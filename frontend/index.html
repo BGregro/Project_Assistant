@@ -8,6 +8,35 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
+
+  <style>
+    /*
+     * Optimizer toggle button — lives in the model bar next to optimizer-badge.
+     * Inherits the badge's font/size; adds a pointer cursor and a toggled-off state.
+     */
+    #btn-optimizer-toggle {
+      cursor: pointer;
+      border: 1px solid currentColor;
+      background: transparent;
+      border-radius: 3px;
+      padding: 1px 7px;
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      margin-left: 6px;
+      opacity: 0.75;
+      transition: opacity 0.15s, color 0.15s;
+      vertical-align: middle;
+    }
+    #btn-optimizer-toggle:hover {
+      opacity: 1;
+    }
+    /* Dimmed appearance when optimizer is disabled */
+    #btn-optimizer-toggle.optimizer-off {
+      opacity: 0.4;
+      text-decoration: line-through;
+    }
+  </style>
 </head>
 <body>
 
@@ -40,7 +69,20 @@
   <!-- ===== MODEL BAR ===== -->
   <div id="model-bar">
     <span id="model-display"></span>
-    <span id="optimizer-badge" class="badge hidden">⚙ optimizer on</span>
+
+    <!--
+      Optimizer controls — two sibling elements:
+        • optimizer-badge   : static label showing "⚙ optimizer"
+        • btn-optimizer-toggle : clickable ON/OFF toggle button
+      Both start hidden; app.js shows them once /status confirms optimizer is available.
+      Clicking the toggle button sends {"type":"set_optimizer","data":{"enabled":…}} over WS.
+    -->
+    <span id="optimizer-badge" class="badge hidden">⚙ optimizer</span>
+    <button
+      id="btn-optimizer-toggle"
+      class="hidden"
+      title="Toggle prompt optimizer on/off"
+    >on</button>
   </div>
 
   <!-- ===== MAIN CHAT AREA ===== -->
@@ -79,6 +121,11 @@
 
   <!-- ===== INPUT BAR ===== -->
   <footer id="input-bar">
+    <!--
+      optimizer-indicator: transient "Optimizing…" spinner shown while the local
+      LLM is rewriting the user's prompt. Hidden when optimizer is off or idle.
+      ID must stay "optimizer-indicator" — app.js references it by that ID.
+    -->
     <div id="optimizer-indicator" class="optimizer-indicator hidden">
       <span class="oi-icon">⚙</span>
       <span class="oi-text">Optimizing…</span>

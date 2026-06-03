@@ -1,0 +1,22 @@
+[
+  {
+    "timestamp": "2026-06-03T16:48:31.575507+00:00",
+    "role": "user",
+    "content": "new conversation. Testing previous conversation memory. what do you remember?"
+  },
+  {
+    "timestamp": "2026-06-03T16:48:31.575507+00:00",
+    "role": "assistant",
+    "content": "I don't have access to any previous conversations with you. Each conversation I have starts fresh without memory of past interactions.\n\nHere's why:\n- **No persistent memory**: I don't retain information between separate conversations\n- **Session-based only**: Within a single conversation thread, I can reference earlier messages, but once that conversation ends, I have no record of it\n- **Stateless design**: This is by design for privacy and security reasons\n\nIf you need me to reference information from a previous conversation, you would need to:\n1. Share that information again in this conversation\n2. Provide files or documents that contain the relevant details\n3. Ask me to read files from your filesystem if you've saved that information\n\nIs there something specific from a previous conversation you'd like to discuss or recreate? I'm happy to help!"
+  },
+  {
+    "timestamp": "2026-06-03T16:48:54.898496+00:00",
+    "role": "user",
+    "content": "what company?"
+  },
+  {
+    "timestamp": "2026-06-03T16:48:54.898496+00:00",
+    "role": "assistant",
+    "content": "I don't have any context about which company you're referring to. This appears to be the start of our conversation, and you haven't mentioned a specific company yet.\n\nCould you please provide more details? For example:\n- Are you asking about a company from a previous conversation?\n- Do you want to discuss a particular company?\n- Are you referring to something in a file or document?\n\nLet me know what company you'd like to discuss, and I'll be happy to help!"
+  }
+]

@@ -12,6 +12,10 @@ The "brain" of the agent. Owns the full request lifecycle:
 The core knows NOTHING about how tools work internally — it only calls handlers
 from the registry. This keeps the architecture modular (adding a Phase 2 tool
 requires zero changes here).
+
+Changes vs Phase 1:
+  - run() accepts an optional context_summary string that is appended to the
+    system prompt when a tiered memory context note is available.
 """
 
 import asyncio
@@ -21,8 +25,8 @@ from typing import Any, Callable, Awaitable
 
 import anthropic
 
-from tools import get_all_definitions, get_handler, is_destructive
-from tools.local_llm import optimize_prompt, local_llm_call
+from agent_tools import get_all_definitions, get_handler, is_destructive
+from agent_tools.local_llm import optimize_prompt, local_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +38,11 @@ class AgentCore:
         llm_cfg = config.get("llm", {})
         self.primary_model: str = llm_cfg.get("primary", "claude-haiku-4-5-20251001")
         self.complex_model: str = llm_cfg.get("complex", "claude-sonnet-4-6")
-        self.local_model: str = llm_cfg.get("local", "qwen2.5:7b")
+        self.local_model:   str = llm_cfg.get("local",   "qwen2.5:7b")
 
         self.use_prompt_optimizer: bool = config.get("use_prompt_optimizer", True)
-        self.local_fallback: bool = config.get("local_fallback", True)
-        self.ollama_url: str = config.get("ollama_base_url", "http://localhost:11434")
+        self.local_fallback:       bool = config.get("local_fallback", True)
+        self.ollama_url:           str  = config.get("ollama_base_url", "http://localhost:11434")
 
         ctx_cfg = config.get("context", {})
         self.max_iterations: int = ctx_cfg.get("max_iterations_per_turn", 10)
@@ -49,7 +53,7 @@ class AgentCore:
 
         # Short system prompt on purpose: every token in the system prompt is paid
         # for on every API call. Keep it informative but not verbose.
-        self.system_prompt = (
+        self._base_system_prompt = (
             "You are a capable personal AI agent with access to filesystem tools. "
             "Use tools whenever they would help complete the user's request. "
             "Before using a tool, briefly state what you're about to do. "
@@ -67,15 +71,21 @@ class AgentCore:
         history: list[dict],
         send_event: Callable[[str, dict], Awaitable[None]],
         pending_confirmations: dict,
+        context_summary: str = "",
     ) -> str:
         """
         Process a single user turn end-to-end.
 
         Args:
             user_message:           Raw text from the user.
-            history:                Previous turns as [{"role":..., "content":...}].
+            history:                Recent turns as [{role, content}] — already
+                                    trimmed to the recent window by build_context().
             send_event:             Async callback — sends a typed event to the frontend.
             pending_confirmations:  Shared dict for the permission layer (confirmation events).
+            context_summary:        Optional note from build_context() describing older
+                                    context (summary of old turns + retrieved similar turns).
+                                    Injected into the system prompt so it costs tokens
+                                    only once, not per message in the history array.
 
         Returns:
             The final text reply from the agent (also sent via send_event).
@@ -92,24 +102,33 @@ class AgentCore:
                 model=self.local_model,
                 base_url=self.ollama_url,
             )
-            # Tell the frontend whether the optimizer actually changed anything
             if optimized_message != user_message:
                 await send_event("prompt_optimized", {
-                    "original": user_message,
+                    "original":  user_message,
                     "optimized": optimized_message,
                 })
             else:
-                await send_event("prompt_optimized", None)   # No change; UI can hide indicator
+                await send_event("prompt_optimized", None)
 
         # ----------------------------------------------------------------
-        # Step 2: Build message list for Claude
+        # Step 2: Build system prompt — append context summary if present
+        # ----------------------------------------------------------------
+        # The context_summary is appended to the system prompt (not injected as a
+        # message) so it is paid for once per API call, not multiplied across the
+        # messages[] array. This is the most token-efficient placement.
+        system = self._base_system_prompt
+        if context_summary:
+            system = f"{self._base_system_prompt}\n\n{context_summary}"
+
+        # ----------------------------------------------------------------
+        # Step 3: Build message list for Claude
         # ----------------------------------------------------------------
         # We use the OPTIMIZED message when talking to Claude (better prompts → better answers)
         # but store the ORIGINAL in history (more readable for the user).
         messages = history + [{"role": "user", "content": optimized_message}]
 
         # ----------------------------------------------------------------
-        # Step 3: Agentic loop — run until final answer or iteration limit
+        # Step 4: Agentic loop — run until final answer or iteration limit
         # ----------------------------------------------------------------
         iteration = 0
 
@@ -122,14 +141,12 @@ class AgentCore:
                 response = await self.client.messages.create(
                     model=self.primary_model,
                     max_tokens=4096,
-                    system=self.system_prompt,
-                    tools=get_all_definitions(),   # tells Claude what tools exist
+                    system=system,
+                    tools=get_all_definitions(),
                     messages=messages,
                 )
             except anthropic.APIConnectionError:
-                return await self._handle_api_unreachable(
-                    optimized_message, send_event
-                )
+                return await self._handle_api_unreachable(optimized_message, send_event)
             except anthropic.AuthenticationError:
                 await send_event("error", {"text": "Invalid or missing ANTHROPIC_API_KEY."})
                 return "Error: authentication failed. Check your API key."
@@ -143,23 +160,15 @@ class AgentCore:
             # --- Handle stop reason ---
 
             if response.stop_reason == "end_turn":
-                # Claude finished — extract and return the final text
                 final_text = _extract_text(response)
                 await send_event("message", {"text": final_text, "source": "claude"})
                 logger.info(f"[agent] Finished in {iteration} iteration(s).")
                 return final_text
 
             elif response.stop_reason == "tool_use":
-                # Claude wants to call one or more tools.
-                # The response may include both text blocks and tool_use blocks.
                 tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-
-                # Append Claude's full response (tool_use blocks included) to history.
-                # This is required by the Anthropic API — the assistant turn must precede
-                # the tool_result turn.
                 messages.append({"role": "assistant", "content": response.content})
 
-                # Execute each requested tool and collect results
                 tool_results = []
                 for block in tool_use_blocks:
                     result = await self._execute_tool(
@@ -171,11 +180,9 @@ class AgentCore:
                     )
                     tool_results.append(result)
 
-                # Feed all tool results back to Claude in a single user turn
                 messages.append({"role": "user", "content": tool_results})
 
             else:
-                # max_tokens or other unexpected stop — try to extract any text
                 logger.warning(f"[agent] Unexpected stop_reason: {response.stop_reason!r}")
                 partial = _extract_text(response)
                 if partial:
@@ -183,7 +190,6 @@ class AgentCore:
                     return partial
                 break
 
-        # Iteration limit reached
         msg = "Agent reached the maximum number of tool-use iterations without a final answer."
         await send_event("error", {"text": msg})
         return msg
@@ -200,18 +206,8 @@ class AgentCore:
         send_event: Callable,
         pending_confirmations: dict,
     ) -> dict:
-        """
-        Run a single tool call:
-          - Notify the frontend the tool is being called.
-          - If destructive, pause and ask user for confirmation.
-          - Call the handler.
-          - Notify the frontend of the result.
-          - Return a tool_result block for the next Claude message.
-        """
-        # Notify frontend a tool call is happening (shows inline in the chat)
         await send_event("tool_call", {"tool": tool_name, "input": tool_input})
 
-        # --- Permission gate for destructive tools ---
         if is_destructive(tool_name):
             approved = await self._request_confirmation(
                 tool_name=tool_name,
@@ -224,7 +220,6 @@ class AgentCore:
                 await send_event("tool_denied", {"tool": tool_name})
                 return _make_tool_result(tool_use_id, result)
 
-        # --- Dispatch to the registered handler ---
         handler = get_handler(tool_name)
         if handler is None:
             result = {"success": False, "error": f"No handler registered for tool '{tool_name}'."}
@@ -233,7 +228,6 @@ class AgentCore:
             try:
                 result = await handler(**tool_input)
             except TypeError as e:
-                # Argument mismatch between Claude's call and the handler signature
                 result = {"success": False, "error": f"Tool argument error: {e}"}
                 logger.exception(f"[agent] Tool '{tool_name}' argument error")
             except Exception as e:
@@ -241,15 +235,14 @@ class AgentCore:
                 logger.exception(f"[agent] Tool '{tool_name}' raised an exception")
 
         await send_event("tool_result", {
-            "tool": tool_name,
+            "tool":    tool_name,
             "success": result.get("success", False),
-            "result": result,
+            "result":  result,
         })
-
         return _make_tool_result(tool_use_id, result)
 
     # ------------------------------------------------------------------
-    # Permission layer — pause and wait for frontend confirmation
+    # Permission layer
     # ------------------------------------------------------------------
 
     async def _request_confirmation(
@@ -260,28 +253,14 @@ class AgentCore:
         pending_confirmations: dict,
         timeout: float = 60.0,
     ) -> bool:
-        """
-        Pause execution and ask the user to approve a destructive operation.
-
-        Flow:
-          1. Generate a unique confirmation_id.
-          2. Register an asyncio.Event in pending_confirmations.
-          3. Send "confirm_required" to the frontend (UI shows Approve/Deny).
-          4. Wait for the frontend to POST back a "confirm" message that sets the Event.
-          5. Return True (approved) or False (denied/timed out).
-
-        The main.py WebSocket handler is responsible for calling
-        pending_confirmations[id]["event"].set() when the user responds.
-        """
-        # Use object id to make confirmation_id unique even for parallel calls
         confirmation_id = f"{tool_name}_{id(tool_input)}"
         event = asyncio.Event()
         pending_confirmations[confirmation_id] = {"event": event, "result": None}
 
         await send_event("confirm_required", {
             "confirmation_id": confirmation_id,
-            "tool": tool_name,
-            "input": tool_input,
+            "tool":    tool_name,
+            "input":   tool_input,
             "message": (
                 f"The agent wants to run '{tool_name}' "
                 f"with: {json.dumps(tool_input, ensure_ascii=False)}"
@@ -289,30 +268,26 @@ class AgentCore:
         })
 
         try:
-            # Wait for the user to click Approve or Deny in the UI
             await asyncio.wait_for(event.wait(), timeout=timeout)
             approved = pending_confirmations[confirmation_id]["result"] is True
-            logger.info(f"[agent] Confirmation '{confirmation_id}': {'approved' if approved else 'denied'}")
+            logger.info(
+                f"[agent] Confirmation '{confirmation_id}': "
+                f"{'approved' if approved else 'denied'}"
+            )
             return approved
         except asyncio.TimeoutError:
-            logger.warning(f"[agent] Confirmation '{confirmation_id}' timed out after {timeout}s.")
+            logger.warning(
+                f"[agent] Confirmation '{confirmation_id}' timed out after {timeout}s."
+            )
             return False
         finally:
             pending_confirmations.pop(confirmation_id, None)
 
     # ------------------------------------------------------------------
-    # Local fallback when Claude API is unreachable
+    # Local fallback
     # ------------------------------------------------------------------
 
-    async def _handle_api_unreachable(
-        self,
-        message: str,
-        send_event: Callable,
-    ) -> str:
-        """
-        Claude API can't be reached. If local_fallback is enabled and Ollama is
-        running, answer directly from the local model (no tools, no agentic loop).
-        """
+    async def _handle_api_unreachable(self, message: str, send_event: Callable) -> str:
         if self.local_fallback:
             await send_event("status", {"text": "Claude API unreachable — trying local fallback…"})
             fallback = await local_llm_call(
@@ -345,11 +320,9 @@ def _make_tool_result(tool_use_id: str, result: Any) -> dict:
     """
     Wrap a tool result in the format the Anthropic API expects:
     { type: "tool_result", tool_use_id: "...", content: "<json string>" }
-
-    The content field is a JSON string, not a nested dict — Claude parses it.
     """
     return {
-        "type": "tool_result",
+        "type":        "tool_result",
         "tool_use_id": tool_use_id,
-        "content": json.dumps(result, ensure_ascii=False),
+        "content":     json.dumps(result, ensure_ascii=False),
     }

@@ -7,6 +7,7 @@
  *   - Permission confirmation modal
  *   - Status indicators (Claude API, Ollama)
  *   - Textarea auto-resize and Enter-to-send
+ *   - Optimizer toggle button (sends set_optimizer, handles optimizer_status)
  */
 
 'use strict';
@@ -14,21 +15,27 @@
 // ============================================================
 // DOM references
 // ============================================================
-const chatArea        = document.getElementById('chat-area');
-const userInput       = document.getElementById('user-input');
-const btnSend         = document.getElementById('btn-send');
-const btnClear        = document.getElementById('btn-clear');
-const statusLine      = document.getElementById('status-line');
-const statusText      = document.getElementById('status-text');
+const chatArea    = document.getElementById('chat-area');
+const userInput   = document.getElementById('user-input');
+const btnSend     = document.getElementById('btn-send');
+const btnClear    = document.getElementById('btn-clear');
+const statusLine  = document.getElementById('status-line');
+const statusText  = document.getElementById('status-text');
+
+// Model bar elements
+const modelDisplay       = document.getElementById('model-display');
+const optimizerBadge     = document.getElementById('optimizer-badge');       // static label
+const btnOptimizerToggle = document.getElementById('btn-optimizer-toggle');  // ON/OFF button
+
+// Input-bar processing indicator (shown while local LLM is optimizing the prompt)
+// NOTE: The element ID is "optimizer-indicator" — distinct from "optimizer-badge"
+//   optimizer-badge     → model bar label, reflects persistent on/off state
+//   optimizer-indicator → footer spinner, shown only during active optimization
 const optimizerIndicator = document.getElementById('optimizer-indicator');
 
 // Status pills
 const statusClaude = document.getElementById('status-claude');
 const statusOllama = document.getElementById('status-ollama');
-
-// Model bar
-const modelDisplay     = document.getElementById('model-display');
-const optimizerBadge   = document.getElementById('optimizer-badge');
 
 // Confirmation modal
 const confirmModal  = document.getElementById('confirm-modal');
@@ -41,8 +48,9 @@ const btnDeny       = document.getElementById('btn-deny');
 // State
 // ============================================================
 let ws = null;
-let pendingConfirmationId = null;   // The confirmation_id we're waiting to resolve
-let isWaiting = false;              // True while the agent is processing
+let pendingConfirmationId = null;  // The confirmation_id we're waiting to resolve
+let isWaiting = false;             // True while the agent is processing
+let optimizerEnabled = false;      // Mirrors agent.use_prompt_optimizer on the backend
 
 // ============================================================
 // WebSocket connection
@@ -141,6 +149,11 @@ function handleServerEvent(type, data) {
       clearChat();
       break;
 
+    case 'optimizer_status':
+      // Backend confirmed the new optimizer state after a set_optimizer message
+      setOptimizerUI(data.enabled);
+      break;
+
     default:
       console.warn('[ws] Unknown event type:', type);
   }
@@ -233,7 +246,6 @@ function appendToolEvent(toolName, input, result) {
   wrapper.className = 'tool-event';
   wrapper.dataset.tool = toolName;
 
-  // Build the JSON for the input/output display
   const inputJson = JSON.stringify(input, null, 2);
 
   wrapper.innerHTML = `
@@ -315,11 +327,16 @@ function toolIcon(name) {
 }
 
 // ============================================================
-// Prompt optimizer indicator
+// Prompt optimizer indicator (footer spinner)
 // ============================================================
 
+/**
+ * Show the "Optimizing…" footer spinner — only when the optimizer is actually on.
+ * Uses the `optimizerEnabled` state flag, NOT the badge visibility, so the two
+ * are decoupled and can be toggled independently at runtime.
+ */
 function showOptimizerIndicator() {
-  if (optimizerBadge && !optimizerBadge.classList.contains('hidden')) {
+  if (optimizerEnabled) {
     optimizerIndicator.classList.remove('hidden');
   }
 }
@@ -349,6 +366,44 @@ function appendOptimizerPill(original, optimized) {
   chatArea.appendChild(pill);
   scrollToBottom();
 }
+
+// ============================================================
+// Optimizer toggle
+// ============================================================
+
+/**
+ * Update all optimizer-related UI to reflect `enabled`.
+ * Called both from pollStatus (initial load) and from the optimizer_status
+ * server event (after a runtime toggle).
+ *
+ * @param {boolean} enabled
+ */
+function setOptimizerUI(enabled) {
+  optimizerEnabled = enabled;
+
+  // Show / hide both the label badge and the toggle button together
+  optimizerBadge.classList.toggle('hidden', false);        // always visible once known
+  btnOptimizerToggle.classList.toggle('hidden', false);    // always visible once known
+
+  // Toggle button: label and strikethrough style
+  btnOptimizerToggle.textContent = enabled ? 'on' : 'off';
+  btnOptimizerToggle.classList.toggle('optimizer-off', !enabled);
+  btnOptimizerToggle.title = enabled
+    ? 'Optimizer is ON — click to disable'
+    : 'Optimizer is OFF — click to enable';
+}
+
+/**
+ * Click handler for the optimizer toggle button.
+ * Sends the new desired state to the backend over WebSocket.
+ * The backend echoes back an optimizer_status event which calls setOptimizerUI().
+ */
+btnOptimizerToggle.addEventListener('click', () => {
+  const newState = !optimizerEnabled;
+  sendWS({ type: 'set_optimizer', data: { enabled: newState } });
+  // Optimistic UI update: reflect immediately, will be confirmed by server event
+  setOptimizerUI(newState);
+});
 
 // ============================================================
 // Confirmation modal
@@ -447,11 +502,11 @@ async function pollStatus() {
     const res = await fetch('/status');
     const data = await res.json();
 
-    // Claude API key
+    // Claude API key indicator
     statusClaude.classList.toggle('online',  !!data.claude_api);
     statusClaude.classList.toggle('offline', !data.claude_api);
 
-    // Ollama
+    // Ollama indicator
     statusOllama.classList.toggle('online',  !!data.ollama);
     statusOllama.classList.toggle('offline', !data.ollama);
 
@@ -461,10 +516,10 @@ async function pollStatus() {
         `primary: ${data.models.primary || '?'}  ·  local: ${data.models.local || '?'}`;
     }
 
-    // Optimizer badge
-    if (data.use_prompt_optimizer) {
-      optimizerBadge.classList.remove('hidden');
-    }
+    // Initialise the optimizer toggle UI from the server's reported state.
+    // setOptimizerUI handles both showing/hiding and labelling the controls.
+    setOptimizerUI(!!data.use_prompt_optimizer);
+
   } catch (e) {
     console.warn('[status] Could not fetch /status:', e);
   }
