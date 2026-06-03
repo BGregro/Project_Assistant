@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AGENT // Personal AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header id="header">
+    <div class="header-left">
+      <span class="logo-bracket">[</span>
+      <span class="logo-text">AGENT</span>
+      <span class="logo-bracket">]</span>
+      <span class="logo-sub">personal AI // phase 1</span>
+    </div>
+    <div class="header-right">
+      <!-- Status indicators populated by app.js after /status fetch -->
+      <div class="status-pill" id="status-claude" title="Claude API">
+        <span class="status-dot"></span>
+        <span class="status-label">claude</span>
+      </div>
+      <div class="status-pill" id="status-ollama" title="Ollama / local LLM">
+        <span class="status-dot"></span>
+        <span class="status-label">ollama</span>
+      </div>
+      <button id="btn-clear" class="icon-btn" title="Clear conversation">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M4 5h12M8 5V3h4v2M6 5l.8 11h6.4L14 5"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== MODEL BAR ===== -->
+  <div id="model-bar">
+    <span id="model-display"></span>
+    <span id="optimizer-badge" class="badge hidden">⚙ optimizer on</span>
+  </div>
+
+  <!-- ===== MAIN CHAT AREA ===== -->
+  <main id="chat-area">
+    <!-- Messages injected here by app.js -->
+
+    <!-- Initial welcome message (replaced on first user message) -->
+    <div id="welcome" class="welcome-block">
+      <div class="welcome-title">System ready.</div>
+      <div class="welcome-body">
+        Type a message to begin. The agent has access to filesystem tools and can
+        read, write, and list files on your machine.
+        <br/><br/>
+        <span class="dim">Try: <em>"List the files in my current directory"</em></span>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== CONFIRMATION MODAL ===== -->
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-icon">⚠</span>
+        <span class="modal-title">Permission Required</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-tool-name" id="modal-tool-name"></div>
+        <pre class="modal-details" id="modal-details"></pre>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-deny"    class="btn btn-deny">Deny</button>
+        <button id="btn-approve" class="btn btn-approve">Approve</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== INPUT BAR ===== -->
+  <footer id="input-bar">
+    <div id="optimizer-indicator" class="optimizer-indicator hidden">
+      <span class="oi-icon">⚙</span>
+      <span class="oi-text">Optimizing…</span>
+    </div>
+    <div id="status-line" class="status-line hidden">
+      <span class="spinner"></span>
+      <span id="status-text"></span>
+    </div>
+    <div class="input-row">
+      <textarea
+        id="user-input"
+        placeholder="Message the agent…"
+        rows="1"
+        autocomplete="off"
+        spellcheck="true"
+      ></textarea>
+      <button id="btn-send" class="send-btn" title="Send (Enter)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10L17 10M11 4l6 6-6 6"/>
+        </svg>
+      </button>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
