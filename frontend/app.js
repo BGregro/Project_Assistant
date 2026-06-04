@@ -3,34 +3,38 @@
  *
  * Handles:
  *   - WebSocket lifecycle (connect, reconnect, send)
- *   - Rendering all message types from the server (messages, tool calls, status…)
+ *   - Rendering all message types (messages, tool calls, status…)
  *   - Permission confirmation modal
  *   - Status indicators (Claude API, Ollama)
  *   - Textarea auto-resize and Enter-to-send
- *   - Optimizer toggle button (sends set_optimizer, handles optimizer_status)
+ *   - Settings panel (gear icon) with all controls:
+ *       · LOCAL / ONLINE mode switch
+ *       · Primary Claude model dropdown
+ *       · Local agent model dropdown
+ *       · Prompt optimizer toggle
+ *       · Advanced: all context / config knobs
+ *   - Model display bar — shows active model name, updates on mode change
+ *   - Project tree sidebar
  */
 
 'use strict';
 
 // ============================================================
-// DOM references
+// DOM references — core
 // ============================================================
-const chatArea    = document.getElementById('chat-area');
-const userInput   = document.getElementById('user-input');
-const btnSend     = document.getElementById('btn-send');
-const btnClear    = document.getElementById('btn-clear');
-const statusLine  = document.getElementById('status-line');
-const statusText  = document.getElementById('status-text');
+const chatArea   = document.getElementById('chat-area');
+const userInput  = document.getElementById('user-input');
+const btnSend    = document.getElementById('btn-send');
+const btnClear   = document.getElementById('btn-clear');
+const statusLine = document.getElementById('status-line');
+const statusText = document.getElementById('status-text');
 
-// Model bar elements
-const modelDisplay       = document.getElementById('model-display');
-const optimizerBadge     = document.getElementById('optimizer-badge');       // static label
-const btnOptimizerToggle = document.getElementById('btn-optimizer-toggle');  // ON/OFF button
+// Model bar
+const modelDisplay   = document.getElementById('model-display');
+const optimizerBadge = document.getElementById('optimizer-badge');
+const localModeBadge = document.getElementById('local-mode-badge');
 
-// Input-bar processing indicator (shown while local LLM is optimizing the prompt)
-// NOTE: The element ID is "optimizer-indicator" — distinct from "optimizer-badge"
-//   optimizer-badge     → model bar label, reflects persistent on/off state
-//   optimizer-indicator → footer spinner, shown only during active optimization
+// Optimizer indicator (footer spinner)
 const optimizerIndicator = document.getElementById('optimizer-indicator');
 
 // Status pills
@@ -44,42 +48,69 @@ const modalDetails  = document.getElementById('modal-details');
 const btnApprove    = document.getElementById('btn-approve');
 const btnDeny       = document.getElementById('btn-deny');
 
+// Tree sidebar
+const treeContent = document.getElementById('tree-content');
+
+// ============================================================
+// DOM references — settings panel
+// ============================================================
+const settingsPanel    = document.getElementById('settings-panel');
+const settingsBackdrop = document.getElementById('settings-backdrop');
+const btnSettingsOpen  = document.getElementById('btn-settings');
+const btnSettingsClose = document.getElementById('btn-settings-close');
+
+const btnModeOnline  = document.getElementById('btn-mode-online');
+const btnModeLocal   = document.getElementById('btn-mode-local');
+const modeModelLabel = document.getElementById('mode-active-model-name');
+
+const selPrimaryModel    = document.getElementById('sel-primary-model');
+const selLocalAgentModel = document.getElementById('sel-local-agent-model');
+
+const toggleOptimizer      = document.getElementById('toggle-optimizer');
+const toggleOptimizerLabel = document.getElementById('toggle-optimizer-label');
+
+const advancedHeader = document.getElementById('advanced-header');
+const advancedBody   = document.getElementById('advanced-body');
+
+const inpRecentTurns      = document.getElementById('inp-recent-turns');
+const inpSummaryThreshold = document.getElementById('inp-summary-threshold');
+const inpRetrievalN       = document.getElementById('inp-retrieval-n');
+const inpSimilarity       = document.getElementById('inp-similarity');
+const valSimilarity       = document.getElementById('val-similarity');
+const inpMaxHistory       = document.getElementById('inp-max-history');
+const inpMaxIterations    = document.getElementById('inp-max-iterations');
+const inpLocalTimeout     = document.getElementById('inp-local-timeout');
+const toggleEmbeddings    = document.getElementById('toggle-embeddings');
+const toggleEmbeddingsLbl = document.getElementById('toggle-embeddings-label');
+const inpTreeRoot         = document.getElementById('inp-tree-root');
+
 // ============================================================
 // State
 // ============================================================
 let ws = null;
-let pendingConfirmationId = null;  // The confirmation_id we're waiting to resolve
-let isWaiting = false;             // True while the agent is processing
-let optimizerEnabled = false;      // Mirrors agent.use_prompt_optimizer on the backend
+let pendingConfirmationId = null;
+let isWaiting             = false;
+let optimizerEnabled      = false;
+let localModeEnabled      = false;
+let currentPrimaryModel   = 'claude-haiku-4-5';
+let currentLocalModel     = 'qwen2.5:14b';
 
 // ============================================================
-// WebSocket connection
+// WebSocket
 // ============================================================
 
 function connectWS() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
-  ws.addEventListener('open', () => {
-    console.log('[ws] Connected.');
-    setWaiting(false);
-  });
-
-  ws.addEventListener('message', (event) => {
+  ws.addEventListener('open',    ()  => { console.log('[ws] Connected.'); setWaiting(false); });
+  ws.addEventListener('message', (e) => {
     let msg;
-    try { msg = JSON.parse(event.data); }
-    catch { console.error('[ws] Bad JSON:', event.data); return; }
+    try { msg = JSON.parse(e.data); } catch { console.error('[ws] Bad JSON:', e.data); return; }
     handleServerEvent(msg.type, msg.data);
   });
-
-  ws.addEventListener('close', () => {
-    console.warn('[ws] Disconnected. Reconnecting in 2s…');
-    setTimeout(connectWS, 2000);
-  });
-
-  ws.addEventListener('error', (e) => {
-    console.error('[ws] Error:', e);
-  });
+  ws.addEventListener('close', () => { console.warn('[ws] Disconnected. Reconnecting…'); setTimeout(connectWS, 2000); });
+  ws.addEventListener('error', (e) => console.error('[ws] Error:', e));
 }
 
 function sendWS(payload) {
@@ -96,28 +127,20 @@ function sendWS(payload) {
 
 function handleServerEvent(type, data) {
   switch (type) {
-
     case 'status':
-      // Processing status text shown above the input bar
       showStatus(data.text);
       break;
 
     case 'prompt_optimized':
-      // data is null (no change) or {original, optimized}
       hideOptimizerIndicator();
-      if (data) {
-        // Show a small pill in the chat showing the optimizer changed the prompt
-        appendOptimizerPill(data.original, data.optimized);
-      }
+      if (data) appendOptimizerPill(data.original, data.optimized);
       break;
 
     case 'tool_call':
-      // Claude is calling a tool — show it inline in the chat
       appendToolEvent(data.tool, data.input, null);
       break;
 
     case 'tool_result':
-      // Tool finished — update the last tool event card with the result
       updateLastToolEvent(data.tool, data.success, data.result);
       break;
 
@@ -126,12 +149,10 @@ function handleServerEvent(type, data) {
       break;
 
     case 'confirm_required':
-      // Agent wants to run a destructive tool — show the modal
       openConfirmModal(data.confirmation_id, data.tool, data.input);
       break;
 
     case 'message':
-      // Final answer from the agent
       hideStatus();
       hideOptimizerIndicator();
       appendAgentMessage(data.text, data.source);
@@ -150,8 +171,34 @@ function handleServerEvent(type, data) {
       break;
 
     case 'optimizer_status':
-      // Backend confirmed the new optimizer state after a set_optimizer message
-      setOptimizerUI(data.enabled);
+      setOptimizerState(data.enabled);
+      break;
+
+    case 'tree_update':
+      updateTreePanel(data.tree);
+      break;
+
+    case 'local_mode_status':
+      applyLocalMode(data.enabled);
+      break;
+
+    case 'model_status':
+      // Primary model confirmed by backend
+      currentPrimaryModel = data.model;
+      updateModelDisplay();
+      flashAck('ack-primary-model');
+      break;
+
+    case 'local_agent_model_status':
+      // Local agent model confirmed
+      currentLocalModel = data.model;
+      updateModelDisplay();
+      flashAck('ack-local-agent-model');
+      break;
+
+    case 'config_ack':
+      // A set_config was accepted — flash the matching ack dot
+      flashAckForKey(data.key);
       break;
 
     default:
@@ -167,7 +214,6 @@ function sendMessage() {
   const text = userInput.value.trim();
   if (!text || isWaiting) return;
 
-  // Hide welcome block on first message
   const welcome = document.getElementById('welcome');
   if (welcome) welcome.remove();
 
@@ -182,12 +228,9 @@ function sendMessage() {
 }
 
 // ============================================================
-// DOM builders — message rows
+// Message row builders
 // ============================================================
 
-/**
- * Append a user message bubble.
- */
 function appendUserMessage(text) {
   const row = document.createElement('div');
   row.className = 'msg-row user-row';
@@ -199,13 +242,10 @@ function appendUserMessage(text) {
   scrollToBottom();
 }
 
-/**
- * Append an agent message bubble. source is "claude" or "local".
- */
 function appendAgentMessage(text, source = 'claude') {
   const row = document.createElement('div');
   row.className = 'msg-row agent-row';
-  const localClass = source === 'local' ? ' local-source' : '';
+  const localClass  = source === 'local' ? ' local-source' : '';
   const sourceLabel = source === 'local' ? 'local' : 'agent';
   row.innerHTML = `
     <span class="msg-role">${escapeHtml(sourceLabel)}</span>
@@ -215,9 +255,6 @@ function appendAgentMessage(text, source = 'claude') {
   scrollToBottom();
 }
 
-/**
- * Append a red error notice.
- */
 function appendErrorMessage(text) {
   const row = document.createElement('div');
   row.className = 'msg-row agent-row';
@@ -230,24 +267,16 @@ function appendErrorMessage(text) {
 }
 
 // ============================================================
-// DOM builders — tool events
+// Tool event builders
 // ============================================================
 
-// Track the last tool-event element per tool name so we can update it with the result
 const lastToolEventEl = {};
 
-/**
- * Append a collapsible tool-call card. Result is filled in later by updateLastToolEvent.
- */
-function appendToolEvent(toolName, input, result) {
-  const icon = toolIcon(toolName);
-
+function appendToolEvent(toolName, input) {
+  const icon    = toolIcon(toolName);
   const wrapper = document.createElement('div');
   wrapper.className = 'tool-event';
   wrapper.dataset.tool = toolName;
-
-  const inputJson = JSON.stringify(input, null, 2);
-
   wrapper.innerHTML = `
     <div class="tool-header" onclick="toggleToolBody(this)">
       <span class="tool-icon">${icon}</span>
@@ -259,24 +288,20 @@ function appendToolEvent(toolName, input, result) {
       <div class="tool-result-status">
         <span class="tool-label" style="color:var(--text-dim)">INPUT</span>
       </div>
-      <pre>${escapeHtml(inputJson)}</pre>
+      <pre>${escapeHtml(JSON.stringify(input, null, 2))}</pre>
       <div class="tool-result-body" style="margin-top:8px"></div>
     </div>
   `;
-
   chatArea.appendChild(wrapper);
   lastToolEventEl[toolName] = wrapper;
   scrollToBottom();
 }
 
-/**
- * Fill in the result section of the most recent tool card for this tool.
- */
 function updateLastToolEvent(toolName, success, result) {
   const el = lastToolEventEl[toolName];
   if (!el) return;
 
-  const statusEl = el.querySelector('.tool-status');
+  const statusEl   = el.querySelector('.tool-status');
   const resultBody = el.querySelector('.tool-result-body');
 
   if (statusEl) {
@@ -285,15 +310,15 @@ function updateLastToolEvent(toolName, success, result) {
   }
 
   if (resultBody) {
-    const resultJson = JSON.stringify(result, null, 2);
+    const displayResult = { ...result };
+    delete displayResult.tree;  // tree shown in sidebar, not inline
     resultBody.innerHTML = `
       <div class="tool-result-status">
         <span class="${success ? 'result-ok' : 'result-fail'}">${success ? '✓ success' : '✗ failed'}</span>
       </div>
-      <pre>${escapeHtml(resultJson)}</pre>
+      <pre>${escapeHtml(JSON.stringify(displayResult, null, 2))}</pre>
     `;
   }
-
   scrollToBottom();
 }
 
@@ -305,50 +330,45 @@ function appendToolDenied(toolName) {
   scrollToBottom();
 }
 
-/**
- * Toggle tool body expansion on header click.
- */
 window.toggleToolBody = function(header) {
-  const body = header.nextElementSibling;
   const expanded = header.classList.toggle('expanded');
-  body.classList.toggle('visible', expanded);
+  header.nextElementSibling.classList.toggle('visible', expanded);
 };
 
-/**
- * Return a small emoji for known tool names.
- */
 function toolIcon(name) {
-  const icons = {
-    read_file:      '📄',
-    write_file:     '✏️',
-    list_directory: '📁',
-  };
+  const icons = { read_file: '📄', write_file: '✏️', list_directory: '📁', list_capabilities: '🤖' };
   return icons[name] || '🔧';
 }
 
 // ============================================================
-// Prompt optimizer indicator (footer spinner)
+// Project tree sidebar
 // ============================================================
 
-/**
- * Show the "Optimizing…" footer spinner — only when the optimizer is actually on.
- * Uses the `optimizerEnabled` state flag, NOT the badge visibility, so the two
- * are decoupled and can be toggled independently at runtime.
- */
-function showOptimizerIndicator() {
-  if (optimizerEnabled) {
-    optimizerIndicator.classList.remove('hidden');
-  }
+function updateTreePanel(treeText) {
+  if (!treeText) return;
+  const ph = document.getElementById('tree-placeholder');
+  if (ph) ph.remove();
+  treeContent.textContent = treeText;
 }
 
+window.toggleTreePanel = function() {
+  const panel = document.getElementById('tree-panel');
+  const btn   = document.getElementById('tree-collapse-btn');
+  const col   = panel.classList.toggle('collapsed');
+  btn.textContent = col ? '▶' : '◀';
+};
+
+// ============================================================
+// Optimizer indicator (footer spinner)
+// ============================================================
+
+function showOptimizerIndicator() {
+  if (optimizerEnabled) optimizerIndicator.classList.remove('hidden');
+}
 function hideOptimizerIndicator() {
   optimizerIndicator.classList.add('hidden');
 }
 
-/**
- * Append a small amber pill showing that the prompt was rewritten.
- * Hovering reveals the before/after.
- */
 function appendOptimizerPill(original, optimized) {
   const pill = document.createElement('div');
   pill.className = 'optimizer-pill';
@@ -356,11 +376,9 @@ function appendOptimizerPill(original, optimized) {
   pill.innerHTML = `
     ⚙ prompt optimized
     <div class="optimizer-detail">
-      <strong style="color:var(--text-dim)">Original:</strong><br>
-      ${escapeHtml(original)}
+      <strong style="color:var(--text-dim)">Original:</strong><br>${escapeHtml(original)}
       <br><br>
-      <strong style="color:var(--amber-dim)">Optimized:</strong><br>
-      ${escapeHtml(optimized)}
+      <strong style="color:var(--amber-dim)">Optimized:</strong><br>${escapeHtml(optimized)}
     </div>
   `;
   chatArea.appendChild(pill);
@@ -368,42 +386,289 @@ function appendOptimizerPill(original, optimized) {
 }
 
 // ============================================================
-// Optimizer toggle
+// Optimizer state (toggled from settings panel)
 // ============================================================
 
 /**
- * Update all optimizer-related UI to reflect `enabled`.
- * Called both from pollStatus (initial load) and from the optimizer_status
- * server event (after a runtime toggle).
- *
- * @param {boolean} enabled
+ * Apply the optimizer state to:
+ *   - JS flag
+ *   - The toggle widget in the settings panel
+ *   - The read-only badge in the model bar
  */
-function setOptimizerUI(enabled) {
+function setOptimizerState(enabled) {
   optimizerEnabled = enabled;
 
-  // Show / hide both the label badge and the toggle button together
-  optimizerBadge.classList.toggle('hidden', false);        // always visible once known
-  btnOptimizerToggle.classList.toggle('hidden', false);    // always visible once known
+  // Panel toggle
+  toggleOptimizer.classList.toggle('on', enabled);
+  toggleOptimizerLabel.textContent = enabled ? 'on' : 'off';
 
-  // Toggle button: label and strikethrough style
-  btnOptimizerToggle.textContent = enabled ? 'on' : 'off';
-  btnOptimizerToggle.classList.toggle('optimizer-off', !enabled);
-  btnOptimizerToggle.title = enabled
-    ? 'Optimizer is ON — click to disable'
-    : 'Optimizer is OFF — click to enable';
+  // Model bar badge
+  optimizerBadge.textContent = enabled ? '⚙ optimizer: on' : '⚙ optimizer: off';
+  optimizerBadge.classList.remove('hidden');
+}
+
+toggleOptimizer.addEventListener('click', () => {
+  const next = !optimizerEnabled;
+  sendWS({ type: 'set_optimizer', data: { enabled: next } });
+  setOptimizerState(next);  // optimistic
+});
+
+// ============================================================
+// Local mode state
+// ============================================================
+
+/**
+ * Apply local mode to all relevant UI:
+ *   - Mode switch buttons (ONLINE/LOCAL highlight)
+ *   - Model display bar
+ *   - Claude status pill label
+ *   - Primary model dropdown (disabled in local mode)
+ *   - Model bar local-mode badge
+ */
+function applyLocalMode(enabled) {
+  localModeEnabled = enabled;
+
+  // Mode switch highlight
+  btnModeOnline.classList.toggle('active-online', !enabled);
+  btnModeLocal.classList.toggle('active-local',   enabled);
+
+  // Primary model dropdown — grayed out when local is active
+  selPrimaryModel.disabled = enabled;
+  const primaryRow = document.getElementById('row-primary-model');
+  if (primaryRow) primaryRow.style.opacity = enabled ? '0.4' : '1';
+
+  // Model bar
+  updateModelDisplay();
+
+  // Claude pill label
+  const claudeLabel = statusClaude.querySelector('.status-label');
+  if (claudeLabel) claudeLabel.textContent = enabled ? 'local' : 'claude';
+
+  // Local-mode badge in model bar
+  localModeBadge.textContent = enabled ? '🖥 local: on' : '🖥 local: off';
+  localModeBadge.classList.remove('hidden');
 }
 
 /**
- * Click handler for the optimizer toggle button.
- * Sends the new desired state to the backend over WebSocket.
- * The backend echoes back an optimizer_status event which calls setOptimizerUI().
+ * Update the model-display bar to show which model is active.
+ * - Online mode: shows the Claude primary model
+ * - Local mode: shows the Ollama local-agent model
  */
-btnOptimizerToggle.addEventListener('click', () => {
-  const newState = !optimizerEnabled;
-  sendWS({ type: 'set_optimizer', data: { enabled: newState } });
-  // Optimistic UI update: reflect immediately, will be confirmed by server event
-  setOptimizerUI(newState);
+function updateModelDisplay() {
+  if (localModeEnabled) {
+    modelDisplay.textContent = `local: ${currentLocalModel}`;
+  } else {
+    modelDisplay.textContent = `claude: ${currentPrimaryModel}`;
+  }
+
+  // Also update the sub-label inside the settings panel mode toggle
+  modeModelLabel.textContent = localModeEnabled ? currentLocalModel : currentPrimaryModel;
+}
+
+// Mode switch click handlers
+btnModeOnline.addEventListener('click', () => {
+  if (localModeEnabled) {
+    sendWS({ type: 'set_local_mode', data: { enabled: false } });
+    applyLocalMode(false);
+  }
 });
+
+btnModeLocal.addEventListener('click', () => {
+  if (!localModeEnabled) {
+    sendWS({ type: 'set_local_mode', data: { enabled: true } });
+    applyLocalMode(true);
+  }
+});
+
+// ============================================================
+// Settings panel — open / close
+// ============================================================
+
+function openSettings() {
+  settingsPanel.classList.add('open');
+  settingsBackdrop.classList.add('visible');
+}
+function closeSettings() {
+  settingsPanel.classList.remove('open');
+  settingsBackdrop.classList.remove('visible');
+}
+
+btnSettingsOpen.addEventListener('click',  openSettings);
+btnSettingsClose.addEventListener('click', closeSettings);
+settingsBackdrop.addEventListener('click', closeSettings);
+
+// Keyboard: Escape closes the panel
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && settingsPanel.classList.contains('open')) closeSettings();
+});
+
+// ============================================================
+// Settings panel — Advanced section toggle
+// ============================================================
+
+window.toggleAdvanced = function() {
+  advancedHeader.classList.toggle('open');
+  advancedBody.classList.toggle('open');
+};
+
+// ============================================================
+// Settings panel — model dropdowns
+// ============================================================
+
+selPrimaryModel.addEventListener('change', () => {
+  const model = selPrimaryModel.value;
+  currentPrimaryModel = model;
+  sendWS({ type: 'set_model', data: { model } });
+  if (!localModeEnabled) updateModelDisplay();
+  // Ack flash will come from model_status server event
+});
+
+selLocalAgentModel.addEventListener('change', () => {
+  const model = selLocalAgentModel.value;
+  currentLocalModel = model;
+  sendWS({ type: 'set_local_agent_model', data: { model } });
+  if (localModeEnabled) updateModelDisplay();
+  // Ack flash will come from local_agent_model_status server event
+});
+
+// ============================================================
+// Settings panel — embeddings toggle
+// ============================================================
+
+toggleEmbeddings.addEventListener('click', () => {
+  const wasOn = toggleEmbeddings.classList.contains('on');
+  const next  = !wasOn;
+  toggleEmbeddings.classList.toggle('on', next);
+  toggleEmbeddingsLbl.textContent = next ? 'on' : 'off';
+  sendWS({ type: 'set_config', data: { key: 'embeddings.enabled', value: next } });
+});
+
+// ============================================================
+// Settings panel — number inputs (debounced)
+// ============================================================
+
+// Map: input element ID → config key
+const numberInputMap = [
+  { id: 'inp-recent-turns',      key: 'context.recent_turns',           parse: parseInt  },
+  { id: 'inp-summary-threshold', key: 'context.summary_threshold',      parse: parseInt  },
+  { id: 'inp-retrieval-n',       key: 'context.retrieval_n',            parse: parseInt  },
+  { id: 'inp-max-history',       key: 'context.max_history_turns',      parse: parseInt  },
+  { id: 'inp-max-iterations',    key: 'context.max_iterations_per_turn', parse: parseInt  },
+  { id: 'inp-local-timeout',     key: 'local_agent_timeout',            parse: parseFloat },
+];
+
+const _debounceTimers = {};
+
+numberInputMap.forEach(({ id, key, parse }) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    clearTimeout(_debounceTimers[id]);
+    _debounceTimers[id] = setTimeout(() => {
+      const v = parse(el.value);
+      if (!isNaN(v)) sendWS({ type: 'set_config', data: { key, value: v } });
+    }, 500);
+  });
+});
+
+// Similarity cutoff slider — send immediately on change (sliders feel sluggish with debounce)
+inpSimilarity.addEventListener('input', () => {
+  const v = parseFloat(inpSimilarity.value);
+  valSimilarity.textContent = v.toFixed(2);
+  clearTimeout(_debounceTimers['similarity']);
+  _debounceTimers['similarity'] = setTimeout(() => {
+    sendWS({ type: 'set_config', data: { key: 'context.similarity_cutoff', value: v } });
+  }, 300);
+});
+
+// Tree root — send on blur or Enter
+function sendTreeRoot() {
+  const v = inpTreeRoot.value.trim();
+  if (v) sendWS({ type: 'set_config', data: { key: 'tree_root', value: v } });
+}
+inpTreeRoot.addEventListener('blur', sendTreeRoot);
+inpTreeRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendTreeRoot(); } });
+
+// ============================================================
+// ACK flash helpers
+// ============================================================
+
+// Map from config key → ack element ID
+const keyToAckId = {
+  'context.recent_turns':            'ack-recent-turns',
+  'context.summary_threshold':       'ack-summary-threshold',
+  'context.retrieval_n':             'ack-retrieval-n',
+  'context.similarity_cutoff':       'ack-similarity',
+  'context.max_history_turns':       'ack-max-history',
+  'context.max_iterations_per_turn': 'ack-max-iterations',
+  'local_agent_timeout':             'ack-local-timeout',
+  'embeddings.enabled':              null,   // toggle — no dot needed
+  'tree_root':                       'ack-tree-root',
+};
+
+function flashAck(ackId) {
+  if (!ackId) return;
+  const el = document.getElementById(ackId);
+  if (!el) return;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+function flashAckForKey(key) {
+  flashAck(keyToAckId[key] || null);
+}
+
+// ============================================================
+// Populate settings panel from /status data
+// ============================================================
+
+function populateSettingsFromStatus(data) {
+  // Primary model dropdown
+  if (data.primary_model) {
+    currentPrimaryModel = data.primary_model;
+    if (selPrimaryModel) {
+      // Select matching option, or add it if not in list
+      const existing = [...selPrimaryModel.options].find(o => o.value === data.primary_model);
+      if (existing) existing.selected = true;
+    }
+  }
+
+  // Local agent model dropdown
+  if (data.local_agent_model) {
+    currentLocalModel = data.local_agent_model;
+    if (selLocalAgentModel) {
+      const existing = [...selLocalAgentModel.options].find(o => o.value === data.local_agent_model);
+      if (existing) existing.selected = true;
+    }
+  }
+
+  // Optimizer toggle
+  setOptimizerState(!!data.use_prompt_optimizer);
+
+  // Local mode
+  applyLocalMode(!!data.local_mode);
+
+  // Advanced fields
+  const ctx = data.context || {};
+  if (inpRecentTurns      && ctx.recent_turns      != null) inpRecentTurns.value      = ctx.recent_turns;
+  if (inpSummaryThreshold && ctx.summary_threshold  != null) inpSummaryThreshold.value = ctx.summary_threshold;
+  if (inpRetrievalN       && ctx.retrieval_n        != null) inpRetrievalN.value       = ctx.retrieval_n;
+  if (inpSimilarity       && ctx.similarity_cutoff  != null) {
+    inpSimilarity.value  = ctx.similarity_cutoff;
+    valSimilarity.textContent = Number(ctx.similarity_cutoff).toFixed(2);
+  }
+  if (inpMaxHistory    && ctx.max_history_turns         != null) inpMaxHistory.value    = ctx.max_history_turns;
+  if (inpMaxIterations && ctx.max_iterations_per_turn   != null) inpMaxIterations.value = ctx.max_iterations_per_turn;
+  if (inpLocalTimeout  && data.local_agent_timeout      != null) inpLocalTimeout.value  = data.local_agent_timeout;
+
+  const emb = data.embeddings || {};
+  if (emb.enabled != null) {
+    toggleEmbeddings.classList.toggle('on', !!emb.enabled);
+    toggleEmbeddingsLbl.textContent = emb.enabled ? 'on' : 'off';
+  }
+
+  if (inpTreeRoot && data.tree_root != null) inpTreeRoot.value = data.tree_root;
+}
 
 // ============================================================
 // Confirmation modal
@@ -412,54 +677,35 @@ btnOptimizerToggle.addEventListener('click', () => {
 function openConfirmModal(confirmationId, toolName, input) {
   pendingConfirmationId = confirmationId;
   modalToolName.textContent = `Tool: ${toolName}`;
-  modalDetails.textContent = JSON.stringify(input, null, 2);
+  modalDetails.textContent  = JSON.stringify(input, null, 2);
   confirmModal.classList.remove('hidden');
   btnApprove.focus();
 }
-
 function closeConfirmModal() {
   confirmModal.classList.add('hidden');
   pendingConfirmationId = null;
 }
 
 btnApprove.addEventListener('click', () => {
-  if (pendingConfirmationId) {
-    sendWS({ type: 'confirm', confirmation_id: pendingConfirmationId, approved: true });
-  }
+  if (pendingConfirmationId) sendWS({ type: 'confirm', confirmation_id: pendingConfirmationId, approved: true });
   closeConfirmModal();
 });
-
 btnDeny.addEventListener('click', () => {
-  if (pendingConfirmationId) {
-    sendWS({ type: 'confirm', confirmation_id: pendingConfirmationId, approved: false });
-  }
+  if (pendingConfirmationId) sendWS({ type: 'confirm', confirmation_id: pendingConfirmationId, approved: false });
   closeConfirmModal();
 });
-
-// Dismiss modal on backdrop click
-confirmModal.addEventListener('click', (e) => {
-  if (e.target === confirmModal) {
-    btnDeny.click();
-  }
-});
+confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) btnDeny.click(); });
 
 // ============================================================
 // Status + waiting state
 // ============================================================
 
-function showStatus(text) {
-  statusText.textContent = text;
-  statusLine.classList.remove('hidden');
-}
-
-function hideStatus() {
-  statusLine.classList.add('hidden');
-  statusText.textContent = '';
-}
+function showStatus(text) { statusText.textContent = text; statusLine.classList.remove('hidden'); }
+function hideStatus()      { statusLine.classList.add('hidden'); statusText.textContent = ''; }
 
 function setWaiting(waiting) {
   isWaiting = waiting;
-  btnSend.disabled = waiting;
+  btnSend.disabled   = waiting;
   userInput.disabled = waiting;
   if (!waiting) hideStatus();
 }
@@ -469,14 +715,10 @@ function setWaiting(waiting) {
 // ============================================================
 
 function clearChat() {
-  // Remove all message rows, tool events, optimizer pills
-  const toRemove = chatArea.querySelectorAll(
-    '.msg-row, .tool-event, .tool-denied-msg, .optimizer-pill'
-  );
-  toRemove.forEach(el => el.remove());
+  chatArea.querySelectorAll('.msg-row, .tool-event, .tool-denied-msg, .optimizer-pill')
+          .forEach(el => el.remove());
   Object.keys(lastToolEventEl).forEach(k => delete lastToolEventEl[k]);
 
-  // Restore welcome block
   const welcome = document.createElement('div');
   welcome.id = 'welcome';
   welcome.className = 'welcome-block';
@@ -488,9 +730,7 @@ function clearChat() {
 }
 
 btnClear.addEventListener('click', () => {
-  if (confirm('Clear the conversation history?')) {
-    sendWS({ type: 'clear' });
-  }
+  if (confirm('Clear the conversation history?')) sendWS({ type: 'clear' });
 });
 
 // ============================================================
@@ -499,26 +739,17 @@ btnClear.addEventListener('click', () => {
 
 async function pollStatus() {
   try {
-    const res = await fetch('/status');
+    const res  = await fetch('/status');
     const data = await res.json();
 
-    // Claude API key indicator
+    // Status pills
     statusClaude.classList.toggle('online',  !!data.claude_api);
     statusClaude.classList.toggle('offline', !data.claude_api);
-
-    // Ollama indicator
     statusOllama.classList.toggle('online',  !!data.ollama);
     statusOllama.classList.toggle('offline', !data.ollama);
 
-    // Model info in the model bar
-    if (data.models) {
-      modelDisplay.textContent =
-        `primary: ${data.models.primary || '?'}  ·  local: ${data.models.local || '?'}`;
-    }
-
-    // Initialise the optimizer toggle UI from the server's reported state.
-    // setOptimizerUI handles both showing/hiding and labelling the controls.
-    setOptimizerUI(!!data.use_prompt_optimizer);
+    // Populate all settings panel controls from server state
+    populateSettingsFromStatus(data);
 
   } catch (e) {
     console.warn('[status] Could not fetch /status:', e);
@@ -532,13 +763,8 @@ async function pollStatus() {
 btnSend.addEventListener('click', sendMessage);
 
 userInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();   // Don't insert newline — use Shift+Enter for that
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-
-// Auto-resize the textarea as user types
 userInput.addEventListener('input', () => autoResize(userInput));
 
 function autoResize(el) {
@@ -550,35 +776,18 @@ function autoResize(el) {
 // Helpers
 // ============================================================
 
-function scrollToBottom() {
-  chatArea.scrollTop = chatArea.scrollHeight;
-}
+function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
 
-/**
- * Escape HTML special chars to prevent XSS when inserting untrusted text.
- * Always use this before setting innerHTML with user/agent content.
- */
 function escapeHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/**
- * Minimal markdown renderer for agent responses:
- * Handles **bold**, `code`, and newlines.
- * Not a full parser — Phase 3 could add a real lib like marked.js.
- */
 function renderMarkdown(text) {
   return escapeHtml(text)
-    // **bold**
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // `inline code`
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Newlines → <br>
     .replace(/\n/g, '<br>');
 }
 
@@ -588,5 +797,4 @@ function renderMarkdown(text) {
 
 connectWS();
 pollStatus();
-// Re-check status every 30s (Ollama can be started/stopped while agent is running)
 setInterval(pollStatus, 30_000);

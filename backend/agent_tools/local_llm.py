@@ -1,31 +1,38 @@
 """
-tools/local_llm.py  —  Local LLM Tier (Ollama)
+agent_tools/local_llm.py  —  Local LLM Tier (Ollama)
 
-This module is the interface to the local Ollama instance running qwen2.5:7b.
+This module is the interface to the local Ollama instance.
 It is NOT a registered tool (Claude doesn't call it directly). Instead, agent_core.py
 and main.py call it for preprocessing tasks before/after Claude API calls:
 
-  optimize_prompt()    — Rewrite raw user input into a clean, precise prompt.
-  summarize_history()  — Compress old conversation turns into a compact summary.
-  local_llm_call()     — Generic single-turn completion.
-  is_ollama_available()— Quick health check used for status display in the UI.
+  optimize_prompt()     — Rewrite raw user input into a clean, precise prompt.
+  summarize_history()   — Compress old conversation turns into a compact summary.
+  local_llm_call()      — Generic single-turn completion via /api/generate.
+  local_agent_call()    — Full agentic loop via /api/chat with tool use (Feature 3).
+  is_ollama_available() — Quick health check used for status display in the UI.
 
 All functions handle Ollama being offline gracefully: they log a warning and return
 None / the original input, never raising exceptions to the caller.
 """
 
+import json
 import logging
 import httpx
-from typing import Optional
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
 # Ollama's default address. Can be overridden via config.json → "ollama_base_url"
-DEFAULT_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL    = "qwen2.5:7b"
+DEFAULT_BASE_URL    = "http://localhost:11434"
+DEFAULT_MODEL       = "qwen2.5:7b"
+DEFAULT_AGENT_MODEL = "qwen2.5:14b"
 
-# Generous timeout: local inference can be slow on CPU
+# Generous timeouts: local inference can be slow on CPU
 GENERATE_TIMEOUT = 60.0
+# NOTE: local_agent_call() no longer uses CHAT_TIMEOUT — it accepts a `timeout`
+# parameter so the caller (agent_core.py) can pass config-driven values.
+# CHAT_TIMEOUT is kept here only for reference / backward compatibility.
+CHAT_TIMEOUT     = 300.0
 HEALTH_TIMEOUT   = 3.0
 
 
@@ -46,10 +53,9 @@ async def local_llm_call(
     payload: dict = {
         "model":  model,
         "prompt": prompt,
-        "stream": False,     # Get the entire response at once (not token-by-token)
+        "stream": False,
     }
     if system:
-        # Ollama supports a system field directly in the generate request
         payload["system"] = system
 
     try:
@@ -61,7 +67,6 @@ async def local_llm_call(
             return text if text else None
 
     except httpx.ConnectError:
-        # Ollama is not running — this is expected when working offline
         logger.warning("[local_llm] Ollama is offline (connection refused).")
         return None
     except httpx.TimeoutException:
@@ -84,17 +89,9 @@ async def optimize_prompt(
     Use the local LLM to rewrite a raw user message into a clean, precise prompt
     for Claude.
 
-    WHY THIS EXISTS:
-    Raw user messages often have typos, ambiguous pronouns, missing context, or
-    conversational filler that wastes Claude API tokens and can confuse the model.
-    A lightweight local pass that standardises the prompt reduces Claude API cost
-    and improves response quality — especially for short, unclear messages.
-
     Falls back to the ORIGINAL message if Ollama is offline or returns garbage.
     This means the system still works 100% without a local model.
     """
-    # Keep the system prompt short — the local model is small (7B) and we want
-    # fast inference, not a reasoning chain.
     system = (
         "You are a prompt optimizer for an AI assistant. "
         "Rewrite the user's message into a clear, concise, and unambiguous instruction. "
@@ -110,12 +107,10 @@ async def optimize_prompt(
     )
 
     if result is None:
-        # Ollama offline or failed — silently fall back to original
         logger.info("[local_llm] optimize_prompt: fallback to original (Ollama unavailable).")
         return raw_message
 
     # Sanity check: if the result is wildly longer than the input, something went wrong
-    # (the model may have ignored the system prompt and started explaining itself)
     if len(result) > len(raw_message) * 3:
         logger.warning("[local_llm] optimize_prompt: result suspiciously long, using original.")
         return raw_message
@@ -142,33 +137,15 @@ async def summarize_history(
     Compress a list of old conversation turns into a compact natural-language summary.
 
     Called by build_context() in main.py when the conversation history grows beyond
-    the recent-turns window. The summary is injected into Claude's system prompt
-    (not the messages array), so it costs ~1× instead of N× the turn tokens.
-
-    Token budget goal: compress N turns into ~100-200 tokens.
-
-    Args:
-        turns: List of {role, content, timestamp} dicts (the OLD portion of history,
-               beyond the recent verbatim window).
-        model: Local Ollama model to use for summarization.
-        base_url: Ollama base URL.
-        max_chars_per_turn: How many chars of each turn to include in the prompt
-                            sent to the local model. Keeps the summarization
-                            prompt itself from being huge.
-
-    Returns:
-        A short summary string, or None if Ollama is unavailable.
+    the recent-turns window. The summary is injected into Claude's system prompt.
     """
     if not turns:
         return None
 
-    # Build a compact transcript from the old turns to feed to the summarizer.
-    # We only send max_chars_per_turn per entry to keep the summarization prompt lean.
     transcript_lines = []
     for entry in turns:
         role    = entry.get("role", "?")
         content = entry.get("content", "")[:max_chars_per_turn]
-        # Truncation marker so the model knows content was cut
         if len(entry.get("content", "")) > max_chars_per_turn:
             content += "…"
         transcript_lines.append(f"{role.upper()}: {content}")
@@ -203,6 +180,151 @@ async def summarize_history(
         )
 
     return result
+
+
+async def local_agent_call(
+    prompt: str,
+    tools: list[dict],
+    messages: list[dict],
+    model: str = DEFAULT_AGENT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+    max_iterations: int = 10,
+    tool_dispatcher: Any = None,
+    timeout: float = 300.0,
+) -> str:
+    """
+    Run a full agentic loop entirely through Ollama — no Claude API required.
+
+    Uses Ollama's /api/chat endpoint with OpenAI-compatible tool calling
+    (supported by qwen2.5:14b and similar function-calling capable models).
+
+    The loop mirrors agent_core.py's Claude loop:
+      1. Send current messages + tool definitions to Ollama.
+      2. If the model emits tool calls, dispatch them and feed results back.
+      3. Repeat until the model returns a plain text response.
+      4. Return the final text.
+
+    Args:
+        prompt:          The current user message (already appended to messages).
+        tools:           List of tool definitions in Anthropic format (name, description,
+                         input_schema). Converted to Ollama/OpenAI format internally.
+        messages:        Full message history in [{role, content}] format.
+        model:           Ollama model to use (default: qwen2.5:14b).
+        base_url:        Ollama base URL.
+        max_iterations:  Safety cap on tool call rounds to prevent infinite loops.
+        tool_dispatcher: Async callable(tool_name, tool_input) → dict result.
+                         Passed in from agent_core so we don't import it here
+                         (avoids circular imports). If None, tool calls return errors.
+        timeout:         Per-request HTTP timeout in seconds. Configurable via
+                         config.json → "local_agent_timeout" (default 300s).
+                         Larger models on CPU may need several minutes per response.
+
+    Returns:
+        Final text response string, or an error message if Ollama is unreachable.
+    """
+
+    # --- Convert Anthropic-format tool definitions to Ollama/OpenAI format ---
+    # Anthropic: {"name": ..., "description": ..., "input_schema": {...}}
+    # OpenAI:    {"type": "function", "function": {"name": ..., "description": ..., "parameters": {...}}}
+    ollama_tools = []
+    for t in tools:
+        ollama_tools.append({
+            "type": "function",
+            "function": {
+                "name":        t["name"],
+                "description": t.get("description", ""),
+                "parameters":  t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        })
+
+    # Build the working message list (deep copy so we don't mutate the caller's list)
+    working_messages = list(messages)
+
+    for iteration in range(max_iterations):
+        logger.info(f"[local_llm] local_agent_call iteration {iteration + 1} (timeout={timeout}s)")
+
+        payload = {
+            "model":    model,
+            "messages": working_messages,
+            "tools":    ollama_tools,
+            "stream":   False,
+        }
+
+        try:
+            # Use the caller-supplied timeout so large models get enough time
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(f"{base_url}/api/chat", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.ConnectError:
+            logger.warning("[local_llm] Ollama offline during local_agent_call.")
+            return "Error: local Ollama is not running. Start Ollama and try again."
+        except httpx.TimeoutException:
+            logger.warning(f"[local_llm] local_agent_call timed out after {timeout}s.")
+            return (
+                f"Error: local model timed out after {timeout}s. "
+                "Try increasing local_agent_timeout in config, or use a smaller model."
+            )
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"[local_llm] Ollama HTTP {e.response.status_code} in local_agent_call.")
+            return f"Error: Ollama returned HTTP {e.response.status_code}."
+        except Exception as e:
+            logger.warning(f"[local_llm] Unexpected error in local_agent_call: {e}")
+            return f"Error: {e}"
+
+        # Extract the assistant message from the response
+        assistant_msg = data.get("message", {})
+        content       = assistant_msg.get("content", "")
+        tool_calls    = assistant_msg.get("tool_calls", [])
+
+        # Append the assistant's turn to the working message list
+        working_messages.append({
+            "role":       "assistant",
+            "content":    content,
+            "tool_calls": tool_calls,
+        })
+
+        # --- No tool calls: final answer ---
+        if not tool_calls:
+            logger.info(f"[local_llm] local_agent_call finished in {iteration + 1} iteration(s).")
+            return content.strip() if content else "No response generated."
+
+        # --- Tool calls: dispatch each one and feed results back ---
+        tool_result_messages = []
+        for tc in tool_calls:
+            fn   = tc.get("function", {})
+            name = fn.get("name", "")
+            # Arguments may be a JSON string or already a dict
+            raw_args = fn.get("arguments", {})
+            if isinstance(raw_args, str):
+                try:
+                    args = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    args = {}
+            else:
+                args = raw_args
+
+            logger.info(f"[local_llm] Tool call: {name}({args})")
+
+            if tool_dispatcher is not None:
+                try:
+                    result = await tool_dispatcher(name, args)
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
+            else:
+                result = {"success": False, "error": "No tool dispatcher available in local mode."}
+
+            # Ollama expects tool results as role="tool" messages
+            tool_result_messages.append({
+                "role":    "tool",
+                "content": json.dumps(result, ensure_ascii=False),
+                "name":    name,
+            })
+
+        working_messages.extend(tool_result_messages)
+
+    # Reached max iterations without a final answer
+    return "Error: local agent reached the maximum number of tool-use iterations without a final answer."
 
 
 async def is_ollama_available(base_url: str = DEFAULT_BASE_URL) -> bool:

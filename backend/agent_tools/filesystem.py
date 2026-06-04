@@ -1,5 +1,5 @@
 """
-tools/filesystem.py  —  Filesystem Tools
+agent_tools/filesystem.py  —  Filesystem Tools
 
 Provides three tools the agent can use:
   - read_file:       Read the text content of a file.
@@ -8,16 +8,103 @@ Provides three tools the agent can use:
 
 All paths go through _safe_path() which handles Windows drive letters, ~ expansion,
 and environment variables. Every operation is logged for audit purposes.
+
+Phase 2 addition — folder tree broadcast:
+  After a successful write_file or list_directory call, a compact folder tree
+  is generated from the configured tree_root (config.json → "tree_root", default ".")
+  and returned as an extra "tree" key in the result dict. agent_core.py detects
+  this key and broadcasts a tree_update WebSocket event to the frontend.
 """
 
+import json
 import os
 import logging
 import pathlib
+from pathlib import Path
 from typing import Any
 
 from . import register_tool
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Config access — loaded lazily so registration order doesn't matter
+# ---------------------------------------------------------------------------
+
+def _get_tree_root() -> Path:
+    """
+    Read tree_root from config.json. Defaults to the current working directory.
+    Called at tree-generation time (not at import time) so config changes are
+    picked up without a restart.
+    """
+    config_path = Path(__file__).parent.parent.parent / "config.json"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        raw = cfg.get("tree_root", ".")
+    except Exception:
+        raw = "."
+    # Resolve relative to the project root (where config.json lives), not CWD
+    project_root = config_path.parent
+    p = Path(os.path.expandvars(os.path.expanduser(raw)))
+    if not p.is_absolute():
+        p = (project_root / p).resolve()
+    return p
+
+
+# ---------------------------------------------------------------------------
+# Folder tree generator
+# ---------------------------------------------------------------------------
+
+def _build_tree(root: Path, max_depth: int = 3) -> str:
+    """
+    Build a compact text tree of the directory structure, like the `tree` command.
+
+    Only directories and files up to `max_depth` levels deep are shown.
+    Hidden entries (starting with '.') and __pycache__ directories are skipped
+    to keep the output clean and readable.
+
+    Example output:
+        project/
+        ├── backend/
+        │   ├── agent_core.py
+        │   └── main.py
+        └── frontend/
+            └── index.html
+    """
+    lines: list[str] = []
+
+    def _walk(directory: Path, prefix: str, depth: int) -> None:
+        if depth > max_depth:
+            return
+        try:
+            # Sort: directories first, then files, both alphabetically
+            entries = sorted(
+                directory.iterdir(),
+                key=lambda x: (x.is_file(), x.name.lower()),
+            )
+            # Filter hidden files and __pycache__ clutter
+            entries = [
+                e for e in entries
+                if not e.name.startswith(".") and e.name != "__pycache__"
+            ]
+        except PermissionError:
+            return
+
+        for i, entry in enumerate(entries):
+            is_last = (i == len(entries) - 1)
+            connector = "└── " if is_last else "├── "
+            suffix    = "/" if entry.is_dir() else ""
+            lines.append(f"{prefix}{connector}{entry.name}{suffix}")
+
+            if entry.is_dir():
+                extension = "    " if is_last else "│   "
+                _walk(entry, prefix + extension, depth + 1)
+
+    root_resolved = root.resolve()
+    lines.append(f"{root_resolved.name}/")
+    _walk(root_resolved, "", 1)
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -78,11 +165,13 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> dict[s
     DESTRUCTIVE: this tool is flagged in the registry and the permission layer
     will ask the user to confirm before this handler is actually called.
     Parent directories are created automatically.
+
+    After a successful write, a folder tree is appended as the "tree" key so
+    agent_core.py can broadcast a tree_update event to the frontend sidebar.
     """
     p = _safe_path(path)
     logger.info(f"[filesystem] write_file: {p} (mode={mode!r})")
 
-    # Create parent directories (e.g. agent/notes/deep/file.txt → make notes/deep/)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
@@ -93,17 +182,28 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> dict[s
             with open(p, "a", encoding="utf-8") as f:
                 f.write(content)
         else:
-            # Default: overwrite (or create)
             p.write_text(content, encoding="utf-8")
 
         bytes_written = len(content.encode("utf-8"))
         logger.info(f"[filesystem] write_file OK: {bytes_written} bytes to {p}")
-        return {
+
+        result: dict[str, Any] = {
             "success": True,
             "path": str(p),
             "mode": mode,
             "bytes_written": bytes_written,
         }
+
+        # --- Folder tree broadcast (Feature 2) ---
+        # Generate and attach the tree so agent_core can send a tree_update event.
+        try:
+            tree_root = _get_tree_root()
+            result["tree"] = _build_tree(tree_root)
+        except Exception as te:
+            logger.warning(f"[filesystem] Tree generation failed (non-fatal): {te}")
+
+        return result
+
     except PermissionError:
         return {"success": False, "error": f"Permission denied: {p}"}
     except Exception as e:
@@ -115,6 +215,9 @@ async def list_directory(path: str = ".") -> dict[str, Any]:
     """
     List the contents of a directory.
     Returns type (file/dir), name, and size for each entry, sorted alphabetically.
+
+    Also returns a "tree" key with a compact folder tree from the configured
+    tree_root so the frontend sidebar stays in sync (Feature 2).
     """
     p = _safe_path(path)
     logger.info(f"[filesystem] list_directory: {p}")
@@ -131,7 +234,6 @@ async def list_directory(path: str = ".") -> dict[str, Any]:
                 "name": item.name,
                 "type": "file" if item.is_file() else "directory",
             }
-            # Include file size; directories don't have a meaningful size here
             if item.is_file():
                 try:
                     entry["size_bytes"] = item.stat().st_size
@@ -140,12 +242,23 @@ async def list_directory(path: str = ".") -> dict[str, Any]:
             entries.append(entry)
 
         logger.info(f"[filesystem] list_directory OK: {len(entries)} entries in {p}")
-        return {
+
+        result: dict[str, Any] = {
             "success": True,
             "path": str(p),
             "entries": entries,
             "count": len(entries),
         }
+
+        # --- Folder tree broadcast (Feature 2) ---
+        try:
+            tree_root = _get_tree_root()
+            result["tree"] = _build_tree(tree_root)
+        except Exception as te:
+            logger.warning(f"[filesystem] Tree generation failed (non-fatal): {te}")
+
+        return result
+
     except PermissionError:
         return {"success": False, "error": f"Permission denied: {p}"}
     except Exception as e:
