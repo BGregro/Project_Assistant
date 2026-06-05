@@ -40,6 +40,9 @@ from memory.embeddings import store_turn, search_similar, clear_all as clear_vec
 from agent_tools.filesystem import register_all as register_filesystem_tools
 from agent_tools.capabilities import register_capabilities_tools
 from agent_tools.local_llm import is_ollama_available, summarize_history
+from agent_tools.web import register_web_tools
+from agent_tools.system_info import register_system_tools
+from agent_tools.file_analysis import register_file_analysis_tools
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -72,9 +75,15 @@ config = load_config()
 
 register_filesystem_tools()
 register_capabilities_tools()
+register_web_tools()
+register_system_tools()
+register_file_analysis_tools()
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
-    "capabilities (list_capabilities)"
+    "capabilities (list_capabilities), "
+    "web (search_web, fetch_page), "
+    "system (get_system_info), "
+    "file_analysis (analyze_file)"
 )
 
 # ---------------------------------------------------------------------------

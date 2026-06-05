@@ -27,5 +27,13 @@
   "embeddings": {
     "enabled": true,
     "model": "nomic-embed-text"
+  },
+  "tools": {
+    "web": {
+      "max_results": 5,
+      "fetch_timeout": 10,
+      "max_fetch_chars": 8000,
+      "searxng_url": "http://localhost:8888"
+    }
   }
 }
