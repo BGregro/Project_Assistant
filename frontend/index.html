@@ -11,423 +11,131 @@
 
   <style>
     /* ================================================================
-       SETTINGS PANEL — overlay sidebar that slides in from the right.
-       Does NOT affect the chat layout when closed because it uses
-       position:fixed and is fully outside the flex flow.
+       SETTINGS PANEL — overlay sidebar, position:fixed, outside layout
        ================================================================ */
-
-    /* ---- Backdrop (click to close) ---- */
     #settings-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      z-index: 90;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.22s ease;
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.22s ease;
     }
-    #settings-backdrop.visible {
-      opacity: 1;
-      pointer-events: all;
-    }
+    #settings-backdrop.visible { opacity: 1; pointer-events: all; }
 
-    /* ---- Panel ---- */
     #settings-panel {
-      position: fixed;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: 320px;
-      max-width: 92vw;
-      background: #10131a;
-      border-left: 1px solid #1e2330;
-      z-index: 100;
-      display: flex;
-      flex-direction: column;
+      position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 92vw;
+      background: #10131a; border-left: 1px solid #1e2330; z-index: 100;
+      display: flex; flex-direction: column;
       transform: translateX(100%);
-      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-      overflow: hidden;
+      transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); overflow: hidden;
     }
-    #settings-panel.open {
-      transform: translateX(0);
-      box-shadow: -8px 0 32px rgba(0,0,0,0.5);
-    }
-
-    /* ---- Panel header ---- */
+    #settings-panel.open { transform: translateX(0); box-shadow: -8px 0 32px rgba(0,0,0,0.5); }
     #settings-header {
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      border-bottom: 1px solid #1e2330;
-      flex-shrink: 0;
+      height: 48px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; border-bottom: 1px solid #1e2330; flex-shrink: 0;
     }
     #settings-title {
-      font-family: var(--font-ui);
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--amber);
+      font-family: var(--font-ui); font-size: 0.75rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber);
     }
     #btn-settings-close {
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: var(--text-dim);
-      font-size: 1.1rem;
-      line-height: 1;
-      padding: 4px 6px;
-      border-radius: var(--radius);
+      background: transparent; border: none; cursor: pointer; color: var(--text-dim);
+      font-size: 1.1rem; line-height: 1; padding: 4px 6px; border-radius: var(--radius);
       transition: color 0.15s;
     }
     #btn-settings-close:hover { color: var(--text); }
+    #settings-body { flex: 1; overflow-y: auto; padding: 16px; }
 
-    /* ---- Scrollable body ---- */
-    #settings-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-    }
-
-    /* ---- Section labels ---- */
     .settings-section-label {
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      margin: 0 0 10px 0;
-      padding-bottom: 5px;
-      border-bottom: 1px solid #1e2330;
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--text-dim); margin: 0 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid #1e2330;
     }
-
-    /* ---- Row: label + control ---- */
     .settings-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      min-height: 30px;
-      position: relative;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 12px; min-height: 30px; position: relative;
     }
-    .settings-label {
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      flex-shrink: 0;
-      line-height: 1.3;
-    }
-    .settings-label small {
-      display: block;
-      font-size: 0.6rem;
-      color: var(--text-muted);
-      margin-top: 1px;
-    }
-
-    /* ---- Inputs ---- */
-    .settings-select,
-    .settings-number,
-    .settings-text {
-      background: #0b0d11;
-      border: 1px solid #1e2330;
-      color: var(--text);
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      border-radius: var(--radius);
-      padding: 4px 7px;
-      transition: border-color 0.15s;
-      min-width: 0;
+    .settings-label { font-size: 0.72rem; color: var(--text-dim); flex-shrink: 0; line-height: 1.3; }
+    .settings-label small { display: block; font-size: 0.6rem; color: var(--text-muted); margin-top: 1px; }
+    .settings-select, .settings-number, .settings-text {
+      background: #0b0d11; border: 1px solid #1e2330; color: var(--text);
+      font-family: var(--font-mono); font-size: 0.72rem; border-radius: var(--radius);
+      padding: 4px 7px; transition: border-color 0.15s; min-width: 0;
     }
     .settings-select { width: 148px; }
     .settings-number { width: 72px; text-align: right; }
     .settings-text   { width: 148px; }
-    .settings-select:focus,
-    .settings-number:focus,
-    .settings-text:focus {
-      outline: none;
-      border-color: var(--amber);
-    }
-    .settings-select:disabled,
-    .settings-number:disabled,
-    .settings-text:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-    }
+    .settings-select:focus, .settings-number:focus, .settings-text:focus { outline: none; border-color: var(--amber); }
+    .settings-select:disabled, .settings-number:disabled, .settings-text:disabled { opacity: 0.35; cursor: not-allowed; }
+    .settings-slider-wrap { display: flex; align-items: center; gap: 8px; }
+    .settings-slider { width: 100px; accent-color: var(--amber); cursor: pointer; }
+    .settings-slider-val { font-size: 0.7rem; color: var(--amber); min-width: 32px; text-align: right; }
 
-    /* ---- Slider ---- */
-    .settings-slider-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .settings-slider {
-      width: 100px;
-      accent-color: var(--amber);
-      cursor: pointer;
-    }
-    .settings-slider-val {
-      font-size: 0.7rem;
-      color: var(--amber);
-      min-width: 32px;
-      text-align: right;
-    }
-
-    /* ---- LOCAL / ONLINE toggle switch ---- */
     .mode-toggle-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: #0b0d11;
-      border: 1px solid #1e2330;
-      border-radius: var(--radius-lg);
-      padding: 14px;
-      margin-bottom: 14px;
+      display: flex; flex-direction: column; gap: 10px; background: #0b0d11;
+      border: 1px solid #1e2330; border-radius: var(--radius-lg); padding: 14px; margin-bottom: 14px;
     }
-    .mode-toggle-label-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .mode-toggle-text {
-      font-size: 0.72rem;
-      color: var(--text-dim);
-    }
-    /* The actual pill switch */
-    .mode-switch {
-      display: flex;
-      border: 1px solid #1e2330;
-      border-radius: 20px;
-      overflow: hidden;
-      width: 160px;
-      flex-shrink: 0;
-    }
+    .mode-toggle-label-row { display: flex; align-items: center; justify-content: space-between; }
+    .mode-toggle-text { font-size: 0.72rem; color: var(--text-dim); }
+    .mode-switch { display: flex; border: 1px solid #1e2330; border-radius: 20px; overflow: hidden; width: 160px; flex-shrink: 0; }
     .mode-switch-btn {
-      flex: 1;
-      border: none;
-      background: transparent;
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      padding: 6px 0;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      color: var(--text-dim);
+      flex: 1; border: none; background: transparent; font-family: var(--font-mono);
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; padding: 6px 0;
+      cursor: pointer; transition: background 0.15s, color 0.15s; color: var(--text-dim);
     }
-    .mode-switch-btn.active-online {
-      background: var(--blue);
-      color: #fff;
-    }
-    .mode-switch-btn.active-local {
-      background: var(--amber);
-      color: #000;
-    }
-    .mode-switch-btn:not(.active-online):not(.active-local):hover {
-      color: var(--text);
-      background: rgba(255,255,255,0.04);
-    }
-    /* Sub-label that shows which model is active */
-    .mode-active-model {
-      font-size: 0.62rem;
-      color: var(--text-muted);
-      font-style: italic;
-    }
-    .mode-active-model span {
-      color: var(--text-dim);
-    }
+    .mode-switch-btn.active-online { background: var(--blue); color: #fff; }
+    .mode-switch-btn.active-local  { background: var(--amber); color: #000; }
+    .mode-switch-btn:not(.active-online):not(.active-local):hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .mode-active-model { font-size: 0.62rem; color: var(--text-muted); font-style: italic; }
+    .mode-active-model span { color: var(--text-dim); }
 
-    /* ---- Toggle (on/off pill) ---- */
-    .settings-toggle {
-      display: inline-flex;
-      align-items: center;
-      cursor: pointer;
-      gap: 7px;
-      user-select: none;
-    }
-    .toggle-track {
-      width: 32px;
-      height: 17px;
-      border-radius: 9px;
-      background: #1e2330;
-      position: relative;
-      transition: background 0.18s;
-      flex-shrink: 0;
-    }
-    .toggle-thumb {
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      transition: transform 0.18s, background 0.18s;
-    }
-    .settings-toggle.on .toggle-track  { background: var(--amber); }
-    .settings-toggle.on .toggle-thumb  { transform: translateX(15px); background: #000; }
-    .toggle-label {
-      font-size: 0.72rem;
-      color: var(--text-dim);
-    }
+    .settings-toggle { display: inline-flex; align-items: center; cursor: pointer; gap: 7px; user-select: none; }
+    .toggle-track { width: 32px; height: 17px; border-radius: 9px; background: #1e2330; position: relative; transition: background 0.18s; flex-shrink: 0; }
+    .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--text-muted); transition: transform 0.18s, background 0.18s; }
+    .settings-toggle.on .toggle-track { background: var(--amber); }
+    .settings-toggle.on .toggle-thumb { transform: translateX(15px); background: #000; }
+    .toggle-label { font-size: 0.72rem; color: var(--text-dim); }
 
-    /* ---- Collapsible advanced section ---- */
     .settings-collapsible-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      user-select: none;
-      padding: 6px 0;
-      margin-bottom: 4px;
-      border-bottom: 1px solid #1e2330;
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; padding: 6px 0; margin-bottom: 4px; border-bottom: 1px solid #1e2330;
     }
-    .settings-collapsible-header:hover .settings-section-label {
-      color: var(--text);
-    }
+    .settings-collapsible-header:hover .settings-section-label { color: var(--text); }
     .settings-section-label { margin-bottom: 0; border-bottom: none; }
-    .settings-chevron {
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      transition: transform 0.18s;
-    }
+    .settings-chevron { font-size: 0.65rem; color: var(--text-dim); transition: transform 0.18s; }
     .settings-collapsible-header.open .settings-chevron { transform: rotate(90deg); }
-    .settings-collapsible-body {
-      display: none;
-      padding-top: 10px;
-    }
+    .settings-collapsible-body { display: none; padding-top: 10px; }
     .settings-collapsible-body.open { display: block; }
 
-    /* ---- ACK flash: green dot next to a control that was saved ---- */
     .ack-flash {
-      position: absolute;
-      right: -16px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--green);
-      opacity: 0;
-      transition: opacity 0.2s;
-      pointer-events: none;
+      position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
+      width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+      opacity: 0; transition: opacity 0.2s; pointer-events: none;
     }
     .ack-flash.show { opacity: 1; }
 
-    /* ---- Gear icon button in header ---- */
     #btn-settings {
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: var(--text-dim);
-      padding: 6px;
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: color 0.15s;
-      margin-left: 4px;
+      background: transparent; border: none; cursor: pointer; color: var(--text-dim);
+      padding: 6px; border-radius: var(--radius); display: flex; align-items: center;
+      justify-content: center; transition: color 0.15s; margin-left: 4px;
     }
     #btn-settings:hover { color: var(--amber); }
     #btn-settings svg { width: 16px; height: 16px; }
-
-    /* ---- Model bar: keep only status badges (toggles moved to panel) ---- */
-    #optimizer-badge,
-    #local-mode-badge {
-      /* Still present in DOM for status read, but de-emphasised */
-      opacity: 0.6;
-    }
-
-    /* ================================================================
-       PROJECT TREE SIDEBAR
-       ================================================================ */
-    #tree-panel {
-      width: 220px;
-      min-width: 160px;
-      max-width: 300px;
-      border-left: 1px solid var(--border, #1e2330);
-      display: flex;
-      flex-direction: column;
-      background: rgba(255,255,255,0.015);
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    #tree-panel-header {
-      padding: 8px 12px;
-      font-size: 0.68rem;
-      font-family: var(--font-mono);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      border-bottom: 1px solid var(--border, #1e2330);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      user-select: none;
-    }
-    #tree-panel-header:hover { color: var(--text); }
-    #tree-collapse-btn {
-      background: transparent;
-      border: none;
-      color: inherit;
-      cursor: pointer;
-      font-size: 0.75rem;
-      padding: 0 2px;
-      line-height: 1;
-    }
-    #tree-content {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: auto;
-      padding: 10px 12px;
-      margin: 0;
-      font-size: 0.65rem;
-      line-height: 1.6;
-      color: var(--text-dim);
-      white-space: pre;
-      font-family: var(--font-mono);
-    }
-    #tree-placeholder { font-style: italic; opacity: 0.5; font-size: 0.62rem; }
-    #tree-panel.collapsed #tree-content { display: none; }
-    #tree-panel.collapsed { width: auto; min-width: 0; }
-
-    /* ================================================================
-       APP BODY LAYOUT
-       ================================================================ */
-    #app-body {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-    }
-    #chat-area { flex: 1; min-width: 0; }
+    #optimizer-badge, #local-mode-badge { opacity: 0.6; }
 
     @media (max-width: 600px) {
-      #tree-panel    { display: none; }
       #settings-panel { width: 100vw; max-width: 100vw; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ===== BACKDROP (settings panel) ===== -->
   <div id="settings-backdrop"></div>
 
-  <!-- ===== SETTINGS PANEL ===== -->
+  <!-- SETTINGS PANEL -->
   <div id="settings-panel" role="dialog" aria-modal="true" aria-label="Agent settings">
     <div id="settings-header">
       <span id="settings-title">⚙ Settings</span>
       <button id="btn-settings-close" title="Close settings">✕</button>
     </div>
-
     <div id="settings-body">
-
-      <!-- ──────────────── MODEL & MODE ──────────────── -->
       <div class="settings-section-label" style="margin-bottom:12px">Model &amp; Mode</div>
-
-      <!-- LOCAL / ONLINE big toggle -->
       <div class="mode-toggle-wrap">
         <div class="mode-toggle-label-row">
           <span class="mode-toggle-text">Execution mode</span>
@@ -440,26 +148,16 @@
           Using: <span id="mode-active-model-name">—</span>
         </div>
       </div>
-
-      <!-- Primary Claude model -->
       <div class="settings-row" id="row-primary-model">
-        <div class="settings-label">
-          Claude model
-          <small>Used when ONLINE</small>
-        </div>
+        <div class="settings-label">Claude model<small>Used when ONLINE</small></div>
         <select class="settings-select" id="sel-primary-model">
           <option value="claude-haiku-4-5">claude-haiku-4-5</option>
           <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
         </select>
         <span class="ack-flash" id="ack-primary-model"></span>
       </div>
-
-      <!-- Local agent model -->
       <div class="settings-row">
-        <div class="settings-label">
-          Local model
-          <small>Used when LOCAL</small>
-        </div>
+        <div class="settings-label">Local model<small>Used when LOCAL</small></div>
         <select class="settings-select" id="sel-local-agent-model">
           <option value="qwen2.5:7b">qwen2.5:7b</option>
           <option value="qwen2.5:14b">qwen2.5:14b</option>
@@ -467,45 +165,34 @@
         </select>
         <span class="ack-flash" id="ack-local-agent-model"></span>
       </div>
-
-      <!-- Optimizer toggle (moved from model bar) -->
       <div class="settings-row">
-        <div class="settings-label">
-          Prompt optimizer
-          <small>Local LLM rewrites prompts</small>
-        </div>
+        <div class="settings-label">Prompt optimizer<small>Local LLM rewrites prompts</small></div>
         <label class="settings-toggle" id="toggle-optimizer">
           <div class="toggle-track"><div class="toggle-thumb"></div></div>
           <span class="toggle-label" id="toggle-optimizer-label">on</span>
         </label>
       </div>
-
-      <!-- ──────────────── ADVANCED (collapsible) ──────────────── -->
       <div style="margin-top:18px">
         <div class="settings-collapsible-header" id="advanced-header" onclick="toggleAdvanced()">
           <span class="settings-section-label">Advanced</span>
           <span class="settings-chevron">▶</span>
         </div>
         <div class="settings-collapsible-body" id="advanced-body">
-
           <div class="settings-row">
             <div class="settings-label">Recent turns<small>Verbatim window</small></div>
             <input class="settings-number" type="number" id="inp-recent-turns" min="1" max="10" value="4" />
             <span class="ack-flash" id="ack-recent-turns"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Summary threshold<small>Min old turns to summarise</small></div>
             <input class="settings-number" type="number" id="inp-summary-threshold" min="2" max="10" value="4" />
             <span class="ack-flash" id="ack-summary-threshold"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Retrieval results<small>Semantic search top-K</small></div>
             <input class="settings-number" type="number" id="inp-retrieval-n" min="0" max="10" value="3" />
             <span class="ack-flash" id="ack-retrieval-n"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Similarity cutoff<small>Max cosine distance</small></div>
             <div class="settings-slider-wrap">
@@ -514,25 +201,21 @@
             </div>
             <span class="ack-flash" id="ack-similarity"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Max history turns<small>Conversation trim limit</small></div>
             <input class="settings-number" type="number" id="inp-max-history" min="5" max="100" value="20" />
             <span class="ack-flash" id="ack-max-history"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Max iterations<small>Tool-use loop cap</small></div>
             <input class="settings-number" type="number" id="inp-max-iterations" min="1" max="20" value="10" />
             <span class="ack-flash" id="ack-max-iterations"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Local timeout (s)<small>Per Ollama request</small></div>
             <input class="settings-number" type="number" id="inp-local-timeout" min="30" max="600" value="300" />
             <span class="ack-flash" id="ack-local-timeout"></span>
           </div>
-
           <div class="settings-row">
             <div class="settings-label">Embeddings<small>Semantic memory</small></div>
             <label class="settings-toggle" id="toggle-embeddings">
@@ -540,28 +223,25 @@
               <span class="toggle-label" id="toggle-embeddings-label">on</span>
             </label>
           </div>
-
-          <div class="settings-row" style="align-items:flex-start; flex-direction:column; gap:6px;">
+          <div class="settings-row" style="align-items:flex-start;flex-direction:column;gap:6px;">
             <div class="settings-label">Tree root path<small>Base path for folder tree</small></div>
-            <div style="display:flex; gap:8px; width:100%; position:relative">
+            <div style="display:flex;gap:8px;width:100%;position:relative">
               <input class="settings-text" type="text" id="inp-tree-root" value="." style="width:100%" />
               <span class="ack-flash" id="ack-tree-root" style="right:4px"></span>
             </div>
           </div>
-
-        </div><!-- /#advanced-body -->
+        </div>
       </div>
+    </div>
+  </div>
 
-    </div><!-- /#settings-body -->
-  </div><!-- /#settings-panel -->
-
-  <!-- ===== HEADER ===== -->
+  <!-- HEADER -->
   <header id="header">
     <div class="header-left">
       <span class="logo-bracket">[</span>
       <span class="logo-text">AGENT</span>
       <span class="logo-bracket">]</span>
-      <span class="logo-sub">personal AI // phase 2</span>
+      <span class="logo-sub">personal AI // phase 3</span>
     </div>
     <div class="header-right">
       <div class="status-pill" id="status-claude" title="Claude API / mode">
@@ -572,12 +252,21 @@
         <span class="status-dot"></span>
         <span class="status-label">ollama</span>
       </div>
+      <!-- Task status badge: idle/thinking/executing/waiting -->
+      <div id="task-status-badge" class="task-badge hidden">
+        <span id="task-badge-dot" class="task-badge-dot"></span>
+        <span id="task-badge-label">idle</span>
+      </div>
+      <!-- Stop button: only during active tasks -->
+      <button id="btn-stop" class="stop-btn hidden" title="Stop task">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><rect x="3" y="3" width="10" height="10" rx="1"/></svg>
+        Stop
+      </button>
       <button id="btn-clear" class="icon-btn" title="Clear conversation">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
           <path d="M4 5h12M8 5V3h4v2M6 5l.8 11h6.4L14 5"/>
         </svg>
       </button>
-      <!-- Gear icon opens the settings panel -->
       <button id="btn-settings" title="Settings">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="10" cy="10" r="2.5"/>
@@ -589,39 +278,86 @@
     </div>
   </header>
 
-  <!-- ===== MODEL BAR ===== -->
+  <!-- MODEL BAR -->
   <div id="model-bar">
     <span id="model-display"></span>
-    <!-- Read-only status badges — interactive controls are in the settings panel -->
     <span id="optimizer-badge"  class="badge hidden">⚙ optimizer</span>
     <span id="local-mode-badge" class="badge hidden">🖥 local</span>
   </div>
 
-  <!-- ===== MAIN BODY ===== -->
+  <!-- MAIN BODY -->
   <div id="app-body">
 
-    <main id="chat-area">
-      <div id="welcome" class="welcome-block">
-        <div class="welcome-title">System ready.</div>
-        <div class="welcome-body">
-          Type a message to begin. The agent has access to filesystem tools.
-          <br/><br/>
-          <span class="dim">Open <strong>⚙ Settings</strong> (top-right) to configure models and context.</span>
+    <!-- LEFT: chat panel (~60%) -->
+    <main id="chat-panel">
+      <div id="chat-area">
+        <div id="welcome" class="welcome-block">
+          <div class="welcome-title">System ready.</div>
+          <div class="welcome-body">
+            Type a message to begin. The agent has access to filesystem, web, and memory tools.
+            <br/><br/>
+            <span class="dim">Open <strong>⚙ Settings</strong> (top-right) to configure models and context.
+            Live task progress appears in the <strong>Tasks</strong> tab →</span>
+          </div>
         </div>
+      </div>
+      <!-- Thinking indicator shown below last message while agent processes -->
+      <div id="thinking-indicator" class="hidden">
+        <span class="thinking-dots"><span></span><span></span><span></span></span>
+        <span id="thinking-label" class="thinking-label">Thinking…</span>
       </div>
     </main>
 
-    <aside id="tree-panel">
-      <div id="tree-panel-header" onclick="toggleTreePanel()">
-        <span>Project Tree</span>
-        <button id="tree-collapse-btn" title="Collapse/expand">◀</button>
+    <!-- RIGHT: collapsible context panel (~40%) -->
+    <div id="right-panel">
+      <!-- Collapse toggle arrow on the left border -->
+      <button id="panel-toggle-btn" title="Collapse/expand panel" onclick="toggleRightPanel()">◀</button>
+
+      <div id="right-panel-inner">
+        <!-- Tab bar -->
+        <div id="tab-bar">
+          <button class="tab-btn active" data-tab="tasks"  onclick="switchTab('tasks')">Tasks</button>
+          <button class="tab-btn"        data-tab="files"  onclick="switchTab('files')">Files</button>
+          <button class="tab-btn"        data-tab="memory" onclick="switchTab('memory')">Memory</button>
+        </div>
+
+        <!-- TASKS TAB -->
+        <div id="tab-tasks" class="tab-content">
+          <div id="task-progress-panel">
+            <div id="task-placeholder" class="tab-placeholder">No active task.</div>
+          </div>
+        </div>
+
+        <!-- FILES TAB -->
+        <div id="tab-files" class="tab-content hidden">
+          <div class="tab-section-label">Project Tree</div>
+          <pre id="tree-content"><span id="tree-placeholder">Run a file op to see the tree.</span></pre>
+        </div>
+
+        <!-- MEMORY TAB -->
+        <div id="tab-memory" class="tab-content hidden">
+          <div class="tab-section-label">Recent History</div>
+          <div id="memory-history-list" class="memory-history-list">
+            <div class="tab-placeholder">No history yet.</div>
+          </div>
+          <div class="tab-section-label" style="margin-top:14px">Semantic Memory</div>
+          <div id="memory-vector-status" class="memory-vector-status">
+            Semantic memory: — entries
+          </div>
+        </div>
       </div>
-      <pre id="tree-content"><span id="tree-placeholder">Run a file op to see the tree.</span></pre>
-    </aside>
+
+      <!-- Icon rail shown when panel is collapsed -->
+      <div id="right-panel-rail">
+        <button class="rail-icon" title="Tasks"  onclick="expandAndTab('tasks')">◈</button>
+        <button class="rail-icon" title="Files"  onclick="expandAndTab('files')">⊞</button>
+        <button class="rail-icon" title="Memory" onclick="expandAndTab('memory')">◎</button>
+      </div>
+    </div>
 
   </div>
 
-  <!-- ===== CONFIRMATION MODAL ===== -->
+  <!-- CONFIRMATION MODAL -->
   <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-box">
       <div class="modal-header">
@@ -639,7 +375,7 @@
     </div>
   </div>
 
-  <!-- ===== INPUT BAR ===== -->
+  <!-- INPUT BAR -->
   <footer id="input-bar">
     <div id="optimizer-indicator" class="optimizer-indicator hidden">
       <span class="oi-icon">⚙</span>

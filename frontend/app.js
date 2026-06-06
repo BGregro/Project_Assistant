@@ -1,20 +1,21 @@
 /**
- * app.js  —  Frontend WebSocket Client
+ * app.js  —  Phase 3 Frontend WebSocket Client
  *
- * Handles:
- *   - WebSocket lifecycle (connect, reconnect, send)
- *   - Rendering all message types (messages, tool calls, status…)
- *   - Permission confirmation modal
- *   - Status indicators (Claude API, Ollama)
- *   - Textarea auto-resize and Enter-to-send
- *   - Settings panel (gear icon) with all controls:
- *       · LOCAL / ONLINE mode switch
- *       · Primary Claude model dropdown
- *       · Local agent model dropdown
- *       · Prompt optimizer toggle
- *       · Advanced: all context / config knobs
- *   - Model display bar — shows active model name, updates on mode change
- *   - Project tree sidebar
+ * Phase 3 additions over Phase 2:
+ *   - Two-panel layout: right panel with Tasks / Files / Memory tabs
+ *   - Right panel collapse/expand
+ *   - task_progress WebSocket event → live step timeline in Tasks tab
+ *   - task_stopped event → stop button, badge update, step cancellation
+ *   - Stop button (sends stop_task, disables itself)
+ *   - Task status badge (idle / thinking / executing / waiting)
+ *   - Tool calls/results wrapped in collapsible <details class="tool-block">
+ *     tracked by tool-use ID so result attaches to the correct block
+ *   - execute_code tool: code input rendered as syntax-highlighted block
+ *   - Thinking indicator: shows below last message, updates label per tool
+ *   - Memory tab: recent history rows + vector store count from /status
+ *   - Copy-to-clipboard buttons on code blocks
+ *
+ * All Phase 2 functionality is preserved exactly.
  */
 
 'use strict';
@@ -34,7 +35,7 @@ const modelDisplay   = document.getElementById('model-display');
 const optimizerBadge = document.getElementById('optimizer-badge');
 const localModeBadge = document.getElementById('local-mode-badge');
 
-// Optimizer indicator (footer spinner)
+// Optimizer indicator (footer)
 const optimizerIndicator = document.getElementById('optimizer-indicator');
 
 // Status pills
@@ -48,7 +49,14 @@ const modalDetails  = document.getElementById('modal-details');
 const btnApprove    = document.getElementById('btn-approve');
 const btnDeny       = document.getElementById('btn-deny');
 
-// Tree sidebar
+// Phase 3: task controls
+const btnStop         = document.getElementById('btn-stop');
+const taskStatusBadge = document.getElementById('task-status-badge');
+const taskBadgeLabel  = document.getElementById('task-badge-label');
+const thinkingIndicator = document.getElementById('thinking-indicator');
+const thinkingLabel   = document.getElementById('thinking-label');
+
+// Files tab tree
 const treeContent = document.getElementById('tree-content');
 
 // ============================================================
@@ -95,6 +103,11 @@ let localModeEnabled      = false;
 let currentPrimaryModel   = 'claude-haiku-4-5';
 let currentLocalModel     = 'qwen2.5:14b';
 
+// Phase 3 state
+let activeTaskSteps = {};    // stepN → DOM element
+let pendingToolBlocks = {};  // tool_use_id → <details> element
+let isTaskRunning = false;
+
 // ============================================================
 // WebSocket
 // ============================================================
@@ -129,6 +142,7 @@ function handleServerEvent(type, data) {
   switch (type) {
     case 'status':
       showStatus(data.text);
+      updateTaskBadge('thinking');
       break;
 
     case 'prompt_optimized':
@@ -137,11 +151,15 @@ function handleServerEvent(type, data) {
       break;
 
     case 'tool_call':
-      appendToolEvent(data.tool, data.input, null);
+      // Update thinking label to reflect active tool
+      setThinkingLabel(toolActionLabel(data.tool));
+      appendToolBlock(data.tool, data.input, data.tool_use_id);
+      updateTaskBadge('executing');
       break;
 
     case 'tool_result':
-      updateLastToolEvent(data.tool, data.success, data.result);
+      updateToolBlock(data.tool_use_id || data.tool, data.success, data.result);
+      updateTaskBadge('thinking');
       break;
 
     case 'tool_denied':
@@ -150,20 +168,28 @@ function handleServerEvent(type, data) {
 
     case 'confirm_required':
       openConfirmModal(data.confirmation_id, data.tool, data.input);
+      updateTaskBadge('waiting');
       break;
 
     case 'message':
       hideStatus();
       hideOptimizerIndicator();
+      hideThinkingIndicator();
       appendAgentMessage(data.text, data.source);
       setWaiting(false);
+      updateTaskBadge('idle');
+      stopTaskRunning();
+      updateMemoryHistory(data.text, 'agent');
       break;
 
     case 'error':
       hideStatus();
       hideOptimizerIndicator();
+      hideThinkingIndicator();
       appendErrorMessage(data.text);
       setWaiting(false);
+      updateTaskBadge('idle');
+      stopTaskRunning();
       break;
 
     case 'cleared':
@@ -183,22 +209,29 @@ function handleServerEvent(type, data) {
       break;
 
     case 'model_status':
-      // Primary model confirmed by backend
       currentPrimaryModel = data.model;
       updateModelDisplay();
       flashAck('ack-primary-model');
       break;
 
     case 'local_agent_model_status':
-      // Local agent model confirmed
       currentLocalModel = data.model;
       updateModelDisplay();
       flashAck('ack-local-agent-model');
       break;
 
     case 'config_ack':
-      // A set_config was accepted — flash the matching ack dot
       flashAckForKey(data.key);
+      break;
+
+    // --- Phase 3 new events ---
+
+    case 'task_progress':
+      handleTaskProgress(data);
+      break;
+
+    case 'task_stopped':
+      handleTaskStopped(data);
       break;
 
     default:
@@ -218,13 +251,16 @@ function sendMessage() {
   if (welcome) welcome.remove();
 
   appendUserMessage(text);
+  updateMemoryHistory(text, 'user');
   sendWS({ type: 'message', text });
 
   userInput.value = '';
   autoResize(userInput);
   setWaiting(true);
+  startTaskRunning();
   showOptimizerIndicator();
   showStatus('Sending…');
+  showThinkingIndicator('Thinking…');
 }
 
 // ============================================================
@@ -249,9 +285,11 @@ function appendAgentMessage(text, source = 'claude') {
   const sourceLabel = source === 'local' ? 'local' : 'agent';
   row.innerHTML = `
     <span class="msg-role">${escapeHtml(sourceLabel)}</span>
-    <div class="msg-bubble${localClass}">${renderMarkdown(text)}</div>
+    <div class="msg-bubble${localClass}">${renderMarkdownWithCode(text)}</div>
   `;
   chatArea.appendChild(row);
+  // Attach copy buttons to code blocks
+  row.querySelectorAll('.code-block').forEach(attachCopyBtn);
   scrollToBottom();
 }
 
@@ -267,58 +305,155 @@ function appendErrorMessage(text) {
 }
 
 // ============================================================
-// Tool event builders
+// Tool blocks — collapsible <details>
+// Tracked by tool_use_id (Phase 3) with fallback to tool name (Phase 2 compat)
 // ============================================================
 
-const lastToolEventEl = {};
-
-function appendToolEvent(toolName, input) {
-  const icon    = toolIcon(toolName);
-  const wrapper = document.createElement('div');
-  wrapper.className = 'tool-event';
-  wrapper.dataset.tool = toolName;
-  wrapper.innerHTML = `
-    <div class="tool-header" onclick="toggleToolBody(this)">
-      <span class="tool-icon">${icon}</span>
-      <span class="tool-name">${escapeHtml(toolName)}</span>
-      <span class="tool-status">…</span>
-      <span class="tool-arrow">▶</span>
-    </div>
-    <div class="tool-body">
-      <div class="tool-result-status">
-        <span class="tool-label" style="color:var(--text-dim)">INPUT</span>
-      </div>
-      <pre>${escapeHtml(JSON.stringify(input, null, 2))}</pre>
-      <div class="tool-result-body" style="margin-top:8px"></div>
-    </div>
-  `;
-  chatArea.appendChild(wrapper);
-  lastToolEventEl[toolName] = wrapper;
-  scrollToBottom();
+/**
+ * Map tool name → display category for border color.
+ */
+function toolCategory(name) {
+  if (['search_web', 'fetch_page'].includes(name)) return 'web';
+  if (['read_file', 'write_file', 'list_directory', 'analyze_file'].includes(name)) return 'filesystem';
+  if (['execute_code'].includes(name)) return 'code';
+  if (['get_system_info'].includes(name)) return 'system';
+  if (['list_capabilities'].includes(name)) return 'other';
+  return 'other';
 }
 
-function updateLastToolEvent(toolName, success, result) {
-  const el = lastToolEventEl[toolName];
+function toolIcon(name) {
+  const icons = {
+    read_file: '📄', write_file: '✏️', list_directory: '📁',
+    analyze_file: '📊', list_capabilities: '🤖',
+    search_web: '🔍', fetch_page: '🌐',
+    execute_code: '⚡', get_system_info: '💻',
+  };
+  return icons[name] || '🔧';
+}
+
+function toolActionLabel(name) {
+  const labels = {
+    search_web: 'Searching web…', fetch_page: 'Fetching page…',
+    read_file: 'Reading file…', write_file: 'Writing file…',
+    list_directory: 'Listing directory…', execute_code: 'Running code…',
+    get_system_info: 'Getting system info…', analyze_file: 'Analyzing file…',
+  };
+  return labels[name] || `Using ${name}…`;
+}
+
+/**
+ * Render a compact parameters preview string (first 60 chars of first value).
+ */
+function paramsPreview(input) {
+  if (!input) return '';
+  const vals = Object.values(input);
+  if (!vals.length) return '';
+  const first = String(vals[0]);
+  const preview = first.length > 60 ? first.slice(0, 57) + '…' : first;
+  return `(${preview})`;
+}
+
+/**
+ * Render the input body of a tool block.
+ * For execute_code: highlight the `code` field as a code block.
+ */
+function renderToolInput(toolName, input) {
+  if (toolName === 'execute_code' && input && input.code) {
+    const lang = input.language || 'python';
+    const restInput = { ...input };
+    delete restInput.code;
+    const header = Object.keys(restInput).length
+      ? `<pre>${escapeHtml(JSON.stringify(restInput, null, 2))}</pre>` : '';
+    return `
+      ${header}
+      <div class="tb-section-label">code (${escapeHtml(lang)})</div>
+      <div class="tb-code-block"><pre>${escapeHtml(input.code)}</pre></div>
+    `;
+  }
+  return `<pre>${escapeHtml(JSON.stringify(input, null, 2))}</pre>`;
+}
+
+/**
+ * Append a new tool block. Called on tool_call event.
+ * @param {string} toolName
+ * @param {object} input
+ * @param {string|null} toolUseId  — may be null for older backend versions
+ */
+function appendToolBlock(toolName, input, toolUseId) {
+  const cat    = toolCategory(toolName);
+  const icon   = toolIcon(toolName);
+  const params = paramsPreview(input);
+  const start  = Date.now();
+
+  const el = document.createElement('details');
+  el.className = 'tool-block';
+  el.dataset.cat     = cat;
+  el.dataset.tool    = toolName;
+  el.dataset.startMs = start;
+  if (toolUseId) el.dataset.toolUseId = toolUseId;
+
+  el.innerHTML = `
+    <summary>
+      <span class="tb-arrow">▶</span>
+      <span class="tb-icon">${icon}</span>
+      <span class="tb-name">${escapeHtml(toolName)}</span>
+      <span class="tb-params">${escapeHtml(params)}</span>
+      <span class="tb-status">⟳</span>
+      <span class="tb-time"></span>
+    </summary>
+    <div class="tb-body">
+      <div class="tb-section-label">INPUT</div>
+      ${renderToolInput(toolName, input)}
+      <div class="tb-result-area" style="margin-top:8px"></div>
+    </div>
+  `;
+
+  chatArea.appendChild(el);
+
+  // Register by ID or by tool name as fallback
+  if (toolUseId) {
+    pendingToolBlocks[toolUseId] = el;
+  }
+  // Always keep a by-name ref for compat (last wins)
+  pendingToolBlocks[toolName] = el;
+
+  scrollToBottom();
+  return el;
+}
+
+/**
+ * Update a tool block with its result. Called on tool_result event.
+ * Looks up by tool_use_id first, then by tool name.
+ */
+function updateToolBlock(idOrName, success, result) {
+  const el = pendingToolBlocks[idOrName];
   if (!el) return;
 
-  const statusEl   = el.querySelector('.tool-status');
-  const resultBody = el.querySelector('.tool-result-body');
+  const elapsed = Date.now() - parseInt(el.dataset.startMs || '0', 10);
+  const statusEl = el.querySelector('.tb-status');
+  const timeEl   = el.querySelector('.tb-time');
+  const resultArea = el.querySelector('.tb-result-area');
 
   if (statusEl) {
     statusEl.textContent = success ? ' ✓' : ' ✗';
     statusEl.style.color = success ? 'var(--green)' : 'var(--red)';
   }
+  if (timeEl) {
+    timeEl.textContent = elapsed < 1000 ? `${elapsed}ms` : `${(elapsed/1000).toFixed(1)}s`;
+  }
 
-  if (resultBody) {
+  if (resultArea) {
     const displayResult = { ...result };
-    delete displayResult.tree;  // tree shown in sidebar, not inline
-    resultBody.innerHTML = `
-      <div class="tool-result-status">
-        <span class="${success ? 'result-ok' : 'result-fail'}">${success ? '✓ success' : '✗ failed'}</span>
+    delete displayResult.tree; // tree shown in Files tab
+    resultArea.innerHTML = `
+      <div class="tb-section-label">RESULT</div>
+      <div class="tb-result-row">
+        <span class="${success ? 'tb-ok' : 'tb-fail'}">${success ? '✓ success' : '✗ failed'}</span>
       </div>
       <pre>${escapeHtml(JSON.stringify(displayResult, null, 2))}</pre>
     `;
   }
+
   scrollToBottom();
 }
 
@@ -330,18 +465,208 @@ function appendToolDenied(toolName) {
   scrollToBottom();
 }
 
-window.toggleToolBody = function(header) {
-  const expanded = header.classList.toggle('expanded');
-  header.nextElementSibling.classList.toggle('visible', expanded);
-};
+// ============================================================
+// Task progress — right panel Tasks tab
+// ============================================================
 
-function toolIcon(name) {
-  const icons = { read_file: '📄', write_file: '✏️', list_directory: '📁', list_capabilities: '🤖' };
-  return icons[name] || '🔧';
+function handleTaskProgress(data) {
+  // data: { step: N, label: "...", status: "running|done|failed", elapsed_ms: N }
+  const { step, label, status, elapsed_ms } = data;
+  const panel = document.getElementById('task-progress-panel');
+  const placeholder = document.getElementById('task-placeholder');
+
+  // Remove placeholder on first step
+  if (placeholder) placeholder.remove();
+
+  const stepKey = `step-${step}`;
+  let stepEl = activeTaskSteps[stepKey];
+
+  if (!stepEl) {
+    // Create new step row
+    stepEl = document.createElement('div');
+    stepEl.className = 'task-step pending';
+    stepEl.id = stepKey;
+    stepEl.innerHTML = `
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div><span class="step-num">${step}.</span><span class="step-label">${escapeHtml(label)}</span></div>
+        <div class="step-time"></div>
+      </div>
+    `;
+    panel.appendChild(stepEl);
+    activeTaskSteps[stepKey] = stepEl;
+  }
+
+  // Update status class
+  stepEl.className = `task-step ${status}`;
+
+  // Update elapsed time
+  const timeEl = stepEl.querySelector('.step-time');
+  if (timeEl && elapsed_ms != null) {
+    timeEl.textContent = elapsed_ms < 1000
+      ? `${elapsed_ms}ms`
+      : `${(elapsed_ms / 1000).toFixed(1)}s`;
+  }
+
+  // Switch to tasks tab if not already visible
+  const tasksTab = document.getElementById('tab-tasks');
+  if (tasksTab && tasksTab.classList.contains('hidden')) {
+    switchTab('tasks');
+  }
+}
+
+function handleTaskStopped(data) {
+  // Mark last running step as cancelled
+  Object.values(activeTaskSteps).forEach(el => {
+    if (el.classList.contains('running')) {
+      el.className = 'task-step cancelled';
+    }
+  });
+  stopTaskRunning();
+  updateTaskBadge('idle');
+  hideThinkingIndicator();
+  setWaiting(false);
+}
+
+function resetTaskPanel() {
+  activeTaskSteps = {};
+  const panel = document.getElementById('task-progress-panel');
+  if (panel) {
+    panel.innerHTML = '<div id="task-placeholder" class="tab-placeholder">No active task.</div>';
+  }
 }
 
 // ============================================================
-// Project tree sidebar
+// Task running state (controls Stop button + badge)
+// ============================================================
+
+function startTaskRunning() {
+  isTaskRunning = true;
+  btnStop.classList.remove('hidden');
+  btnStop.disabled = false;
+  updateTaskBadge('thinking');
+  // Reset task panel for new task
+  resetTaskPanel();
+  pendingToolBlocks = {};
+}
+
+function stopTaskRunning() {
+  isTaskRunning = false;
+  btnStop.classList.add('hidden');
+  btnStop.disabled = false;
+}
+
+// ============================================================
+// Stop button
+// ============================================================
+
+btnStop.addEventListener('click', () => {
+  btnStop.disabled = true; // prevent double-send
+  sendWS({ type: 'stop_task' });
+});
+
+// ============================================================
+// Task status badge
+// ============================================================
+
+function updateTaskBadge(state) {
+  if (state === 'idle') {
+    taskStatusBadge.classList.add('hidden');
+    taskStatusBadge.dataset.state = 'idle';
+    return;
+  }
+  taskStatusBadge.classList.remove('hidden');
+  taskStatusBadge.dataset.state = state;
+  taskBadgeLabel.textContent = state;
+}
+
+// ============================================================
+// Thinking indicator
+// ============================================================
+
+function showThinkingIndicator(label) {
+  thinkingLabel.textContent = label || 'Thinking…';
+  thinkingIndicator.classList.remove('hidden');
+  scrollToBottom();
+}
+
+function hideThinkingIndicator() {
+  thinkingIndicator.classList.add('hidden');
+}
+
+function setThinkingLabel(label) {
+  thinkingLabel.textContent = label;
+  showThinkingIndicator(label);
+}
+
+// ============================================================
+// Right panel — collapse / expand + tab switching
+// ============================================================
+
+window.toggleRightPanel = function() {
+  const panel = document.getElementById('right-panel');
+  const btn   = document.getElementById('panel-toggle-btn');
+  const appBody = document.getElementById('app-body');
+  const collapsed = panel.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  // Adjust grid on the parent
+  appBody.style.gridTemplateColumns = collapsed
+    ? `1fr ${getComputedStyle(document.documentElement).getPropertyValue('--panel-toggle-w').trim()} 0px`
+    : '';
+};
+
+window.switchTab = function(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+  // Show selected
+  const tab = document.getElementById(`tab-${tabName}`);
+  if (tab) tab.classList.remove('hidden');
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.classList.add('active');
+};
+
+window.expandAndTab = function(tabName) {
+  const panel = document.getElementById('right-panel');
+  if (panel.classList.contains('collapsed')) {
+    toggleRightPanel();
+  }
+  switchTab(tabName);
+};
+
+// ============================================================
+// Memory tab — update recent history
+// ============================================================
+
+const recentHistory = []; // { role, text }[] last 5
+
+function updateMemoryHistory(text, role) {
+  recentHistory.push({ role, text });
+  if (recentHistory.length > 5) recentHistory.shift();
+  renderMemoryHistory();
+}
+
+function renderMemoryHistory() {
+  const list = document.getElementById('memory-history-list');
+  if (!list) return;
+  if (!recentHistory.length) {
+    list.innerHTML = '<div class="tab-placeholder">No history yet.</div>';
+    return;
+  }
+  list.innerHTML = recentHistory.map(({ role, text }) => {
+    const snippet = text.length > 80 ? text.slice(0, 77) + '…' : text;
+    return `
+      <div class="memory-history-row">
+        <span class="memory-role ${role}">${escapeHtml(role)}</span>
+        <span class="memory-snippet">${escapeHtml(snippet)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+// Files tab — project tree
 // ============================================================
 
 function updateTreePanel(treeText) {
@@ -349,14 +674,9 @@ function updateTreePanel(treeText) {
   const ph = document.getElementById('tree-placeholder');
   if (ph) ph.remove();
   treeContent.textContent = treeText;
+  // Optionally switch to Files tab on first update
+  // switchTab('files');
 }
-
-window.toggleTreePanel = function() {
-  const panel = document.getElementById('tree-panel');
-  const btn   = document.getElementById('tree-collapse-btn');
-  const col   = panel.classList.toggle('collapsed');
-  btn.textContent = col ? '▶' : '◀';
-};
 
 // ============================================================
 // Optimizer indicator (footer spinner)
@@ -386,23 +706,13 @@ function appendOptimizerPill(original, optimized) {
 }
 
 // ============================================================
-// Optimizer state (toggled from settings panel)
+// Optimizer state
 // ============================================================
 
-/**
- * Apply the optimizer state to:
- *   - JS flag
- *   - The toggle widget in the settings panel
- *   - The read-only badge in the model bar
- */
 function setOptimizerState(enabled) {
   optimizerEnabled = enabled;
-
-  // Panel toggle
   toggleOptimizer.classList.toggle('on', enabled);
   toggleOptimizerLabel.textContent = enabled ? 'on' : 'off';
-
-  // Model bar badge
   optimizerBadge.textContent = enabled ? '⚙ optimizer: on' : '⚙ optimizer: off';
   optimizerBadge.classList.remove('hidden');
 }
@@ -410,62 +720,36 @@ function setOptimizerState(enabled) {
 toggleOptimizer.addEventListener('click', () => {
   const next = !optimizerEnabled;
   sendWS({ type: 'set_optimizer', data: { enabled: next } });
-  setOptimizerState(next);  // optimistic
+  setOptimizerState(next);
 });
 
 // ============================================================
 // Local mode state
 // ============================================================
 
-/**
- * Apply local mode to all relevant UI:
- *   - Mode switch buttons (ONLINE/LOCAL highlight)
- *   - Model display bar
- *   - Claude status pill label
- *   - Primary model dropdown (disabled in local mode)
- *   - Model bar local-mode badge
- */
 function applyLocalMode(enabled) {
   localModeEnabled = enabled;
-
-  // Mode switch highlight
   btnModeOnline.classList.toggle('active-online', !enabled);
   btnModeLocal.classList.toggle('active-local',   enabled);
-
-  // Primary model dropdown — grayed out when local is active
   selPrimaryModel.disabled = enabled;
   const primaryRow = document.getElementById('row-primary-model');
   if (primaryRow) primaryRow.style.opacity = enabled ? '0.4' : '1';
-
-  // Model bar
   updateModelDisplay();
-
-  // Claude pill label
   const claudeLabel = statusClaude.querySelector('.status-label');
   if (claudeLabel) claudeLabel.textContent = enabled ? 'local' : 'claude';
-
-  // Local-mode badge in model bar
   localModeBadge.textContent = enabled ? '🖥 local: on' : '🖥 local: off';
   localModeBadge.classList.remove('hidden');
 }
 
-/**
- * Update the model-display bar to show which model is active.
- * - Online mode: shows the Claude primary model
- * - Local mode: shows the Ollama local-agent model
- */
 function updateModelDisplay() {
   if (localModeEnabled) {
     modelDisplay.textContent = `local: ${currentLocalModel}`;
   } else {
     modelDisplay.textContent = `claude: ${currentPrimaryModel}`;
   }
-
-  // Also update the sub-label inside the settings panel mode toggle
   modeModelLabel.textContent = localModeEnabled ? currentLocalModel : currentPrimaryModel;
 }
 
-// Mode switch click handlers
 btnModeOnline.addEventListener('click', () => {
   if (localModeEnabled) {
     sendWS({ type: 'set_local_mode', data: { enabled: false } });
@@ -497,14 +781,9 @@ btnSettingsOpen.addEventListener('click',  openSettings);
 btnSettingsClose.addEventListener('click', closeSettings);
 settingsBackdrop.addEventListener('click', closeSettings);
 
-// Keyboard: Escape closes the panel
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && settingsPanel.classList.contains('open')) closeSettings();
 });
-
-// ============================================================
-// Settings panel — Advanced section toggle
-// ============================================================
 
 window.toggleAdvanced = function() {
   advancedHeader.classList.toggle('open');
@@ -520,7 +799,6 @@ selPrimaryModel.addEventListener('change', () => {
   currentPrimaryModel = model;
   sendWS({ type: 'set_model', data: { model } });
   if (!localModeEnabled) updateModelDisplay();
-  // Ack flash will come from model_status server event
 });
 
 selLocalAgentModel.addEventListener('change', () => {
@@ -528,7 +806,6 @@ selLocalAgentModel.addEventListener('change', () => {
   currentLocalModel = model;
   sendWS({ type: 'set_local_agent_model', data: { model } });
   if (localModeEnabled) updateModelDisplay();
-  // Ack flash will come from local_agent_model_status server event
 });
 
 // ============================================================
@@ -547,14 +824,13 @@ toggleEmbeddings.addEventListener('click', () => {
 // Settings panel — number inputs (debounced)
 // ============================================================
 
-// Map: input element ID → config key
 const numberInputMap = [
-  { id: 'inp-recent-turns',      key: 'context.recent_turns',           parse: parseInt  },
-  { id: 'inp-summary-threshold', key: 'context.summary_threshold',      parse: parseInt  },
-  { id: 'inp-retrieval-n',       key: 'context.retrieval_n',            parse: parseInt  },
-  { id: 'inp-max-history',       key: 'context.max_history_turns',      parse: parseInt  },
+  { id: 'inp-recent-turns',      key: 'context.recent_turns',            parse: parseInt  },
+  { id: 'inp-summary-threshold', key: 'context.summary_threshold',       parse: parseInt  },
+  { id: 'inp-retrieval-n',       key: 'context.retrieval_n',             parse: parseInt  },
+  { id: 'inp-max-history',       key: 'context.max_history_turns',       parse: parseInt  },
   { id: 'inp-max-iterations',    key: 'context.max_iterations_per_turn', parse: parseInt  },
-  { id: 'inp-local-timeout',     key: 'local_agent_timeout',            parse: parseFloat },
+  { id: 'inp-local-timeout',     key: 'local_agent_timeout',             parse: parseFloat },
 ];
 
 const _debounceTimers = {};
@@ -571,7 +847,6 @@ numberInputMap.forEach(({ id, key, parse }) => {
   });
 });
 
-// Similarity cutoff slider — send immediately on change (sliders feel sluggish with debounce)
 inpSimilarity.addEventListener('input', () => {
   const v = parseFloat(inpSimilarity.value);
   valSimilarity.textContent = v.toFixed(2);
@@ -581,7 +856,6 @@ inpSimilarity.addEventListener('input', () => {
   }, 300);
 });
 
-// Tree root — send on blur or Enter
 function sendTreeRoot() {
   const v = inpTreeRoot.value.trim();
   if (v) sendWS({ type: 'set_config', data: { key: 'tree_root', value: v } });
@@ -593,7 +867,6 @@ inpTreeRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.prev
 // ACK flash helpers
 // ============================================================
 
-// Map from config key → ack element ID
 const keyToAckId = {
   'context.recent_turns':            'ack-recent-turns',
   'context.summary_threshold':       'ack-summary-threshold',
@@ -602,7 +875,7 @@ const keyToAckId = {
   'context.max_history_turns':       'ack-max-history',
   'context.max_iterations_per_turn': 'ack-max-iterations',
   'local_agent_timeout':             'ack-local-timeout',
-  'embeddings.enabled':              null,   // toggle — no dot needed
+  'embeddings.enabled':              null,
   'tree_root':                       'ack-tree-root',
 };
 
@@ -623,17 +896,13 @@ function flashAckForKey(key) {
 // ============================================================
 
 function populateSettingsFromStatus(data) {
-  // Primary model dropdown
   if (data.primary_model) {
     currentPrimaryModel = data.primary_model;
     if (selPrimaryModel) {
-      // Select matching option, or add it if not in list
       const existing = [...selPrimaryModel.options].find(o => o.value === data.primary_model);
       if (existing) existing.selected = true;
     }
   }
-
-  // Local agent model dropdown
   if (data.local_agent_model) {
     currentLocalModel = data.local_agent_model;
     if (selLocalAgentModel) {
@@ -642,32 +911,33 @@ function populateSettingsFromStatus(data) {
     }
   }
 
-  // Optimizer toggle
   setOptimizerState(!!data.use_prompt_optimizer);
-
-  // Local mode
   applyLocalMode(!!data.local_mode);
 
-  // Advanced fields
   const ctx = data.context || {};
   if (inpRecentTurns      && ctx.recent_turns      != null) inpRecentTurns.value      = ctx.recent_turns;
   if (inpSummaryThreshold && ctx.summary_threshold  != null) inpSummaryThreshold.value = ctx.summary_threshold;
   if (inpRetrievalN       && ctx.retrieval_n        != null) inpRetrievalN.value       = ctx.retrieval_n;
   if (inpSimilarity       && ctx.similarity_cutoff  != null) {
-    inpSimilarity.value  = ctx.similarity_cutoff;
+    inpSimilarity.value = ctx.similarity_cutoff;
     valSimilarity.textContent = Number(ctx.similarity_cutoff).toFixed(2);
   }
-  if (inpMaxHistory    && ctx.max_history_turns         != null) inpMaxHistory.value    = ctx.max_history_turns;
-  if (inpMaxIterations && ctx.max_iterations_per_turn   != null) inpMaxIterations.value = ctx.max_iterations_per_turn;
-  if (inpLocalTimeout  && data.local_agent_timeout      != null) inpLocalTimeout.value  = data.local_agent_timeout;
+  if (inpMaxHistory    && ctx.max_history_turns          != null) inpMaxHistory.value    = ctx.max_history_turns;
+  if (inpMaxIterations && ctx.max_iterations_per_turn    != null) inpMaxIterations.value = ctx.max_iterations_per_turn;
+  if (inpLocalTimeout  && data.local_agent_timeout       != null) inpLocalTimeout.value  = data.local_agent_timeout;
 
   const emb = data.embeddings || {};
   if (emb.enabled != null) {
     toggleEmbeddings.classList.toggle('on', !!emb.enabled);
     toggleEmbeddingsLbl.textContent = emb.enabled ? 'on' : 'off';
   }
-
   if (inpTreeRoot && data.tree_root != null) inpTreeRoot.value = data.tree_root;
+
+  // Phase 3: populate memory tab vector count
+  if (data.embeddings_count != null) {
+    const el = document.getElementById('memory-vector-status');
+    if (el) el.textContent = `Semantic memory: ${data.embeddings_count} entries`;
+  }
 }
 
 // ============================================================
@@ -715,9 +985,14 @@ function setWaiting(waiting) {
 // ============================================================
 
 function clearChat() {
-  chatArea.querySelectorAll('.msg-row, .tool-event, .tool-denied-msg, .optimizer-pill')
-          .forEach(el => el.remove());
-  Object.keys(lastToolEventEl).forEach(k => delete lastToolEventEl[k]);
+  chatArea.querySelectorAll(
+    '.msg-row, .tool-block, .tool-denied-msg, .optimizer-pill'
+  ).forEach(el => el.remove());
+  pendingToolBlocks = {};
+  activeTaskSteps   = {};
+  recentHistory.length = 0;
+  renderMemoryHistory();
+  resetTaskPanel();
 
   const welcome = document.createElement('div');
   welcome.id = 'welcome';
@@ -742,15 +1017,12 @@ async function pollStatus() {
     const res  = await fetch('/status');
     const data = await res.json();
 
-    // Status pills
     statusClaude.classList.toggle('online',  !!data.claude_api);
     statusClaude.classList.toggle('offline', !data.claude_api);
     statusOllama.classList.toggle('online',  !!data.ollama);
     statusOllama.classList.toggle('offline', !data.ollama);
 
-    // Populate all settings panel controls from server state
     populateSettingsFromStatus(data);
-
   } catch (e) {
     console.warn('[status] Could not fetch /status:', e);
   }
@@ -773,6 +1045,25 @@ function autoResize(el) {
 }
 
 // ============================================================
+// Copy-to-clipboard for code blocks
+// ============================================================
+
+function attachCopyBtn(codeBlockEl) {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const pre = codeBlockEl.querySelector('pre');
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      btn.textContent = 'copied!';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+    });
+  });
+  codeBlockEl.appendChild(btn);
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -784,11 +1075,26 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function renderMarkdown(text) {
-  return escapeHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
+/**
+ * Minimal markdown renderer that also handles fenced code blocks.
+ * Code blocks become .code-block divs with copy button support.
+ */
+function renderMarkdownWithCode(text) {
+  // Split on fenced code blocks first
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return parts.map(part => {
+    if (part.startsWith('```')) {
+      const lines  = part.slice(3, -3).split('\n');
+      const lang   = lines[0].trim() || 'code';
+      const code   = lines.slice(1).join('\n');
+      return `<div class="code-block"><pre>${escapeHtml(code)}</pre></div>`;
+    }
+    // Inline markdown
+    return escapeHtml(part)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  }).join('');
 }
 
 // ============================================================

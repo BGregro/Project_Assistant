@@ -34,6 +34,9 @@
       "fetch_timeout": 10,
       "max_fetch_chars": 8000,
       "searxng_url": "http://localhost:8888"
+    },
+    "code": {
+      "timeout_seconds": 30
     }
   }
 }

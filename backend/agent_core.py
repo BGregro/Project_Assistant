@@ -61,7 +61,15 @@ class AgentCore:
             "Use tools whenever they would help complete the user's request. "
             "Before using a tool, briefly state what you're about to do. "
             "After getting tool results, synthesise them into a clear final answer. "
-            "Be concise. Avoid unnecessary preamble."
+            "Be concise. Avoid unnecessary preamble.\n\n"
+            "You have access to an execute_code tool that runs Python or Bash on the "
+            "host machine. Prefer writing and running code over guessing at results "
+            "for anything computational, data-related, or verifiable by execution. "
+            "Always inspect stdout and stderr from the result before concluding success "
+            "or failure — a zero exit code with empty stdout may still mean the output "
+            "went to a file or was suppressed. "
+            "If the first run fails, read the error, fix the code, and try again rather "
+            "than giving up or answering from assumptions."
         )
 
     # ------------------------------------------------------------------
@@ -262,7 +270,7 @@ class AgentCore:
         send_event: Callable,
         pending_confirmations: dict,
     ) -> dict:
-        await send_event("tool_call", {"tool": tool_name, "input": tool_input})
+        await send_event("tool_call", {"tool": tool_name, "input": tool_input, "tool_use_id": tool_use_id})
 
         if tool_is_destructive(tool_name):
             approved = await self._request_confirmation(

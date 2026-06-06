@@ -43,6 +43,7 @@ from agent_tools.local_llm import is_ollama_available, summarize_history
 from agent_tools.web import register_web_tools
 from agent_tools.system_info import register_system_tools
 from agent_tools.file_analysis import register_file_analysis_tools
+from agent_tools.code_executor import register_code_executor_tools
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -78,12 +79,14 @@ register_capabilities_tools()
 register_web_tools()
 register_system_tools()
 register_file_analysis_tools()
+register_code_executor_tools()
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
     "capabilities (list_capabilities), "
     "web (search_web, fetch_page), "
     "system (get_system_info), "
-    "file_analysis (analyze_file)"
+    "file_analysis (analyze_file), "
+    "code_executor (execute_code)"
 )
 
 # ---------------------------------------------------------------------------
@@ -111,6 +114,16 @@ async def serve_index():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
+def _get_embeddings_count() -> int:
+    """Return number of stored embedding entries, or 0 if unavailable."""
+    try:
+        from memory.embeddings import _get_collection
+        col = _get_collection()
+        return col.count()
+    except Exception:
+        return 0
+
+
 @app.get("/status")
 async def status():
     has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -128,6 +141,7 @@ async def status():
         "embeddings":            config.get("embeddings", {}),
         "local_agent_timeout":   agent.local_agent_timeout,
         "tree_root":             config.get("tree_root", "."),
+        "embeddings_count":      _get_embeddings_count(),
     })
 
 
