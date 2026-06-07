@@ -646,3 +646,53 @@ details[open] .tb-arrow { transform: rotate(90deg); }
 }
 
 ::selection { background: var(--amber-glow); color: var(--text-bright); }
+
+/* ============================================================
+   PHASE 3b — TASK RUNNER UI
+   ============================================================ */
+
+/* Queued mid-task message annotation */
+.msg-bubble.queued-bubble {
+  background: transparent;
+  border: 1px dashed var(--border-soft);
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+/* Interrupted-task recovery banner */
+.interrupted-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(250,179,135,0.10);
+  border: 1px solid var(--amber-dim);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: 12px;
+  padding: 9px 14px;
+  margin-bottom: 14px;
+  animation: fadeIn 0.25s ease;
+}
+
+.interrupted-banner span {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.banner-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.banner-dismiss:hover {
+  color: var(--text-bright);
+  background: var(--bg-tool);
+}

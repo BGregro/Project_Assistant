@@ -5,6 +5,7 @@ WebSocket message types (client → server):
     { "type": "message",               "text": "…" }
     { "type": "confirm",               "confirmation_id": "…", "approved": bool }
     { "type": "clear" }
+    { "type": "stop_task" }                                      ← Phase 3b
     { "type": "set_optimizer",         "data": {"enabled": bool} }
     { "type": "set_local_mode",        "data": {"enabled": bool} }
     { "type": "set_model",             "data": {"model": "…"} }
@@ -15,6 +16,7 @@ WebSocket event types (server → client):
     status | prompt_optimized | tool_call | tool_result | tool_denied
     confirm_required | message | error | cleared | optimizer_status
     tree_update | local_mode_status | model_status | local_agent_model_status | config_ack
+    task_started | task_progress | task_stopped                   ← Phase 3b
 """
 
 import asyncio
@@ -35,6 +37,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 
 from agent_core import AgentCore
+from task_runner import TaskRunner                                   # Phase 3b
 from memory.context import load_history, save_history, trim_history
 from memory.embeddings import store_turn, search_similar, clear_all as clear_vectors
 from agent_tools.filesystem import register_all as register_filesystem_tools
@@ -90,10 +93,11 @@ logger.info(
 )
 
 # ---------------------------------------------------------------------------
-# Agent instance
+# Agent + TaskRunner instances
 # ---------------------------------------------------------------------------
 
-agent = AgentCore(config)
+agent       = AgentCore(config)
+task_runner = TaskRunner()      # Phase 3b: single shared instance for the server lifetime
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -101,8 +105,8 @@ agent = AgentCore(config)
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 2 — settings panel, configurable models and context",
-    version="1.4.0",
+    description="Phase 3b — long-running task loop with cancellation and mid-task messaging",
+    version="1.5.0",
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -143,6 +147,21 @@ async def status():
         "tree_root":             config.get("tree_root", "."),
         "embeddings_count":      _get_embeddings_count(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Phase 3b: GET /task — return last persisted task state
+# ---------------------------------------------------------------------------
+
+@app.get("/task")
+async def get_task():
+    """
+    Return the last persisted task state so the frontend can check on page
+    load whether a previous run was interrupted and show a recovery banner.
+    Returns {} if no task has been run yet.
+    """
+    data = task_runner.load_last_task()
+    return JSONResponse(data if data is not None else {})
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +343,22 @@ async def websocket_endpoint(websocket: WebSocket):
             user_text = raw.get("text", "").strip()
             if not user_text:
                 return None
+
+            # ── Phase 3b: mid-task message injection ──────────────────
+            # If a task is already running, queue the message rather than
+            # starting a new agent run.  The TaskRunner drains the queue
+            # at the top of each iteration, appending injected messages
+            # as user turns before the next Claude API call.
+            if task_runner.is_running():
+                logger.info(
+                    f"[ws] Task running — queuing mid-task message: {user_text[:60]!r}"
+                )
+                await task_runner.inject_message(user_text)
+                await send_event("status", {
+                    "text": "Message queued — agent will read it after the current step."
+                })
+                return None   # signal: don't start a new agent run
+
             logger.info(f"[ws] User: {user_text[:80]!r}")
             context_note, agent_messages = await build_context(history, user_text)
             if context_note:
@@ -332,6 +367,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     f"from {len(history)} history entries."
                 )
             return (user_text, context_note, agent_messages)
+
+        # ── Phase 3b: Stop button ──────────────────────────────────────
+        elif msg_type == "stop_task":
+            logger.info("[ws] stop_task received.")
+            task_runner.cancel()
+            # task_runner.run_task() will send task_stopped itself
 
         elif msg_type == "confirm":
             # This is the critical path: resolve a pending permission modal.
@@ -415,16 +456,27 @@ async def websocket_endpoint(websocket: WebSocket):
             user_text, context_note, agent_messages = result
 
             # ----------------------------------------------------------------
-            # Run the agent as a background Task so the receive loop stays
-            # live and can process incoming "confirm" messages while the agent
-            # is blocked on asyncio.Event.wait() inside _request_confirmation.
+            # Phase 3b: Launch agent via TaskRunner as a background Task.
             #
-            # Without this, agent.run() blocks the entire coroutine and the
-            # confirm response from the browser never gets read — causing every
-            # tool confirmation to time out and return False (denied).
+            # asyncio.create_task() schedules run_with_task_runner() on the
+            # event loop without blocking the current coroutine.  The receive
+            # pump below then runs concurrently so that:
+            #   - "confirm" messages can resolve tool permission modals
+            #     (asyncio.Event.set()) while the agent awaits them
+            #   - "stop_task" messages can cancel the task at the next safe
+            #     checkpoint via asyncio.Event.set() in TaskRunner.cancel()
+            #   - "message" messages during a running task go to
+            #     TaskRunner.inject_message() via asyncio.Queue.put()
+            #   - settings changes (set_model, set_config, etc.) still work
+            #
+            # Without create_task, agent.run_with_task_runner() would block
+            # the entire WebSocket coroutine and no incoming message could
+            # ever be processed until the agent finished — breaking all of
+            # the above.
             # ----------------------------------------------------------------
             agent_task = asyncio.create_task(
-                agent.run(
+                agent.run_with_task_runner(
+                    task_runner=task_runner,
                     user_message=user_text,
                     history=agent_messages,
                     send_event=send_event,
@@ -434,8 +486,6 @@ async def websocket_endpoint(websocket: WebSocket):
             )
 
             # Pump incoming messages while the agent is running.
-            # confirm messages resolve permission modals; other messages
-            # (settings toggles, model changes) are also handled live.
             while not agent_task.done():
                 recv_task = asyncio.create_task(websocket.receive_json())
                 done, _ = await asyncio.wait(

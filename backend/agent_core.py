@@ -12,6 +12,11 @@ The "brain" of the agent. Owns the full request lifecycle:
   6. After any tool result that contains a "tree" key, broadcast a tree_update event
      so the frontend sidebar stays in sync.
 
+Phase 3b additions:
+  - _run_claude_once(): single Claude API call with no loop; used by TaskRunner.
+  - run_with_task_runner(): entry point that delegates to task_runner.run_task()
+    instead of _run_claude(), keeping the existing run() method intact as fallback.
+
 The core knows NOTHING about how tools work internally — it only calls handlers
 from the registry. This keeps the architecture modular.
 """
@@ -82,6 +87,7 @@ class AgentCore:
 
     # ------------------------------------------------------------------
     # Public entry point — called from main.py WebSocket handler
+    # (original; kept intact for backward compatibility)
     # ------------------------------------------------------------------
 
     async def run(
@@ -93,7 +99,7 @@ class AgentCore:
         context_summary: str = "",
     ) -> str:
         """
-        Process a single user turn end-to-end.
+        Process a single user turn end-to-end (original bounded loop).
 
         Args:
             user_message:           Raw text from the user.
@@ -148,6 +154,107 @@ class AgentCore:
             )
 
     # ------------------------------------------------------------------
+    # Phase 3b: Task-runner entry point
+    # ------------------------------------------------------------------
+
+    async def run_with_task_runner(
+        self,
+        task_runner,                             # TaskRunner instance
+        user_message: str,
+        history: list[dict],
+        send_event: Callable[[str, dict], Awaitable[None]],
+        pending_confirmations: dict,
+        context_summary: str = "",
+    ) -> str:
+        """
+        Entry point for the Phase 3b task runner.
+
+        Mirrors the setup logic of run() (prompt optimisation, system prompt,
+        message list assembly, local-mode routing) but then delegates the
+        agentic loop to task_runner.run_task() instead of _run_claude().
+
+        This keeps run() intact as a fallback and avoids duplication of the
+        preamble logic.
+
+        Args:
+            task_runner:    TaskRunner instance from main.py.
+            (rest same as run())
+
+        Returns:
+            The final text reply (or cancellation/error string).
+        """
+
+        # ── Prompt optimisation ────────────────────────────────────────
+        optimized_message = user_message
+        if self.use_prompt_optimizer:
+            await send_event("status", {"text": "Optimizing prompt…"})
+            optimized_message = await optimize_prompt(
+                raw_message=user_message,
+                model=self.local_model,
+                base_url=self.ollama_url,
+            )
+            if optimized_message != user_message:
+                await send_event("prompt_optimized", {
+                    "original":  user_message,
+                    "optimized": optimized_message,
+                })
+            else:
+                await send_event("prompt_optimized", None)
+
+        # ── System prompt ──────────────────────────────────────────────
+        system = self._base_system_prompt
+        if context_summary:
+            system = f"{self._base_system_prompt}\n\n{context_summary}"
+
+        # ── Message list ───────────────────────────────────────────────
+        messages = history + [{"role": "user", "content": optimized_message}]
+
+        # ── Routing ────────────────────────────────────────────────────
+        if self.local_mode:
+            # Local mode doesn't use TaskRunner — fall back to the bounded local loop.
+            return await self._run_local(messages, send_event, pending_confirmations)
+
+        return await task_runner.run_task(
+            initial_message=user_message,
+            messages=messages,
+            system=system,
+            send_event=send_event,
+            pending_confirmations=pending_confirmations,
+            agent=self,
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 3b: Single Claude API call (no loop, no event sending)
+    # Used by TaskRunner to make exactly one round-trip per iteration.
+    # ------------------------------------------------------------------
+
+    async def _run_claude_once(
+        self,
+        messages: list[dict],
+        system: str,
+    ) -> anthropic.types.Message:
+        """
+        Make a single call to the Claude API and return the raw response.
+
+        Raises API exceptions as-is so the caller (TaskRunner) can decide
+        how to handle them (fallback, error event, etc.).
+
+        This method intentionally has:
+          - No loop
+          - No event sending
+          - No tool dispatch
+          - No fallback logic
+        All of that lives in TaskRunner.run_task().
+        """
+        return await self.client.messages.create(
+            model=self.primary_model,
+            max_tokens=4096,
+            system=system,
+            tools=get_all_definitions(),
+            messages=messages,
+        )
+
+    # ------------------------------------------------------------------
     # Local-only agentic loop
     # ------------------------------------------------------------------
 
@@ -193,7 +300,7 @@ class AgentCore:
         return final_text
 
     # ------------------------------------------------------------------
-    # Claude agentic loop
+    # Claude agentic loop (original bounded version — kept as fallback)
     # ------------------------------------------------------------------
 
     async def _run_claude(
@@ -204,7 +311,7 @@ class AgentCore:
         pending_confirmations: dict,
         optimized_message: str,
     ) -> str:
-        """The original Claude API agentic loop."""
+        """The original Claude API agentic loop (bounded by max_iterations)."""
         iteration = 0
 
         while iteration < self.max_iterations:

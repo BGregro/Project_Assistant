@@ -226,6 +226,14 @@ function handleServerEvent(type, data) {
 
     // --- Phase 3 new events ---
 
+    case 'task_started':
+      // The backend confirmed a task is now running. Show the Stop button
+      // and switch the badge to 'running'.  The frontend already called
+      // startTaskRunning() in sendMessage(), so this is a belt-and-braces
+      // confirmation that both sides agree a task is active.
+      handleTaskStarted(data);
+      break;
+
     case 'task_progress':
       handleTaskProgress(data);
       break;
@@ -245,7 +253,22 @@ function handleServerEvent(type, data) {
 
 function sendMessage() {
   const text = userInput.value.trim();
-  if (!text || isWaiting) return;
+  if (!text) return;
+
+  // ── Phase 3b: mid-task message injection ─────────────────────────────────
+  // If the Stop button is visible, a task is running.  Show a muted "queued"
+  // annotation instead of a normal user bubble and let the backend inject the
+  // message at the next safe checkpoint.
+  if (isTaskRunning) {
+    appendQueuedMessage(text);
+    sendWS({ type: 'message', text });
+    userInput.value = '';
+    autoResize(userInput);
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  if (isWaiting) return;
 
   const welcome = document.getElementById('welcome');
   if (welcome) welcome.remove();
@@ -299,6 +322,22 @@ function appendErrorMessage(text) {
   row.innerHTML = `
     <span class="msg-role" style="color:var(--red)">err</span>
     <div class="msg-bubble" style="border-color:var(--red);color:var(--red);">${escapeHtml(text)}</div>
+  `;
+  chatArea.appendChild(row);
+  scrollToBottom();
+}
+
+/**
+ * Muted italic annotation shown when the user sends a message while a task
+ * is already running.  The backend queues it; the agent reads it at the next
+ * checkpoint.
+ */
+function appendQueuedMessage(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row queued-row';
+  row.innerHTML = `
+    <span class="msg-role" style="opacity:0.45">you</span>
+    <div class="msg-bubble queued-bubble">↪ Instruction queued for agent: <em>${escapeHtml(text)}</em></div>
   `;
   chatArea.appendChild(row);
   scrollToBottom();
@@ -469,6 +508,16 @@ function appendToolDenied(toolName) {
 // Task progress — right panel Tasks tab
 // ============================================================
 
+function handleTaskStarted(data) {
+  // Belt-and-braces: ensure Stop button and badge reflect running state.
+  // sendMessage() already called startTaskRunning(), but the backend
+  // confirmation is the canonical signal that a task is truly active.
+  isTaskRunning = true;
+  btnStop.classList.remove('hidden');
+  btnStop.disabled = false;
+  updateTaskBadge('thinking');
+}
+
 function handleTaskProgress(data) {
   // data: { step: N, label: "...", status: "running|done|failed", elapsed_ms: N }
   const { step, label, status, elapsed_ms } = data;
@@ -516,16 +565,43 @@ function handleTaskProgress(data) {
 }
 
 function handleTaskStopped(data) {
-  // Mark last running step as cancelled
+  // Mark last running step as cancelled/failed
   Object.values(activeTaskSteps).forEach(el => {
     if (el.classList.contains('running')) {
       el.className = 'task-step cancelled';
     }
   });
+
   stopTaskRunning();
   updateTaskBadge('idle');
   hideThinkingIndicator();
   setWaiting(false);
+
+  const reason = data && data.reason;
+
+  if (reason === 'user_cancelled') {
+    // Append a muted annotation in chat
+    const row = document.createElement('div');
+    row.className = 'msg-row agent-row';
+    row.innerHTML = `
+      <span class="msg-role" style="opacity:0.45">sys</span>
+      <div class="msg-bubble" style="opacity:0.6;font-style:italic;">↪ Task cancelled.</div>
+    `;
+    chatArea.appendChild(row);
+    scrollToBottom();
+
+  } else if (reason === 'error') {
+    const errText = (data && data.error) ? data.error : 'Unknown error.';
+    const row = document.createElement('div');
+    row.className = 'msg-row agent-row';
+    row.innerHTML = `
+      <span class="msg-role" style="color:var(--red)">sys</span>
+      <div class="msg-bubble" style="border-color:var(--red);color:var(--red);">↪ Task failed: ${escapeHtml(errText)}</div>
+    `;
+    chatArea.appendChild(row);
+    scrollToBottom();
+  }
+  // reason === 'complete': agent already sent its final answer via 'message' event
 }
 
 function resetTaskPanel() {
@@ -1101,6 +1177,54 @@ function renderMarkdownWithCode(text) {
 // Init
 // ============================================================
 
-connectWS();
-pollStatus();
-setInterval(pollStatus, 30_000);
+async function init() {
+  connectWS();
+  pollStatus();
+  setInterval(pollStatus, 30_000);
+
+  // Phase 3b: on page load, check whether the last task was interrupted.
+  // Show a dismissible warning banner so the user knows they can resume
+  // or start fresh — we never auto-resume because the agent might have
+  // been mid-destructive-operation.
+  try {
+    const res  = await fetch('/task');
+    const task = await res.json();
+    if (task && task.status === 'running') {
+      showInterruptedBanner(task);
+    }
+  } catch (e) {
+    // /task unavailable (server not yet ready on first load) — ignore
+  }
+}
+
+/**
+ * Show a yellow dismissible banner at the top of the chat area when a
+ * previously running task was interrupted (server was restarted while a
+ * task was active, leaving status="running" on disk).
+ */
+function showInterruptedBanner(task) {
+  const existing = document.getElementById('interrupted-banner');
+  if (existing) return;  // don't show twice
+
+  const banner = document.createElement('div');
+  banner.id = 'interrupted-banner';
+  banner.className = 'interrupted-banner';
+
+  const preview = task.initial_message
+    ? ` ("${escapeHtml(task.initial_message.slice(0, 60))}${task.initial_message.length > 60 ? '…' : ''}")`
+    : '';
+
+  banner.innerHTML = `
+    <span>⚠ A previous task was interrupted${preview}. Ask the agent to continue or start fresh.</span>
+    <button class="banner-dismiss" onclick="document.getElementById('interrupted-banner').remove()">✕</button>
+  `;
+
+  // Insert before the first child of chatArea, or append if empty
+  if (chatArea.firstChild) {
+    chatArea.insertBefore(banner, chatArea.firstChild);
+  } else {
+    chatArea.appendChild(banner);
+  }
+}
+
+init();
