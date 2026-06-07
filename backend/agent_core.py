@@ -83,6 +83,14 @@ class AgentCore:
             "want to approve the execution or try a different approach.\n"
             "5. If a run fails (non-zero exit code or stderr), read the error, fix the "
             "code, and call execute_code again. Do not give up after one failure."
+            "You can write and register new tools using write_tool and reload_tool. "
+            "Tools must be written as Python async functions following this template: "
+            "async def tool_name(param: str) -> dict — always return a dict with at least "
+            "a 'success' key. Include a register_<toolname>_tools() function that calls "
+            "register_tool() from agent_tools (import: from agent_tools import register_tool). "
+            "After writing a tool with write_tool, always call reload_tool to activate it. "
+            "New tools are saved to agent_tools/generated/ and persist across restarts. "
+            "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/."
         )
 
     # ------------------------------------------------------------------

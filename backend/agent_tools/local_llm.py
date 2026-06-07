@@ -51,9 +51,10 @@ async def local_llm_call(
     Returns None if Ollama is unreachable or returns an error — never raises.
     """
     payload: dict = {
-        "model":  model,
-        "prompt": prompt,
-        "stream": False,
+        "model":      model,
+        "prompt":     prompt,
+        "stream":     False,
+        "keep_alive": 0,    # Unload model from RAM immediately after response
     }
     if system:
         payload["system"] = system
@@ -244,10 +245,11 @@ async def local_agent_call(
         logger.info(f"[local_llm] local_agent_call iteration {iteration + 1} (timeout={timeout}s)")
 
         payload = {
-            "model":    model,
-            "messages": working_messages,
-            "tools":    ollama_tools,
-            "stream":   False,
+            "model":      model,
+            "messages":   working_messages,
+            "tools":      ollama_tools,
+            "stream":     False,
+            "keep_alive": 0,    # Unload model from RAM immediately after response
         }
 
         try:

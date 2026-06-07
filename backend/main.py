@@ -47,6 +47,8 @@ from agent_tools.web import register_web_tools
 from agent_tools.system_info import register_system_tools
 from agent_tools.file_analysis import register_file_analysis_tools
 from agent_tools.code_executor import register_code_executor_tools
+from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c
+from agent_tools.hot_reload import hot_reload_tool, list_generated_tools  # Phase 3c
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -83,14 +85,40 @@ register_web_tools()
 register_system_tools()
 register_file_analysis_tools()
 register_code_executor_tools()
+register_tool_writer_tools()                                             # Phase 3c
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
     "capabilities (list_capabilities), "
     "web (search_web, fetch_page), "
     "system (get_system_info), "
     "file_analysis (analyze_file), "
-    "code_executor (execute_code)"
+    "code_executor (execute_code), "
+    "tool_writer (write_tool, reload_tool)"                             # Phase 3c
 )
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Phase 3c — Auto-load agent-written tools from agent_tools/generated/
+# ---------------------------------------------------------------------------
+# Any .py files written by the agent in a previous session are imported and
+# registered here so they are available immediately, without the agent having
+# to call reload_tool again after a restart.
+
+async def _autoload_generated_tools() -> None:
+    """Import every .py file in agent_tools/generated/ that passes validation."""
+    from pathlib import Path
+    generated_dir = Path(__file__).parent / "agent_tools" / "generated"
+    files = list_generated_tools()
+    if not files:
+        logger.info("[startup] No agent-generated tools to auto-load.")
+        return
+    for filename in files:
+        path = generated_dir / filename
+        success, msg = await hot_reload_tool(path, send_event=None)
+        if success:
+            logger.info(f"[startup] Auto-loaded generated tool: {filename}")
+        else:
+            logger.warning(f"[startup] Failed to auto-load {filename}: {msg}")
 
 # ---------------------------------------------------------------------------
 # Agent + TaskRunner instances
@@ -105,12 +133,18 @@ task_runner = TaskRunner()      # Phase 3b: single shared instance for the serve
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 3b — long-running task loop with cancellation and mid-task messaging",
-    version="1.5.0",
+    description="Phase 3c — agent self-modification: write_tool, reload_tool, hot-reload",
+    version="1.6.0",
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+
+# Phase 3c: auto-load agent-written tools once the event loop is running.
+@app.on_event("startup")
+async def _on_startup() -> None:
+    await _autoload_generated_tools()
 
 
 @app.get("/", include_in_schema=False)

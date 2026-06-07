@@ -9,6 +9,9 @@ Unlike hard-coded descriptions, this tool introspects the registry at call time,
 so it automatically reflects any new tools added in Phase 2 or 3 without any
 manual updates.
 
+Phase 3c addition: also lists files in agent_tools/generated/ so the agent
+always knows what tool code it has already written (even across restarts).
+
 Registration: call register_capabilities_tools() once at startup from main.py.
 """
 
@@ -16,6 +19,7 @@ import logging
 from typing import Any
 
 from . import register_tool, get_all_definitions, list_tools, is_destructive
+from .hot_reload import list_generated_tools
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +31,20 @@ logger = logging.getLogger(__name__)
 async def list_capabilities() -> dict[str, Any]:
     """
     Introspect the live tool registry and return a structured description of
-    every registered tool, plus top-level agent architecture information.
+    every registered tool, plus top-level agent architecture information,
+    plus a listing of agent-written tools in agent_tools/generated/.
 
-    Returns a dict with two keys:
-      - "agent_info":  High-level description of the agent's architecture.
-      - "tools":       List of tool descriptors, one per registered tool.
+    Returns a dict with:
+      - "agent_info":       High-level description of the agent's architecture.
+      - "tool_count":       Total number of registered tools.
+      - "tools":            List of tool descriptors (one per registered tool).
+      - "generated_tools":  List of .py filenames in agent_tools/generated/
+                            (tools the agent has written itself).
 
     Each tool descriptor contains:
-      - name:         The tool's identifier (what Claude calls it).
-      - description:  Human-readable description passed to the LLM.
-      - parameters:   The JSON Schema input_schema for the tool's parameters.
+      - name:           The tool's identifier (what Claude calls it).
+      - description:    Human-readable description passed to the LLM.
+      - parameters:     The JSON Schema input_schema for the tool's parameters.
       - is_destructive: Whether the tool requires user confirmation before running.
     """
     logger.info("[capabilities] list_capabilities called — introspecting registry.")
@@ -49,11 +57,14 @@ async def list_capabilities() -> dict[str, Any]:
     for defn in definitions:
         name = defn.get("name", "?")
         tools_info.append({
-            "name":         name,
-            "description":  defn.get("description", ""),
-            "parameters":   defn.get("input_schema", {}),
+            "name":           name,
+            "description":    defn.get("description", ""),
+            "parameters":     defn.get("input_schema", {}),
             "is_destructive": is_destructive(name),
         })
+
+    # List agent-generated tool files (Phase 3c)
+    generated = list_generated_tools()
 
     return {
         "success": True,
@@ -65,10 +76,20 @@ async def list_capabilities() -> dict[str, Any]:
             "Conversation history is persisted to disk (history.json) and embedded into a local "
             "ChromaDB vector store (nomic-embed-text) for semantic retrieval of relevant past context. "
             "Tools are registered in a central registry; new tools can be added without modifying "
-            "the agent core."
+            "the agent core. The agent can write new tools to agent_tools/generated/ using "
+            "write_tool and activate them with reload_tool."
         ),
         "tool_count": len(tools_info),
         "tools": tools_info,
+        # Phase 3c: agent-written tool files that persist across sessions
+        "generated_tools": {
+            "description": (
+                "Python files in agent_tools/generated/ — tools written by the agent itself. "
+                "These are auto-loaded on every server restart."
+            ),
+            "files": generated,
+            "count": len(generated),
+        },
     }
 
 
@@ -85,13 +106,14 @@ def register_capabilities_tools() -> None:
             "List all tools and capabilities available to this agent. "
             "Returns a structured description of every registered tool (name, description, "
             "parameters, whether it requires user confirmation) plus a summary of the agent's "
-            "architecture. Use this when the user asks what you can do, what tools you have, "
+            "architecture and a list of agent-written tool files in agent_tools/generated/. "
+            "Use this when the user asks what you can do, what tools you have, "
             "or how you work."
         ),
         input_schema={
-            "type": "object",
+            "type":       "object",
             "properties": {},
-            "required": [],
+            "required":   [],
         },
         handler=list_capabilities,
         is_destructive=False,   # Read-only introspection — no side effects
