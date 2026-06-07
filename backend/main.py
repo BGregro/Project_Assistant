@@ -310,116 +310,163 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_event(event_type: str, data) -> None:
         await websocket.send_json({"type": event_type, "data": data})
 
+    # ------------------------------------------------------------------
+    # Message dispatcher — handles all incoming WS messages from the
+    # browser.  Called both from the idle loop (no agent running) and
+    # from the concurrent receive pump that runs while the agent is busy.
+    # Returns the (user_text, context_note, agent_messages) tuple when
+    # msg_type=="message", otherwise returns None.
+    # ------------------------------------------------------------------
+    async def dispatch(raw: dict):
+        msg_type = raw.get("type")
+
+        if msg_type == "message":
+            user_text = raw.get("text", "").strip()
+            if not user_text:
+                return None
+            logger.info(f"[ws] User: {user_text[:80]!r}")
+            context_note, agent_messages = await build_context(history, user_text)
+            if context_note:
+                logger.info(
+                    f"[ws] Context note: {len(context_note)} chars "
+                    f"from {len(history)} history entries."
+                )
+            return (user_text, context_note, agent_messages)
+
+        elif msg_type == "confirm":
+            # This is the critical path: resolve a pending permission modal.
+            # Must be reachable even while agent.run() is awaiting the event.
+            confirmation_id = raw.get("confirmation_id")
+            approved        = bool(raw.get("approved", False))
+            if confirmation_id in pending_confirmations:
+                pending_confirmations[confirmation_id]["result"] = approved
+                pending_confirmations[confirmation_id]["event"].set()
+                logger.info(
+                    f"[ws] Confirmation '{confirmation_id}': "
+                    f"{'approved' if approved else 'denied'}"
+                )
+            else:
+                logger.warning(f"[ws] Unknown confirmation_id: {confirmation_id!r}")
+
+        elif msg_type == "clear":
+            history.clear()
+            save_history(history)
+            clear_vectors()
+            await send_event("cleared", {"text": "Conversation history cleared."})
+            logger.info("[ws] History and vector store cleared by user.")
+
+        elif msg_type == "set_optimizer":
+            enabled = bool(raw.get("data", {}).get("enabled", True))
+            agent.use_prompt_optimizer = enabled
+            logger.info(f"[ws] Prompt optimizer set to: {enabled}")
+            await send_event("optimizer_status", {"enabled": enabled})
+
+        elif msg_type == "set_local_mode":
+            enabled          = bool(raw.get("data", {}).get("enabled", False))
+            agent.local_mode = enabled
+            logger.info(f"[ws] Local mode set to: {enabled}")
+            await send_event("local_mode_status", {"enabled": enabled})
+
+        elif msg_type == "set_model":
+            model = raw.get("data", {}).get("model", "").strip()
+            if model:
+                agent.primary_model = model
+                config.setdefault("llm", {})["primary"] = model
+                logger.info(f"[ws] Primary model set to: {model}")
+                await send_event("model_status", {"model": model})
+
+        elif msg_type == "set_local_agent_model":
+            model = raw.get("data", {}).get("model", "").strip()
+            if model:
+                agent.local_agent_model = model
+                config.setdefault("llm", {})["local_agent"] = model
+                logger.info(f"[ws] Local agent model set to: {model}")
+                await send_event("local_agent_model_status", {"model": model})
+
+        elif msg_type == "set_config":
+            data_payload = raw.get("data", {})
+            key   = data_payload.get("key", "").strip()
+            value = data_payload.get("value")
+            if key and value is not None:
+                try:
+                    _apply_config(key, value)
+                    await send_event("config_ack", {"key": key, "value": value})
+                except Exception as e:
+                    logger.warning(f"[ws] set_config failed for {key!r}: {e}")
+                    await send_event("error", {"text": f"Could not apply config {key}: {e}"})
+
+        else:
+            logger.warning(f"[ws] Unknown message type: {msg_type!r}")
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Main receive loop
+    # ------------------------------------------------------------------
     try:
         while True:
-            raw      = await websocket.receive_json()
-            msg_type = raw.get("type")
+            raw = await websocket.receive_json()
+            result = await dispatch(raw)
 
-            # ---- Incoming chat message ----
-            if msg_type == "message":
-                user_text = raw.get("text", "").strip()
-                if not user_text:
-                    continue
+            if result is None:
+                # Not a chat message — already handled inside dispatch()
+                continue
 
-                logger.info(f"[ws] User: {user_text[:80]!r}")
+            user_text, context_note, agent_messages = result
 
-                context_note, agent_messages = await build_context(history, user_text)
-
-                if context_note:
-                    logger.info(
-                        f"[ws] Context note: {len(context_note)} chars "
-                        f"from {len(history)} history entries."
-                    )
-
-                assistant_reply = await agent.run(
+            # ----------------------------------------------------------------
+            # Run the agent as a background Task so the receive loop stays
+            # live and can process incoming "confirm" messages while the agent
+            # is blocked on asyncio.Event.wait() inside _request_confirmation.
+            #
+            # Without this, agent.run() blocks the entire coroutine and the
+            # confirm response from the browser never gets read — causing every
+            # tool confirmation to time out and return False (denied).
+            # ----------------------------------------------------------------
+            agent_task = asyncio.create_task(
+                agent.run(
                     user_message=user_text,
                     history=agent_messages,
                     send_event=send_event,
                     pending_confirmations=pending_confirmations,
                     context_summary=context_note,
                 )
+            )
 
-                ts = datetime.now(timezone.utc).isoformat()
-                history.append({"timestamp": ts, "role": "user",      "content": user_text})
-                history.append({"timestamp": ts, "role": "assistant", "content": assistant_reply})
-
-                max_turns = config.get("context", {}).get("max_history_turns", 20)
-                history   = trim_history(history, max_turns)
-                save_history(history)
-
-                asyncio.create_task(_embed_turn_bg(ts, user_text, assistant_reply))
-
-            # ---- Confirmation ----
-            elif msg_type == "confirm":
-                confirmation_id = raw.get("confirmation_id")
-                approved        = bool(raw.get("approved", False))
-
-                if confirmation_id in pending_confirmations:
-                    pending_confirmations[confirmation_id]["result"] = approved
-                    pending_confirmations[confirmation_id]["event"].set()
-                    logger.info(
-                        f"[ws] Confirmation '{confirmation_id}': "
-                        f"{'approved' if approved else 'denied'}"
-                    )
-                else:
-                    logger.warning(f"[ws] Unknown confirmation_id: {confirmation_id!r}")
-
-            # ---- Clear history ----
-            elif msg_type == "clear":
-                history.clear()
-                save_history(history)
-                clear_vectors()
-                await send_event("cleared", {"text": "Conversation history cleared."})
-                logger.info("[ws] History and vector store cleared by user.")
-
-            # ---- Optimizer toggle ----
-            elif msg_type == "set_optimizer":
-                enabled = bool(raw.get("data", {}).get("enabled", True))
-                agent.use_prompt_optimizer = enabled
-                logger.info(f"[ws] Prompt optimizer set to: {enabled}")
-                await send_event("optimizer_status", {"enabled": enabled})
-
-            # ---- Local mode toggle ----
-            elif msg_type == "set_local_mode":
-                enabled          = bool(raw.get("data", {}).get("enabled", False))
-                agent.local_mode = enabled
-                logger.info(f"[ws] Local mode set to: {enabled}")
-                await send_event("local_mode_status", {"enabled": enabled})
-
-            # ---- Primary Claude model change ----
-            elif msg_type == "set_model":
-                model = raw.get("data", {}).get("model", "").strip()
-                if model:
-                    agent.primary_model = model
-                    # Also update the live config so /status reflects it
-                    config.setdefault("llm", {})["primary"] = model
-                    logger.info(f"[ws] Primary model set to: {model}")
-                    await send_event("model_status", {"model": model})
-
-            # ---- Local agent model change ----
-            elif msg_type == "set_local_agent_model":
-                model = raw.get("data", {}).get("model", "").strip()
-                if model:
-                    agent.local_agent_model = model
-                    config.setdefault("llm", {})["local_agent"] = model
-                    logger.info(f"[ws] Local agent model set to: {model}")
-                    await send_event("local_agent_model_status", {"model": model})
-
-            # ---- Generic config key update ----
-            elif msg_type == "set_config":
-                data_payload = raw.get("data", {})
-                key   = data_payload.get("key", "").strip()
-                value = data_payload.get("value")
-                if key and value is not None:
+            # Pump incoming messages while the agent is running.
+            # confirm messages resolve permission modals; other messages
+            # (settings toggles, model changes) are also handled live.
+            while not agent_task.done():
+                recv_task = asyncio.create_task(websocket.receive_json())
+                done, _ = await asyncio.wait(
+                    {agent_task, recv_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if recv_task in done:
                     try:
-                        _apply_config(key, value)
-                        await send_event("config_ack", {"key": key, "value": value})
-                    except Exception as e:
-                        logger.warning(f"[ws] set_config failed for {key!r}: {e}")
-                        await send_event("error", {"text": f"Could not apply config {key}: {e}"})
+                        incoming = recv_task.result()
+                        await dispatch(incoming)
+                    except Exception:
+                        pass  # WebSocket closed mid-run; agent_task will finish normally
+                else:
+                    # agent_task finished first — cancel the pending recv and exit pump
+                    recv_task.cancel()
+                    try:
+                        await recv_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
 
-            else:
-                logger.warning(f"[ws] Unknown message type: {msg_type!r}")
+            assistant_reply = await agent_task  # re-raises any exception from the task
+
+            ts = datetime.now(timezone.utc).isoformat()
+            history.append({"timestamp": ts, "role": "user",      "content": user_text})
+            history.append({"timestamp": ts, "role": "assistant", "content": assistant_reply})
+
+            max_turns = config.get("context", {}).get("max_history_turns", 20)
+            history   = trim_history(history, max_turns)
+            save_history(history)
+
+            asyncio.create_task(_embed_turn_bg(ts, user_text, assistant_reply))
 
     except WebSocketDisconnect:
         logger.info("[ws] Client disconnected.")
