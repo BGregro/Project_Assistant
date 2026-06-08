@@ -17,6 +17,12 @@ WebSocket event types (server → client):
     confirm_required | message | error | cleared | optimizer_status
     tree_update | local_mode_status | model_status | local_agent_model_status | config_ack
     task_started | task_progress | task_stopped                   ← Phase 3b
+
+Phase 3d changes:
+    - TaskRunner now receives the config dict so it can read compression_threshold.
+    - _apply_config() syncs the three new efficiency flags to agent attributes.
+    - /status endpoint includes use_intent_routing, use_tool_compression,
+      use_code_prevalidation so the settings panel can read them on page load.
 """
 
 import asyncio
@@ -93,16 +99,12 @@ logger.info(
     "system (get_system_info), "
     "file_analysis (analyze_file), "
     "code_executor (execute_code), "
-    "tool_writer (write_tool, reload_tool)"                             # Phase 3c
+    "tool_writer (write_tool, reload_tool)"
 )
 
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # Phase 3c — Auto-load agent-written tools from agent_tools/generated/
 # ---------------------------------------------------------------------------
-# Any .py files written by the agent in a previous session are imported and
-# registered here so they are available immediately, without the agent having
-# to call reload_tool again after a restart.
 
 async def _autoload_generated_tools() -> None:
     """Import every .py file in agent_tools/generated/ that passes validation."""
@@ -122,10 +124,11 @@ async def _autoload_generated_tools() -> None:
 
 # ---------------------------------------------------------------------------
 # Agent + TaskRunner instances
+# Phase 3d: TaskRunner receives config so it can read compression_threshold.
 # ---------------------------------------------------------------------------
 
 agent       = AgentCore(config)
-task_runner = TaskRunner()      # Phase 3b: single shared instance for the server lifetime
+task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -133,8 +136,8 @@ task_runner = TaskRunner()      # Phase 3b: single shared instance for the serve
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 3c — agent self-modification: write_tool, reload_tool, hot-reload",
-    version="1.6.0",
+    description="Phase 3d — efficiency layer: intent routing, tool compression, code pre-validation, context compression",
+    version="1.7.0",
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -167,19 +170,23 @@ async def status():
     has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     ollama_ok   = await is_ollama_available(config.get("ollama_base_url", "http://localhost:11434"))
     return JSONResponse({
-        "claude_api":            has_api_key,
-        "ollama":                ollama_ok,
-        "use_prompt_optimizer":  agent.use_prompt_optimizer,
-        "local_fallback":        config.get("local_fallback", True),
-        "local_mode":            agent.local_mode,
-        "primary_model":         agent.primary_model,
-        "local_agent_model":     agent.local_agent_model,
-        "models":                config.get("llm", {}),
-        "context":               config.get("context", {}),
-        "embeddings":            config.get("embeddings", {}),
-        "local_agent_timeout":   agent.local_agent_timeout,
-        "tree_root":             config.get("tree_root", "."),
-        "embeddings_count":      _get_embeddings_count(),
+        "claude_api":              has_api_key,
+        "ollama":                  ollama_ok,
+        "use_prompt_optimizer":    agent.use_prompt_optimizer,
+        # Phase 3d — new flags readable by the settings panel
+        "use_intent_routing":      agent.use_intent_routing,
+        "use_tool_compression":    agent.use_tool_compression,
+        "use_code_prevalidation":  agent.use_code_prevalidation,
+        "local_fallback":          config.get("local_fallback", True),
+        "local_mode":              agent.local_mode,
+        "primary_model":           agent.primary_model,
+        "local_agent_model":       agent.local_agent_model,
+        "models":                  config.get("llm", {}),
+        "context":                 config.get("context", {}),
+        "embeddings":              config.get("embeddings", {}),
+        "local_agent_timeout":     agent.local_agent_timeout,
+        "tree_root":               config.get("tree_root", "."),
+        "embeddings_count":        _get_embeddings_count(),
     })
 
 
@@ -189,41 +196,29 @@ async def status():
 
 @app.get("/task")
 async def get_task():
-    """
-    Return the last persisted task state so the frontend can check on page
-    load whether a previous run was interrupted and show a recovery banner.
-    Returns {} if no task has been run yet.
-    """
     data = task_runner.load_last_task()
     return JSONResponse(data if data is not None else {})
 
 
 # ---------------------------------------------------------------------------
 # set_config helper — apply a dot-notation key to the live config dict
-# and mirror any change to agent attributes that cache config values.
+# and mirror any change to agent / task_runner attributes.
 # ---------------------------------------------------------------------------
 
 def _apply_config(key: str, value) -> None:
     """
-    Apply a dot-notation config key (e.g. "context.recent_turns") to the live
-    `config` dict, then mirror the change to any `agent.*` attribute that reads
-    from config so in-flight requests see the new value immediately.
+    Apply a dot-notation config key to the live `config` dict, then mirror
+    the change to any agent.* or task_runner.* attribute that caches it.
 
-    Supported keys and their agent mirrors:
-        context.recent_turns          — config only (read by build_context each call)
-        context.summary_threshold     — config only
-        context.retrieval_n           — config only
-        context.similarity_cutoff     — config only
-        context.max_history_turns     — config only (read by WS handler each turn)
-        context.max_iterations_per_turn → agent.max_iterations
-        embeddings.enabled            — config only (read by _embed_turn_bg each call)
-        tree_root                     — config only (read by filesystem.py each call)
-        local_agent_timeout           → agent.local_agent_timeout
+    Phase 3d additions:
+        use_intent_routing       → agent.use_intent_routing
+        use_tool_compression     → agent.use_tool_compression
+        use_code_prevalidation   → agent.use_code_prevalidation
+        context.compression_threshold → task_runner._compression_threshold
     """
     parts = key.split(".")
     node  = config
 
-    # Navigate to the parent of the leaf key
     for part in parts[:-1]:
         if part not in node or not isinstance(node[part], dict):
             node[part] = {}
@@ -233,11 +228,20 @@ def _apply_config(key: str, value) -> None:
     node[leaf] = value
     logger.info(f"[config] Set {key} = {value!r}")
 
-    # Mirror to agent attributes where applicable
+    # Mirror to agent attributes
     if key == "context.max_iterations_per_turn":
         agent.max_iterations = int(value)
     elif key == "local_agent_timeout":
         agent.local_agent_timeout = float(value)
+    # Phase 3d — new efficiency flags
+    elif key == "use_intent_routing":
+        agent.use_intent_routing = bool(value)
+    elif key == "use_tool_compression":
+        agent.use_tool_compression = bool(value)
+    elif key == "use_code_prevalidation":
+        agent.use_code_prevalidation = bool(value)
+    elif key == "context.compression_threshold":
+        task_runner._compression_threshold = int(value)
 
 
 # ---------------------------------------------------------------------------
@@ -363,13 +367,6 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_event(event_type: str, data) -> None:
         await websocket.send_json({"type": event_type, "data": data})
 
-    # ------------------------------------------------------------------
-    # Message dispatcher — handles all incoming WS messages from the
-    # browser.  Called both from the idle loop (no agent running) and
-    # from the concurrent receive pump that runs while the agent is busy.
-    # Returns the (user_text, context_note, agent_messages) tuple when
-    # msg_type=="message", otherwise returns None.
-    # ------------------------------------------------------------------
     async def dispatch(raw: dict):
         msg_type = raw.get("type")
 
@@ -378,11 +375,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if not user_text:
                 return None
 
-            # ── Phase 3b: mid-task message injection ──────────────────
-            # If a task is already running, queue the message rather than
-            # starting a new agent run.  The TaskRunner drains the queue
-            # at the top of each iteration, appending injected messages
-            # as user turns before the next Claude API call.
             if task_runner.is_running():
                 logger.info(
                     f"[ws] Task running — queuing mid-task message: {user_text[:60]!r}"
@@ -391,7 +383,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await send_event("status", {
                     "text": "Message queued — agent will read it after the current step."
                 })
-                return None   # signal: don't start a new agent run
+                return None
 
             logger.info(f"[ws] User: {user_text[:80]!r}")
             context_note, agent_messages = await build_context(history, user_text)
@@ -402,15 +394,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
             return (user_text, context_note, agent_messages)
 
-        # ── Phase 3b: Stop button ──────────────────────────────────────
         elif msg_type == "stop_task":
             logger.info("[ws] stop_task received.")
             task_runner.cancel()
-            # task_runner.run_task() will send task_stopped itself
 
         elif msg_type == "confirm":
-            # This is the critical path: resolve a pending permission modal.
-            # Must be reachable even while agent.run() is awaiting the event.
             confirmation_id = raw.get("confirmation_id")
             approved        = bool(raw.get("approved", False))
             if confirmation_id in pending_confirmations:
@@ -475,39 +463,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
         return None
 
-    # ------------------------------------------------------------------
-    # Main receive loop
-    # ------------------------------------------------------------------
     try:
         while True:
             raw = await websocket.receive_json()
             result = await dispatch(raw)
 
             if result is None:
-                # Not a chat message — already handled inside dispatch()
                 continue
 
             user_text, context_note, agent_messages = result
 
-            # ----------------------------------------------------------------
-            # Phase 3b: Launch agent via TaskRunner as a background Task.
-            #
-            # asyncio.create_task() schedules run_with_task_runner() on the
-            # event loop without blocking the current coroutine.  The receive
-            # pump below then runs concurrently so that:
-            #   - "confirm" messages can resolve tool permission modals
-            #     (asyncio.Event.set()) while the agent awaits them
-            #   - "stop_task" messages can cancel the task at the next safe
-            #     checkpoint via asyncio.Event.set() in TaskRunner.cancel()
-            #   - "message" messages during a running task go to
-            #     TaskRunner.inject_message() via asyncio.Queue.put()
-            #   - settings changes (set_model, set_config, etc.) still work
-            #
-            # Without create_task, agent.run_with_task_runner() would block
-            # the entire WebSocket coroutine and no incoming message could
-            # ever be processed until the agent finished — breaking all of
-            # the above.
-            # ----------------------------------------------------------------
             agent_task = asyncio.create_task(
                 agent.run_with_task_runner(
                     task_runner=task_runner,
@@ -519,7 +484,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
             )
 
-            # Pump incoming messages while the agent is running.
             while not agent_task.done():
                 recv_task = asyncio.create_task(websocket.receive_json())
                 done, _ = await asyncio.wait(
@@ -531,16 +495,15 @@ async def websocket_endpoint(websocket: WebSocket):
                         incoming = recv_task.result()
                         await dispatch(incoming)
                     except Exception:
-                        pass  # WebSocket closed mid-run; agent_task will finish normally
+                        pass
                 else:
-                    # agent_task finished first — cancel the pending recv and exit pump
                     recv_task.cancel()
                     try:
                         await recv_task
                     except (asyncio.CancelledError, Exception):
                         pass
 
-            assistant_reply = await agent_task  # re-raises any exception from the task
+            assistant_reply = await agent_task
 
             ts = datetime.now(timezone.utc).isoformat()
             history.append({"timestamp": ts, "role": "user",      "content": user_text})

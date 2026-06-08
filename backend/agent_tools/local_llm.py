@@ -54,7 +54,7 @@ async def local_llm_call(
         "model":      model,
         "prompt":     prompt,
         "stream":     False,
-        "keep_alive": 0,    # Unload model from RAM immediately after response
+        "keep_alive": -1,   # Keep model loaded for the life of the Ollama process
     }
     if system:
         payload["system"] = system
@@ -249,7 +249,7 @@ async def local_agent_call(
             "messages":   working_messages,
             "tools":      ollama_tools,
             "stream":     False,
-            "keep_alive": 0,    # Unload model from RAM immediately after response
+            "keep_alive": -1,   # Keep model loaded for the life of the Ollama process
         }
 
         try:
@@ -341,3 +341,254 @@ async def is_ollama_available(base_url: str = DEFAULT_BASE_URL) -> bool:
             return resp.status_code == 200
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Phase 3d — Efficiency layer functions
+# ---------------------------------------------------------------------------
+
+async def classify_intent(
+    message: str,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> str:
+    """
+    Classify a user message into exactly one routing category using the local LLM.
+
+    Categories:
+        SIMPLE  — greetings, trivial questions answerable in one sentence, no tools needed
+        TOOL    — needs a tool call but is straightforward (file ops, web search, system info)
+        COMPLEX — multi-step reasoning, planning, code architecture, research synthesis,
+                  self-modification, app development
+
+    Returns one of the three uppercase category strings.
+    Falls back to "TOOL" (safe default) if the call fails or returns an unexpected value.
+    """
+    system = (
+        "Classify the user message into exactly one category. "
+        "Reply with only the category word, nothing else. "
+        "Categories: "
+        "SIMPLE (greetings, trivial questions answerable in one sentence, no tools needed), "
+        "TOOL (needs a tool call but straightforward — file ops, web search, system info, single-step tasks), "
+        "COMPLEX (multi-step reasoning, planning, code architecture, research synthesis, "
+        "self-modification, app development)."
+    )
+
+    payload: dict = {
+        "model":      model,
+        "prompt":     message,
+        "system":     system,
+        "stream":     False,
+        "keep_alive": -1,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=GENERATE_TIMEOUT) as client:
+            response = await client.post(f"{base_url}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            raw = data.get("response", "").strip().upper()
+            if raw in ("SIMPLE", "TOOL", "COMPLEX"):
+                logger.info(f"[local_llm] classify_intent → {raw}")
+                return raw
+            # If the model returned something unexpected, log and default
+            logger.warning(
+                f"[local_llm] classify_intent returned unexpected value {raw!r}, "
+                "defaulting to TOOL."
+            )
+            return "TOOL"
+
+    except httpx.ConnectError:
+        logger.warning("[local_llm] classify_intent: Ollama offline, defaulting to TOOL.")
+    except httpx.TimeoutException:
+        logger.warning("[local_llm] classify_intent: timed out, defaulting to TOOL.")
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[local_llm] classify_intent: HTTP {e.response.status_code}, defaulting to TOOL.")
+    except Exception as e:
+        logger.warning(f"[local_llm] classify_intent: unexpected error ({e}), defaulting to TOOL.")
+
+    return "TOOL"
+
+
+async def compress_tool_result(
+    tool_name: str,
+    result: dict,
+    user_goal: str,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> dict:
+    """
+    Compress a verbose tool result down to the information relevant to the user's goal.
+
+    Skip compression entirely if the serialised result is under 500 characters —
+    the overhead isn't worth it.
+
+    Returns either:
+        {"compressed": True,  "content": "<compressed text>"}   — on success
+        original result dict unchanged                          — on failure or tiny result
+    """
+    serialised = str(result)
+    if len(serialised) < 500:
+        # Not worth compressing
+        return result
+
+    system = (
+        "You are a result compressor. Given a tool result and the user's current goal, "
+        "extract ONLY the information relevant to the goal. "
+        "Discard boilerplate, irrelevant fields, and verbose formatting. "
+        "Return compressed plain text, maximum 300 words."
+    )
+
+    prompt = f"Goal: {user_goal}\n\nTool result:\n{serialised}"
+
+    payload: dict = {
+        "model":      model,
+        "prompt":     prompt,
+        "system":     system,
+        "stream":     False,
+        "keep_alive": -1,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=GENERATE_TIMEOUT) as client:
+            response = await client.post(f"{base_url}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            compressed_text = data.get("response", "").strip()
+
+        if compressed_text:
+            ratio = len(compressed_text) / len(serialised)
+            logger.info(
+                f"[local_llm] compress_tool_result ({tool_name}): "
+                f"{len(serialised)} → {len(compressed_text)} chars "
+                f"({ratio:.0%})"
+            )
+            return {"compressed": True, "content": compressed_text}
+
+    except httpx.ConnectError:
+        logger.warning("[local_llm] compress_tool_result: Ollama offline, using original.")
+    except httpx.TimeoutException:
+        logger.warning("[local_llm] compress_tool_result: timed out, using original.")
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[local_llm] compress_tool_result: HTTP {e.response.status_code}, using original.")
+    except Exception as e:
+        logger.warning(f"[local_llm] compress_tool_result: unexpected error ({e}), using original.")
+
+    # Any failure: return the original so Claude always gets something
+    return result
+
+
+async def summarize_completed_steps(
+    steps_text: str,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> str:
+    """
+    Compress a multi-step task history into 3-5 dense bullet points.
+
+    Called by TaskRunner when the running token estimate exceeds the
+    compression_threshold config value.
+
+    Returns the summary string, or steps_text unchanged on failure so
+    the task can always continue.
+    """
+    system = (
+        "Summarize the following completed task steps into 3-5 bullet points. "
+        "Focus on what was accomplished and what key data was found. "
+        "Be dense and specific. Start each bullet with •"
+    )
+
+    payload: dict = {
+        "model":      model,
+        "prompt":     steps_text,
+        "system":     system,
+        "stream":     False,
+        "keep_alive": -1,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=GENERATE_TIMEOUT) as client:
+            response = await client.post(f"{base_url}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            summary = data.get("response", "").strip()
+
+        if summary:
+            logger.info(
+                f"[local_llm] summarize_completed_steps: "
+                f"{len(steps_text)} → {len(summary)} chars"
+            )
+            return summary
+
+    except httpx.ConnectError:
+        logger.warning("[local_llm] summarize_completed_steps: Ollama offline, using original.")
+    except httpx.TimeoutException:
+        logger.warning("[local_llm] summarize_completed_steps: timed out, using original.")
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[local_llm] summarize_completed_steps: HTTP {e.response.status_code}, using original.")
+    except Exception as e:
+        logger.warning(f"[local_llm] summarize_completed_steps: unexpected error ({e}), using original.")
+
+    return steps_text
+
+
+async def prevalidate_code(
+    code: str,
+    language: str,
+    intent: str,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> tuple[bool, str]:
+    """
+    Ask the local LLM to review agent-written code for obvious bugs before execution.
+
+    Returns:
+        (True,  "OK")           — code looks correct, proceed with execute_code
+        (False, "<issue>")      — obvious problem found, return synthetic error to Claude
+        (True,  "OK")           — on any failure (never block on prevalidation errors)
+
+    The function is intentionally lenient on failure: if Ollama is offline or
+    the call times out, the code goes through to execute_code unchanged.
+    Pre-validation is a cost-saving optimisation, not a security gate.
+    """
+    system = (
+        f"Review this {language} code for obvious bugs, syntax errors, or logic errors "
+        f"that would cause it to fail. The code is intended to: {intent}. "
+        "Reply with either 'OK' if the code looks correct, or 'ISSUE: ' followed by a "
+        "one-sentence description of the problem. Nothing else."
+    )
+
+    payload: dict = {
+        "model":      model,
+        "prompt":     code,
+        "system":     system,
+        "stream":     False,
+        "keep_alive": -1,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=GENERATE_TIMEOUT) as client:
+            response = await client.post(f"{base_url}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            verdict = data.get("response", "").strip()
+
+        if verdict.upper().startswith("ISSUE:"):
+            issue = verdict[6:].strip()
+            logger.info(f"[local_llm] prevalidate_code: ISSUE detected — {issue!r}")
+            return (False, issue)
+
+        logger.debug("[local_llm] prevalidate_code: OK")
+        return (True, "OK")
+
+    except httpx.ConnectError:
+        logger.warning("[local_llm] prevalidate_code: Ollama offline, passing through.")
+    except httpx.TimeoutException:
+        logger.warning("[local_llm] prevalidate_code: timed out, passing through.")
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"[local_llm] prevalidate_code: HTTP {e.response.status_code}, passing through.")
+    except Exception as e:
+        logger.warning(f"[local_llm] prevalidate_code: unexpected error ({e}), passing through.")
+
+    # Never block on prevalidation failure
+    return (True, "OK")

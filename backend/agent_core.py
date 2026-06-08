@@ -4,18 +4,32 @@ agent_core.py  —  Agent Core
 The "brain" of the agent. Owns the full request lifecycle:
 
   1. Optionally optimise the user's raw message via local LLM (prompt optimizer).
-  2. If local_mode is enabled, delegate entirely to local_agent_call() (no Claude API).
+  2. Optionally classify intent (Phase 3d) to route to local / haiku / sonnet tier.
+  3. If local_mode is enabled, delegate entirely to local_agent_call() (no Claude API).
      Otherwise, send the message to Claude with the tool definitions.
-  3. If Claude requests tools, dispatch them (with permission checks for destructive ones).
-  4. Feed tool results back to Claude and repeat until Claude gives a final answer.
-  5. Stream events to the frontend at every step so the UI stays live.
-  6. After any tool result that contains a "tree" key, broadcast a tree_update event
+  4. If Claude requests tools, dispatch them (with permission checks for destructive ones).
+     Before execute_code, optionally pre-validate the code (Phase 3d).
+     After receiving tool results, optionally compress them (Phase 3d).
+  5. Feed (compressed) tool results back to Claude and repeat until Claude gives a final answer.
+  6. Stream events to the frontend at every step so the UI stays live.
+  7. After any tool result that contains a "tree" key, broadcast a tree_update event
      so the frontend sidebar stays in sync.
 
 Phase 3b additions:
   - _run_claude_once(): single Claude API call with no loop; used by TaskRunner.
   - run_with_task_runner(): entry point that delegates to task_runner.run_task()
     instead of _run_claude(), keeping the existing run() method intact as fallback.
+
+Phase 3d additions:
+  - Intent routing: classify_intent() decides which tier handles this turn before
+    any Claude API call is made.
+  - Tool result compression: compress_tool_result() strips verbose output so Claude's
+    context stays lean.
+  - Code pre-validation: prevalidate_code() catches obvious bugs before execute_code
+    is actually invoked, saving a subprocess round-trip.
+  - self._current_goal: set at the start of each run; passed to compression calls.
+  - self.use_intent_routing / use_tool_compression / use_code_prevalidation: runtime
+    flags mirrored from config, toggleable via the settings panel.
 
 The core knows NOTHING about how tools work internally — it only calls handlers
 from the registry. This keeps the architecture modular.
@@ -29,9 +43,19 @@ from typing import Any, Callable, Awaitable
 import anthropic
 
 from agent_tools import get_all_definitions, get_handler, is_destructive as tool_is_destructive
-from agent_tools.local_llm import optimize_prompt, local_llm_call, local_agent_call
+from agent_tools.local_llm import (
+    optimize_prompt,
+    local_llm_call,
+    local_agent_call,
+    classify_intent,
+    compress_tool_result,
+    prevalidate_code,
+)
 
 logger = logging.getLogger(__name__)
+
+# Tools whose output is worth compressing (verbose by nature)
+_COMPRESSIBLE_TOOLS = {"search_web", "fetch_page", "get_system_info", "list_directory"}
 
 
 class AgentCore:
@@ -41,17 +65,18 @@ class AgentCore:
         llm_cfg = config.get("llm", {})
         self.primary_model:     str  = llm_cfg.get("primary",     "claude-haiku-4-5")
         self.complex_model:     str  = llm_cfg.get("complex",     "claude-sonnet-4-6")
-        self.local_model:       str  = llm_cfg.get("local",       "qwen2.5:7b")
+        self.local_model:       str  = llm_cfg.get("local",       "qwen2.5:14b")
         self.local_agent_model: str  = llm_cfg.get("local_agent", "qwen2.5:14b")
 
-        self.use_prompt_optimizer: bool  = config.get("use_prompt_optimizer", True)
-        self.local_fallback:       bool  = config.get("local_fallback", True)
-        self.local_mode:           bool  = config.get("local_mode", False)
-        self.ollama_url:           str   = config.get("ollama_base_url", "http://localhost:11434")
+        self.use_prompt_optimizer:  bool = config.get("use_prompt_optimizer",  True)
+        self.use_intent_routing:    bool = config.get("use_intent_routing",    True)
+        self.use_tool_compression:  bool = config.get("use_tool_compression",  True)
+        self.use_code_prevalidation: bool = config.get("use_code_prevalidation", True)
+        self.local_fallback:        bool = config.get("local_fallback",        True)
+        self.local_mode:            bool = config.get("local_mode",            False)
+        self.ollama_url:            str  = config.get("ollama_base_url",       "http://localhost:11434")
 
-        # local_agent_timeout is the per-HTTP-request timeout (seconds) for the
-        # agentic Ollama loop. Large models on CPU can take several minutes per
-        # response, so we surface this in config rather than hard-coding it.
+        # Per-request timeout for the local agentic loop (large models need time on CPU)
         self.local_agent_timeout: float = float(config.get("local_agent_timeout", 300))
 
         ctx_cfg = config.get("context", {})
@@ -60,6 +85,10 @@ class AgentCore:
         # AsyncAnthropic reads ANTHROPIC_API_KEY from the environment automatically.
         # Do NOT hardcode keys here; use a .env file or set the env var manually.
         self.client = anthropic.AsyncAnthropic()
+
+        # Current user goal — set at the start of each run() / run_with_task_runner()
+        # call so tool result compression has context about what the user wants.
+        self._current_goal: str = ""
 
         self._base_system_prompt = (
             "You are a capable personal AI agent with access to filesystem tools. "
@@ -119,12 +148,61 @@ class AgentCore:
         Returns:
             The final text reply from the agent.
         """
+        # Store the raw user message as the current goal for compression context.
+        self._current_goal = user_message
 
         # ----------------------------------------------------------------
-        # Step 1: Prompt optimisation (local LLM tier)
+        # Step 1: Intent routing (Phase 3d) — runs FIRST on the raw message.
+        # ----------------------------------------------------------------
+        # Classifying before optimization means SIMPLE queries never pay the
+        # optimizer cost at all.  For TOOL/COMPLEX the optimizer still runs
+        # below (step 2) before the Claude API call.
+        #
+        # SIMPLE  → answer locally right now, return immediately
+        # TOOL    → proceed with primary model (haiku) + optimizer
+        # COMPLEX → proceed with complex model (sonnet) + optimizer
+        model_override = None
+        intent = "TOOL"  # default when routing is disabled
+        if self.use_intent_routing and not self.local_mode:
+            await send_event("status", {"text": "Routing intent…"})
+            intent = await classify_intent(
+                message=user_message,
+                model=self.local_model,
+                base_url=self.ollama_url,
+            )
+
+            if intent == "SIMPLE":
+                await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
+                # Answer directly — no optimizer, no Claude API call
+                local_answer = await local_llm_call(
+                    prompt=user_message,
+                    model=self.local_model,
+                    base_url=self.ollama_url,
+                )
+                if local_answer:
+                    await send_event("message", {"text": local_answer, "source": "local"})
+                    return local_answer
+                # Ollama offline or empty — fall through to Claude
+                logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through to Claude.")
+                await send_event("status", {"text": "Local unavailable — using Claude…"})
+
+            elif intent == "COMPLEX":
+                model_override = self.complex_model
+                await send_event("status", {
+                    "text": f"Intent: COMPLEX → routing to {self.complex_model}…"
+                })
+            else:  # TOOL
+                await send_event("status", {
+                    "text": f"Intent: TOOL → routing to {self.primary_model}…"
+                })
+
+        # ----------------------------------------------------------------
+        # Step 2: Prompt optimisation — only for TOOL / COMPLEX intents.
+        # SIMPLE already returned above; optimizing a trivial message wastes
+        # a full model load/unload cycle with zero quality benefit.
         # ----------------------------------------------------------------
         optimized_message = user_message
-        if self.use_prompt_optimizer:
+        if self.use_prompt_optimizer and intent != "SIMPLE":
             await send_event("status", {"text": "Optimizing prompt…"})
             optimized_message = await optimize_prompt(
                 raw_message=user_message,
@@ -140,25 +218,26 @@ class AgentCore:
                 await send_event("prompt_optimized", None)
 
         # ----------------------------------------------------------------
-        # Step 2: Build system prompt — append context summary if present
+        # Step 3: Build system prompt — append context summary if present
         # ----------------------------------------------------------------
         system = self._base_system_prompt
         if context_summary:
             system = f"{self._base_system_prompt}\n\n{context_summary}"
 
         # ----------------------------------------------------------------
-        # Step 3: Build message list
+        # Step 4: Build message list
         # ----------------------------------------------------------------
         messages = history + [{"role": "user", "content": optimized_message}]
 
         # ----------------------------------------------------------------
-        # Step 4: Route to local mode or Claude API
+        # Step 5: Route to local mode or Claude API
         # ----------------------------------------------------------------
         if self.local_mode:
             return await self._run_local(messages, send_event, pending_confirmations)
         else:
             return await self._run_claude(
-                messages, system, send_event, pending_confirmations, optimized_message
+                messages, system, send_event, pending_confirmations,
+                optimized_message, model_override=model_override,
             )
 
     # ------------------------------------------------------------------
@@ -177,24 +256,58 @@ class AgentCore:
         """
         Entry point for the Phase 3b task runner.
 
-        Mirrors the setup logic of run() (prompt optimisation, system prompt,
-        message list assembly, local-mode routing) but then delegates the
-        agentic loop to task_runner.run_task() instead of _run_claude().
+        Mirrors the setup logic of run() (prompt optimisation, intent routing,
+        system prompt, message list assembly, local-mode routing) but then
+        delegates the agentic loop to task_runner.run_task() instead of
+        _run_claude().
 
-        This keeps run() intact as a fallback and avoids duplication of the
-        preamble logic.
-
-        Args:
-            task_runner:    TaskRunner instance from main.py.
-            (rest same as run())
-
-        Returns:
-            The final text reply (or cancellation/error string).
+        Phase 3d: intent routing applied here too. SIMPLE intents are answered
+        locally before the task runner is ever invoked. COMPLEX intents are
+        signalled to task_runner via agent.complex_model so it can pass the
+        right model to _run_claude_once().
         """
+        # Store goal for compression context
+        self._current_goal = user_message
 
-        # ── Prompt optimisation ────────────────────────────────────────
+        # ── Intent routing (Phase 3d) — runs FIRST on the raw message ─
+        # SIMPLE queries return immediately without ever running the optimizer.
+        model_override = None
+        intent = "TOOL"  # default when routing is disabled
+        if self.use_intent_routing and not self.local_mode:
+            await send_event("status", {"text": "Routing intent…"})
+            intent = await classify_intent(
+                message=user_message,
+                model=self.local_model,
+                base_url=self.ollama_url,
+            )
+
+            if intent == "SIMPLE":
+                await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
+                local_answer = await local_llm_call(
+                    prompt=user_message,
+                    model=self.local_model,
+                    base_url=self.ollama_url,
+                )
+                if local_answer:
+                    await send_event("message", {"text": local_answer, "source": "local"})
+                    return local_answer
+                logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through.")
+                await send_event("status", {"text": "Local unavailable — using Claude…"})
+
+            elif intent == "COMPLEX":
+                model_override = self.complex_model
+                await send_event("status", {
+                    "text": f"Intent: COMPLEX → routing to {self.complex_model}…"
+                })
+            else:
+                await send_event("status", {
+                    "text": f"Intent: TOOL → routing to {self.primary_model}…"
+                })
+
+        # ── Prompt optimisation — only for TOOL / COMPLEX intents ─────
+        # SIMPLE already returned above; no point optimizing a trivial message.
         optimized_message = user_message
-        if self.use_prompt_optimizer:
+        if self.use_prompt_optimizer and intent != "SIMPLE":
             await send_event("status", {"text": "Optimizing prompt…"})
             optimized_message = await optimize_prompt(
                 raw_message=user_message,
@@ -219,7 +332,6 @@ class AgentCore:
 
         # ── Routing ────────────────────────────────────────────────────
         if self.local_mode:
-            # Local mode doesn't use TaskRunner — fall back to the bounded local loop.
             return await self._run_local(messages, send_event, pending_confirmations)
 
         return await task_runner.run_task(
@@ -229,17 +341,20 @@ class AgentCore:
             send_event=send_event,
             pending_confirmations=pending_confirmations,
             agent=self,
+            model_override=model_override,
         )
 
     # ------------------------------------------------------------------
     # Phase 3b: Single Claude API call (no loop, no event sending)
     # Used by TaskRunner to make exactly one round-trip per iteration.
+    # Phase 3d: accepts optional model_override for COMPLEX intent routing.
     # ------------------------------------------------------------------
 
     async def _run_claude_once(
         self,
         messages: list[dict],
         system: str,
+        model_override: str | None = None,
     ) -> anthropic.types.Message:
         """
         Make a single call to the Claude API and return the raw response.
@@ -247,15 +362,14 @@ class AgentCore:
         Raises API exceptions as-is so the caller (TaskRunner) can decide
         how to handle them (fallback, error event, etc.).
 
-        This method intentionally has:
-          - No loop
-          - No event sending
-          - No tool dispatch
-          - No fallback logic
-        All of that lives in TaskRunner.run_task().
+        Args:
+            model_override: If set, use this model instead of self.primary_model.
+                            Used by Phase 3d intent routing to invoke claude-sonnet-4-6
+                            for COMPLEX intents without permanently changing the default.
         """
+        model = model_override if model_override else self.primary_model
         return await self.client.messages.create(
-            model=self.primary_model,
+            model=model,
             max_tokens=4096,
             system=system,
             tools=get_all_definitions(),
@@ -301,7 +415,7 @@ class AgentCore:
             base_url=self.ollama_url,
             max_iterations=self.max_iterations,
             tool_dispatcher=_dispatch,
-            timeout=self.local_agent_timeout,   # ← config-driven, no longer hardcoded
+            timeout=self.local_agent_timeout,
         )
 
         await send_event("message", {"text": final_text, "source": "local"})
@@ -309,6 +423,7 @@ class AgentCore:
 
     # ------------------------------------------------------------------
     # Claude agentic loop (original bounded version — kept as fallback)
+    # Phase 3d: accepts model_override for intent-based tier selection.
     # ------------------------------------------------------------------
 
     async def _run_claude(
@@ -318,6 +433,7 @@ class AgentCore:
         send_event: Callable,
         pending_confirmations: dict,
         optimized_message: str,
+        model_override: str | None = None,
     ) -> str:
         """The original Claude API agentic loop (bounded by max_iterations)."""
         iteration = 0
@@ -327,13 +443,11 @@ class AgentCore:
             await send_event("status", {"text": "Thinking…"})
 
             try:
-                response = await self.client.messages.create(
-                    model=self.primary_model,
-                    max_tokens=4096,
-                    system=system,
-                    tools=get_all_definitions(),
-                    messages=messages,
+                response = await self._run_claude_once(
+                    messages, system, model_override=model_override
                 )
+                # Only override the first call — subsequent iterations use primary
+                model_override = None
             except anthropic.APIConnectionError:
                 return await self._handle_api_unreachable(optimized_message, send_event)
             except anthropic.AuthenticationError:
@@ -383,6 +497,8 @@ class AgentCore:
 
     # ------------------------------------------------------------------
     # Tool execution (with permission check + tree broadcast)
+    # Phase 3d: code pre-validation before execute_code
+    #           tool result compression before returning to Claude
     # ------------------------------------------------------------------
 
     async def _execute_tool(
@@ -395,6 +511,7 @@ class AgentCore:
     ) -> dict:
         await send_event("tool_call", {"tool": tool_name, "input": tool_input, "tool_use_id": tool_use_id})
 
+        # ── Permission check ───────────────────────────────────────────
         if tool_is_destructive(tool_name):
             approved = await self._request_confirmation(
                 tool_name=tool_name,
@@ -407,6 +524,44 @@ class AgentCore:
                 await send_event("tool_denied", {"tool": tool_name})
                 return _make_tool_result(tool_use_id, result)
 
+        # ── Phase 3d: code pre-validation ─────────────────────────────
+        # For execute_code calls, ask the local LLM to review the code for
+        # obvious bugs before we spin up a subprocess. This saves an execution
+        # round-trip when the agent has generated broken code.
+        if tool_name == "execute_code" and self.use_code_prevalidation:
+            code     = tool_input.get("code", "")
+            language = tool_input.get("language", "python")
+            valid, issue = await prevalidate_code(
+                code=code,
+                language=language,
+                intent=self._current_goal,
+                model=self.local_model,
+                base_url=self.ollama_url,
+            )
+            if not valid:
+                await send_event("status", {
+                    "text": f"Pre-validation caught an issue: {issue} — asking agent to fix…"
+                })
+                synthetic_result = {
+                    "success":   False,
+                    "stdout":    "",
+                    "stderr":    (
+                        f"Pre-validation caught an issue before execution: {issue}. "
+                        "Please fix the code and retry."
+                    ),
+                    "exit_code": -1,
+                    "language":  language,
+                }
+                # Send the synthetic failure as a tool_result event so the UI
+                # shows what happened, then return it to Claude without executing.
+                await send_event("tool_result", {
+                    "tool":    tool_name,
+                    "success": False,
+                    "result":  synthetic_result,
+                })
+                return _make_tool_result(tool_use_id, synthetic_result)
+
+        # ── Dispatch to handler ────────────────────────────────────────
         handler = get_handler(tool_name)
         if handler is None:
             result = {"success": False, "error": f"No handler registered for tool '{tool_name}'."}
@@ -421,6 +576,7 @@ class AgentCore:
                 result = {"success": False, "error": str(e)}
                 logger.exception(f"[agent] Tool '{tool_name}' raised an exception")
 
+        # Always send the FULL uncompressed result to the UI so the user sees everything.
         await send_event("tool_result", {
             "tool":    tool_name,
             "success": result.get("success", False),
@@ -432,7 +588,20 @@ class AgentCore:
         if isinstance(result, dict) and "tree" in result:
             await send_event("tree_update", {"tree": result["tree"]})
 
-        return _make_tool_result(tool_use_id, result)
+        # ── Phase 3d: tool result compression ─────────────────────────
+        # Compress verbose results before appending to Claude's context window.
+        # The user-facing tool_result event above already carries the full output.
+        claude_result = result
+        if self.use_tool_compression and tool_name in _COMPRESSIBLE_TOOLS:
+            claude_result = await compress_tool_result(
+                tool_name=tool_name,
+                result=result,
+                user_goal=self._current_goal,
+                model=self.local_model,
+                base_url=self.ollama_url,
+            )
+
+        return _make_tool_result(tool_use_id, claude_result)
 
     # ------------------------------------------------------------------
     # Permission layer

@@ -2,10 +2,13 @@
   "llm": {
     "primary": "claude-haiku-4-5",
     "complex": "claude-sonnet-4-6",
-    "local": "qwen2.5:7b",
+    "local": "qwen2.5:14b",
     "local_agent": "qwen2.5:14b"
   },
   "use_prompt_optimizer": true,
+  "use_intent_routing": true,
+  "use_tool_compression": true,
+  "use_code_prevalidation": true,
   "local_fallback": true,
   "local_mode": false,
   "local_agent_timeout": 300,
@@ -22,7 +25,8 @@
     "recent_turns": 4,
     "summary_threshold": 4,
     "retrieval_n": 3,
-    "similarity_cutoff": 0.45
+    "similarity_cutoff": 0.45,
+    "compression_threshold": 6000
   },
   "embeddings": {
     "enabled": true,
