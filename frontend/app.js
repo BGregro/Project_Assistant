@@ -247,6 +247,11 @@ function handleServerEvent(type, data) {
       handleTaskPlan(data);
       break;
 
+    // Phase 3h — structured research mode
+    case 'research_started':
+      handleResearchStarted(data);
+      break;
+
     default:
       console.warn('[ws] Unknown event type:', type);
   }
@@ -523,6 +528,69 @@ function handleTaskStarted(data) {
   updateTaskBadge('thinking');
 }
 
+// ============================================================
+// Phase 3h: Research progress tracking
+// ============================================================
+
+// State for the active research run
+let _researchTotal   = 0;
+let _researchCurrent = 0;
+
+function handleResearchStarted(data) {
+  // Agent can send { total_questions: N } to initialise the bar early
+  const total = data && data.total_questions ? parseInt(data.total_questions) : 0;
+  if (total > 0) {
+    _researchTotal   = total;
+    _researchCurrent = 0;
+    _ensureResearchBar(total);
+  }
+}
+
+/**
+ * Create (or return) the research progress bar container inside the Tasks panel.
+ * The bar sits above the step timeline so it is always visible during a run.
+ */
+function _ensureResearchBar(total) {
+  const panel = document.getElementById('task-progress-panel');
+  if (!panel) return null;
+  let bar = document.getElementById('research-progress-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'research-progress-bar';
+    bar.className = 'research-progress-container';
+    bar.innerHTML = `
+      <div class="research-progress-label">
+        <span id="research-progress-text">Research: 0 / ${total}</span>
+      </div>
+      <div class="research-progress-track">
+        <div class="research-progress-fill" id="research-progress-fill" style="width:0%"></div>
+      </div>
+    `;
+    if (panel.firstChild) {
+      panel.insertBefore(bar, panel.firstChild);
+    } else {
+      panel.appendChild(bar);
+    }
+  }
+  return bar;
+}
+
+function _updateResearchBar(current, total) {
+  _ensureResearchBar(total);
+  const pct  = total > 0 ? Math.round((current / total) * 100) : 0;
+  const fill = document.getElementById('research-progress-fill');
+  const text = document.getElementById('research-progress-text');
+  if (fill) fill.style.width = pct + '%';
+  if (text) text.textContent = `Research: ${current} / ${total}`;
+}
+
+function _removeResearchBar() {
+  const bar = document.getElementById('research-progress-bar');
+  if (bar) bar.remove();
+  _researchTotal   = 0;
+  _researchCurrent = 0;
+}
+
 function handleTaskProgress(data) {
   // data: { step: N, label: "...", status: "running|done|failed", elapsed_ms: N }
   const { step, label, status, elapsed_ms } = data;
@@ -562,6 +630,16 @@ function handleTaskProgress(data) {
       : `${(elapsed_ms / 1000).toFixed(1)}s`;
   }
 
+  // Phase 3h: detect research progress labels ("Researching: N/T")
+  if (label && /^Researching:\s*\d+\/\d+/i.test(label)) {
+    const match = label.match(/(\d+)\/(\d+)/);
+    if (match) {
+      _researchCurrent = parseInt(match[1]);
+      _researchTotal   = parseInt(match[2]);
+      _updateResearchBar(_researchCurrent, _researchTotal);
+    }
+  }
+
   // Switch to tasks tab if not already visible
   const tasksTab = document.getElementById('tab-tasks');
   if (tasksTab && tasksTab.classList.contains('hidden')) {
@@ -570,6 +648,7 @@ function handleTaskProgress(data) {
 }
 
 function handleTaskStopped(data) {
+  _removeResearchBar();  // Phase 3h
   // Mark last running step as cancelled/failed
   Object.values(activeTaskSteps).forEach(el => {
     if (el.classList.contains('running')) {

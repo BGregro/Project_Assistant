@@ -129,10 +129,17 @@ class AgentCore:
             "After writing a tool with write_tool, always call reload_tool to activate it. "
             "New tools are saved to agent_tools/generated/ and persist across restarts. "
             "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/."
-            "\n\nWhen you complete research or discover useful information, always call "
-            "log_research to save your findings before finishing. When you learn a specific "
-            "fact about the user or their environment, call log_fact to store it. "
-            "This ensures knowledge persists across sessions."
+            "\n\nIMPORTANT: After completing any research task (web search, page fetching, "
+            "or information gathering), you MUST call log_research before sending your final "
+            "answer. After learning any specific fact about the user, their system, or their "
+            "preferences, you MUST call log_fact. Never end a research task without logging "
+            "findings — this is how you build persistent knowledge across sessions."
+            "\n\nFor high-level research goals (finding opportunities, comparing options, "
+            "investigating topics), use the deep_research tool first to get a structured "
+            "research plan. Then follow the plan: search each sub-question, fetch relevant "
+            "pages, evaluate findings against the criteria, log each angle with log_research, "
+            "and produce a final ranked report saved as a .md file. "
+            "Always read the user profile before research tasks that depend on personal fit."
         )
 
     # ------------------------------------------------------------------
@@ -316,26 +323,32 @@ class AgentCore:
             )
 
             if intent == "SIMPLE":
-                await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
-                # Answer directly — no optimizer, no Claude API call
-                local_answer = await local_llm_call(
-                    prompt=user_message,
-                    model=self.local_model,
-                    base_url=self.ollama_url,
-                )
-                if local_answer:
-                    await send_event("message", {"text": local_answer, "source": "local"})
-                    return local_answer
-                # Ollama offline or empty — fall through to Claude
-                logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through to Claude.")
-                await send_event("status", {"text": "Local unavailable — using Claude…"})
+                # Bug fix (Phase 3g): self-directed tasks must never be answered
+                # locally — the local model has no access to the user profile.
+                if self._is_self_directed(user_message):
+                    intent = "TOOL"
+                    await send_event("status", {"text": "Self-directed — overriding SIMPLE → TOOL"})
+                else:
+                    await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
+                    # Answer directly — no optimizer, no Claude API call
+                    local_answer = await local_llm_call(
+                        prompt=user_message,
+                        model=self.local_model,
+                        base_url=self.ollama_url,
+                    )
+                    if local_answer:
+                        await send_event("message", {"text": local_answer, "source": "local"})
+                        return local_answer
+                    # Ollama offline or empty — fall through to Claude
+                    logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through to Claude.")
+                    await send_event("status", {"text": "Local unavailable — using Claude…"})
 
-            elif intent == "COMPLEX":
+            if intent == "COMPLEX":
                 model_override = self.complex_model
                 await send_event("status", {
                     "text": f"Intent: COMPLEX → routing to {self.complex_model}…"
                 })
-            else:  # TOOL
+            elif intent == "TOOL":
                 await send_event("status", {
                     "text": f"Intent: TOOL → routing to {self.primary_model}…"
                 })
@@ -367,6 +380,18 @@ class AgentCore:
         system = self._base_system_prompt
         if context_summary:
             system = f"{self._base_system_prompt}\n\n{context_summary}"
+
+        # Phase 3g (run path): inject user profile for self-directed tasks.
+        if self._is_self_directed(user_message):
+            import pathlib
+            _profile_path = pathlib.Path(__file__).parent.parent / "memory" / "user_profile.json"
+            if _profile_path.exists():
+                try:
+                    _profile = json.loads(_profile_path.read_text(encoding="utf-8"))
+                    system += "\n\nUser profile:\n" + json.dumps(_profile, indent=2)
+                    logger.info("[agent] User profile injected into system prompt (run path).")
+                except Exception as _prof_err:
+                    logger.warning(f"[agent] Could not inject user profile (non-fatal): {_prof_err}")
 
         # ----------------------------------------------------------------
         # Step 4: Build message list
@@ -441,24 +466,30 @@ class AgentCore:
             )
 
             if intent == "SIMPLE":
-                await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
-                local_answer = await local_llm_call(
-                    prompt=user_message,
-                    model=self.local_model,
-                    base_url=self.ollama_url,
-                )
-                if local_answer:
-                    await send_event("message", {"text": local_answer, "source": "local"})
-                    return local_answer
-                logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through.")
-                await send_event("status", {"text": "Local unavailable — using Claude…"})
+                # Bug fix (Phase 3g): self-directed tasks must never be answered
+                # locally — the local model has no access to the user profile.
+                if self._is_self_directed(user_message):
+                    intent = "TOOL"
+                    await send_event("status", {"text": "Self-directed — overriding SIMPLE → TOOL"})
+                else:
+                    await send_event("status", {"text": "Intent: SIMPLE → answering locally…"})
+                    local_answer = await local_llm_call(
+                        prompt=user_message,
+                        model=self.local_model,
+                        base_url=self.ollama_url,
+                    )
+                    if local_answer:
+                        await send_event("message", {"text": local_answer, "source": "local"})
+                        return local_answer
+                    logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through.")
+                    await send_event("status", {"text": "Local unavailable — using Claude…"})
 
-            elif intent == "COMPLEX":
+            if intent == "COMPLEX":
                 model_override = self.complex_model
                 await send_event("status", {
                     "text": f"Intent: COMPLEX → routing to {self.complex_model}…"
                 })
-            else:
+            elif intent == "TOOL":
                 await send_event("status", {
                     "text": f"Intent: TOOL → routing to {self.primary_model}…"
                 })
@@ -537,7 +568,7 @@ class AgentCore:
         # on the user's behalf or learning about the user's environment.
         if self._is_self_directed(user_message):
             import pathlib
-            profile_path = pathlib.Path("memory/user_profile.json")
+            profile_path = pathlib.Path(__file__).parent.parent / "memory" / "user_profile.json"
             if profile_path.exists():
                 try:
                     profile = json.loads(profile_path.read_text(encoding="utf-8"))
