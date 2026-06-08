@@ -62,6 +62,7 @@ from agent_tools.file_analysis import register_file_analysis_tools
 from agent_tools.code_executor import register_code_executor_tools
 from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c
 from agent_tools.hot_reload import hot_reload_tool, list_generated_tools  # Phase 3c
+from agent_tools.memory_tool import register_memory_tools                 # Phase 3f
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -99,6 +100,7 @@ register_system_tools()
 register_file_analysis_tools()
 register_code_executor_tools()
 register_tool_writer_tools()                                             # Phase 3c
+register_memory_tools()                                                  # Phase 3f
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
     "capabilities (list_capabilities), "
@@ -106,7 +108,8 @@ logger.info(
     "system (get_system_info), "
     "file_analysis (analyze_file), "
     "code_executor (execute_code), "
-    "tool_writer (write_tool, reload_tool)"
+    "tool_writer (write_tool, reload_tool), "
+    "memory (log_research, recall_memory, log_fact)"
 )
 
 # ---------------------------------------------------------------------------
@@ -212,6 +215,29 @@ async def status():
 async def get_task():
     data = task_runner.load_last_task()
     return JSONResponse(data if data is not None else {})
+
+
+# ---------------------------------------------------------------------------
+# Phase 3f: GET /memory — return long-term memory store as JSON
+# ---------------------------------------------------------------------------
+
+@app.get("/memory")
+async def get_memory():
+    """
+    Return the full long-term memory store (tasks, facts, research).
+    Useful for the Memory tab count display and debugging.
+    """
+    from memory.long_term import load as load_long_term
+    try:
+        data = load_long_term()
+        return JSONResponse({
+            "tasks":    data.get("tasks",    []),
+            "facts":    data.get("facts",    []),
+            "research": data.get("research", []),
+        })
+    except Exception as e:
+        logger.warning(f"[memory] Could not load long-term store: {e}")
+        return JSONResponse({"tasks": [], "facts": [], "research": []})
 
 
 # ---------------------------------------------------------------------------

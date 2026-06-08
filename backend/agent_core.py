@@ -394,6 +394,12 @@ class AgentCore:
         # Ensure pending_plans is always a dict even when not supplied
         if pending_plans is None:
             pending_plans = {}
+
+        # Phase 3f bug fix: initialise plan_system_addon unconditionally so it
+        # is always defined when we reach the system-prompt assembly block below,
+        # regardless of whether _should_plan() returns True or False.
+        plan_system_addon: str = ""
+
         # Store goal for compression context
         self._current_goal = user_message
 
@@ -489,6 +495,17 @@ class AgentCore:
         # Phase 3e: append the approved plan (empty string = no change)
         if plan_system_addon:
             system = system + plan_system_addon
+
+        # Phase 3f: prepend relevant past-session context (tasks / facts / research)
+        # so Claude is aware of prior attempts without needing an extra tool call.
+        try:
+            from memory.long_term import get_context_summary
+            past_context = get_context_summary(user_message)
+            if past_context:
+                system += f"\n\n{past_context}"
+                logger.info(f"[agent] Long-term context injected ({len(past_context)} chars).")
+        except Exception as _lt_err:
+            logger.warning(f"[agent] Long-term context lookup failed (non-fatal): {_lt_err}")
 
         # ── Message list ───────────────────────────────────────────────
         messages = history + [{"role": "user", "content": optimized_message}]

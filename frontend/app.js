@@ -1197,6 +1197,25 @@ btnClear.addEventListener('click', () => {
 });
 
 // ============================================================
+// Phase 3f: Long-term memory counts from /memory endpoint
+// ============================================================
+
+async function fetchMemoryCounts() {
+  try {
+    const res  = await fetch('/memory');
+    const data = await res.json();
+    const tasksEl    = document.getElementById('mem-tasks-count');
+    const factsEl    = document.getElementById('mem-facts-count');
+    const researchEl = document.getElementById('mem-research-count');
+    if (tasksEl)    tasksEl.textContent    = `Tasks logged: ${(data.tasks    || []).length}`;
+    if (factsEl)    factsEl.textContent    = `Facts stored: ${(data.facts    || []).length}`;
+    if (researchEl) researchEl.textContent = `Research entries: ${(data.research || []).length}`;
+  } catch (e) {
+    console.warn('[memory] Could not fetch /memory:', e);
+  }
+}
+
+// ============================================================
 // Status polling — /status endpoint
 // ============================================================
 
@@ -1293,6 +1312,10 @@ async function init() {
   connectWS();
   pollStatus();
   setInterval(pollStatus, 30_000);
+
+  // Phase 3f: fetch long-term memory counts on load and every 60 seconds.
+  fetchMemoryCounts();
+  setInterval(fetchMemoryCounts, 60_000);
 
   // Phase 3b: on page load, check whether the last task was interrupted.
   // Show a dismissible warning banner so the user knows they can resume

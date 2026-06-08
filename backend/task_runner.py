@@ -130,6 +130,7 @@ class TaskRunner:
         # ── Initialise task state ──────────────────────────────────────
         task_id = str(uuid4())
         start_ts = datetime.now(timezone.utc).isoformat()
+        _start_time = time.time()   # Phase 3f: wall-clock start for duration logging
         self._current_task = {
             "id":              task_id,
             "started_at":      start_ts,
@@ -173,6 +174,18 @@ class TaskRunner:
                     self._current_task["status"] = "cancelled"
                     self._save_task()
                     await send_event("task_stopped", {"reason": "user_cancelled"})
+                    # Phase 3f: log cancellation to long-term memory
+                    try:
+                        from memory.long_term import log_task as _log_task
+                        _log_task(
+                            goal=initial_message,
+                            outcome="failure",
+                            summary=f"Cancelled by user after {len(self._current_task.get('steps', []))} steps.",
+                            tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                            duration_seconds=int(time.time() - _start_time),
+                        )
+                    except Exception as _lt_e:
+                        logger.warning(f"[task_runner] Long-term log (cancel) failed (non-fatal): {_lt_e}")
                     return "Task cancelled."
 
                 # ── 2. Drain injected user messages ────────────────────
@@ -246,6 +259,18 @@ class TaskRunner:
                         f"[task_runner] Task {task_id} complete in "
                         f"{_elapsed_ms(run_start_ms)}ms."
                     )
+                    # Phase 3f: persist outcome to long-term memory
+                    try:
+                        from memory.long_term import log_task as _log_task
+                        _log_task(
+                            goal=initial_message,
+                            outcome="success",
+                            summary=f"Completed in {len(self._current_task['steps'])} steps.",
+                            tools_used=list({s["tool"] for s in self._current_task["steps"]}),
+                            duration_seconds=int(time.time() - _start_time),
+                        )
+                    except Exception as _lt_e:
+                        logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
                     return final_text
 
                 # ── 4b. tool_use — dispatch tools then loop ────────────
@@ -344,6 +369,18 @@ class TaskRunner:
             self._current_task["error"] = str(e)
             self._save_task()
             await send_event("task_stopped", {"reason": "error", "error": str(e)})
+            # Phase 3f: log failure to long-term memory
+            try:
+                from memory.long_term import log_task as _log_task
+                _log_task(
+                    goal=initial_message,
+                    outcome="failure",
+                    summary=f"Failed after {len(self._current_task.get('steps', []))} steps: {str(e)[:120]}",
+                    tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                    duration_seconds=int(time.time() - _start_time),
+                )
+            except Exception as _lt_e:
+                logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
             return f"Task failed: {e}"
 
         finally:

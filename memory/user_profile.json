@@ -1,0 +1,13 @@
+{
+  "name": "Gergo",
+  "skills": ["Python", "C", "web basics", "machine learning basics"],
+  "education": "3rd year Computer Engineering student",
+  "languages": ["Hungarian", "English"],
+  "available_time": "evenings and weekends",
+  "hardware": "Lenovo ThinkPad E14 Gen7, 32GB RAM, Windows",
+  "constraints": ["no upfront investment", "legal only"],
+  "goals": ["build autonomous AI agent", "learn software architecture", "find ways to make money online"],
+  "accounts": ["GitHub"],
+  "current_projects": ["personal AI agent (this system)", "website ai assistant (in development)"],
+  "interests": ["AI", "software development", "technology trends"]
+}
