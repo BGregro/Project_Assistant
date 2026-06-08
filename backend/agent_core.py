@@ -129,7 +129,32 @@ class AgentCore:
             "After writing a tool with write_tool, always call reload_tool to activate it. "
             "New tools are saved to agent_tools/generated/ and persist across restarts. "
             "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/."
+            "\n\nWhen you complete research or discover useful information, always call "
+            "log_research to save your findings before finishing. When you learn a specific "
+            "fact about the user or their environment, call log_fact to store it. "
+            "This ensures knowledge persists across sessions."
         )
+
+    # ------------------------------------------------------------------
+    # Phase 3g: Self-directed task detection
+    # ------------------------------------------------------------------
+
+    _SELF_DIRECTED_KEYWORDS = frozenset([
+        "yourself", "your capabilities", "what can you",
+        "optimize yourself", "improve yourself", "learn about me",
+        "about me", "my profile", "scan my", "what do you know about me",
+    ])
+
+    def _is_self_directed(self, message: str) -> bool:
+        """
+        Return True if the message implies the agent should act on its own
+        initiative or learn about the user.
+
+        Triggers profile injection into the system prompt so the agent has
+        full user context without needing an extra tool round-trip.
+        """
+        lower = message.lower()
+        return any(kw in lower for kw in self._SELF_DIRECTED_KEYWORDS)
 
     # ------------------------------------------------------------------
     # Phase 3e: Task planning
@@ -506,6 +531,20 @@ class AgentCore:
                 logger.info(f"[agent] Long-term context injected ({len(past_context)} chars).")
         except Exception as _lt_err:
             logger.warning(f"[agent] Long-term context lookup failed (non-fatal): {_lt_err}")
+
+        # Phase 3g: inject user profile for self-directed tasks.
+        # This avoids a read_user_profile tool round-trip when Claude is acting
+        # on the user's behalf or learning about the user's environment.
+        if self._is_self_directed(user_message):
+            import pathlib
+            profile_path = pathlib.Path("memory/user_profile.json")
+            if profile_path.exists():
+                try:
+                    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+                    system += f"\n\nUser profile:\n{json.dumps(profile, indent=2)}"
+                    logger.info("[agent] User profile injected into system prompt.")
+                except Exception as _prof_err:
+                    logger.warning(f"[agent] Could not inject user profile (non-fatal): {_prof_err}")
 
         # ── Message list ───────────────────────────────────────────────
         messages = history + [{"role": "user", "content": optimized_message}]

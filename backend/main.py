@@ -63,6 +63,8 @@ from agent_tools.code_executor import register_code_executor_tools
 from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c
 from agent_tools.hot_reload import hot_reload_tool, list_generated_tools  # Phase 3c
 from agent_tools.memory_tool import register_memory_tools                 # Phase 3f
+from agent_tools.self_knowledge import register_self_knowledge_tools      # Phase 3g
+from agent_tools.profile_updater import register_profile_updater_tools    # Phase 3g
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -101,6 +103,8 @@ register_file_analysis_tools()
 register_code_executor_tools()
 register_tool_writer_tools()                                             # Phase 3c
 register_memory_tools()                                                  # Phase 3f
+register_self_knowledge_tools()                                          # Phase 3g
+register_profile_updater_tools()                                         # Phase 3g
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
     "capabilities (list_capabilities), "
@@ -109,7 +113,9 @@ logger.info(
     "file_analysis (analyze_file), "
     "code_executor (execute_code), "
     "tool_writer (write_tool, reload_tool), "
-    "memory (log_research, recall_memory, log_fact)"
+    "memory (log_research, recall_memory, log_fact), "
+    "self_knowledge (read_user_profile, scan_system), "
+    "profile_updater (update_user_profile)"
 )
 
 # ---------------------------------------------------------------------------
@@ -147,7 +153,7 @@ task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 app = FastAPI(
     title="Personal AI Agent",
     description="Phase 3d — efficiency layer: intent routing, tool compression, code pre-validation, context compression",
-    version="1.7.0",
+    version="1.8.0",  # Phase 3g
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -204,6 +210,8 @@ async def status():
         "local_agent_timeout":     agent.local_agent_timeout,
         "tree_root":               config.get("tree_root", "."),
         "embeddings_count":        _get_embeddings_count(),
+        # Phase 3g — user profile presence indicator
+        "profile_loaded":          Path("memory/user_profile.json").exists(),
     })
 
 

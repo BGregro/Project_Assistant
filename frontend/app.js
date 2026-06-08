@@ -1126,6 +1126,18 @@ function populateSettingsFromStatus(data) {
     const el = document.getElementById('memory-vector-status');
     if (el) el.textContent = `Semantic memory: ${data.embeddings_count} entries`;
   }
+
+  // Phase 3g: show user profile load status in memory tab
+  const profileEl = document.getElementById('mem-profile-status');
+  if (profileEl) {
+    if (data.profile_loaded === true) {
+      profileEl.textContent = 'Profile: loaded ✓';
+      profileEl.style.color = 'var(--green)';
+    } else {
+      profileEl.textContent = 'Profile: not found ⚠';
+      profileEl.style.color = 'var(--yellow)';
+    }
+  }
 }
 
 // ============================================================
