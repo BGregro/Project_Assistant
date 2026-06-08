@@ -592,3 +592,21 @@ async def prevalidate_code(
 
     # Never block on prevalidation failure
     return (True, "OK")
+
+
+async def unload_model(model: str, base_url: str = DEFAULT_BASE_URL) -> None:
+    """
+    Explicitly unload the model from Ollama's memory.
+    Called on WebSocket disconnect and server shutdown.
+    Sends a minimal request with keep_alive=0 which tells Ollama
+    to evict the model immediately instead of waiting for its timeout.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(
+                f"{base_url}/api/generate",
+                json={"model": model, "prompt": "", "keep_alive": 0},
+            )
+            logger.info(f"[local_llm] Unloaded model '{model}' from Ollama memory.")
+    except Exception as e:
+        logger.debug(f"[local_llm] unload_model: ignored error ({e})")

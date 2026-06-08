@@ -696,3 +696,182 @@ details[open] .tb-arrow { transform: rotate(90deg); }
   color: var(--text-bright);
   background: var(--bg-tool);
 }
+
+/* ============================================================
+   PHASE 3e — PLAN APPROVAL CARD
+   ============================================================ */
+
+.plan-card {
+  position: relative;
+  background: var(--bg-tertiary);
+  border-left: 4px solid var(--accent-blue);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  margin: 10px 0;
+  max-width: min(640px, 96%);
+  animation: fadeIn 0.2s ease;
+  /* Slightly wider than a chat bubble to feel like a card */
+  align-self: flex-start;
+}
+
+.plan-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.plan-card-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.plan-card-title {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+.plan-card-count {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ---- Steps ---- */
+
+.plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.plan-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.plan-step-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-purple);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.plan-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-step-action {
+  line-height: 1.4;
+}
+
+/* The editable label — subtle dashed underline on hover, solid on focus */
+.plan-step-label {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text-bright);
+  outline: none;
+  border-bottom: 1.5px dashed transparent;
+  transition: border-color 0.12s;
+  cursor: text;
+  display: inline;
+  /* prevent the contenteditable from creating a visible box */
+  padding-bottom: 1px;
+}
+
+.plan-step-label:hover {
+  border-bottom-color: var(--text-muted);
+}
+
+.plan-step-label:focus {
+  border-bottom: 1.5px solid var(--accent-blue);
+}
+
+/* Disable editing cursor after submission */
+.plan-step-label[contenteditable="false"] {
+  cursor: default;
+  border-bottom-color: transparent !important;
+}
+
+.plan-step-details {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+/* ---- Actions row ---- */
+
+.plan-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  align-items: center;
+  min-height: 32px;
+}
+
+.plan-btn {
+  padding: 6px 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.4px;
+  transition: background 0.12s, box-shadow 0.12s, opacity 0.1s;
+}
+
+.plan-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.plan-btn-run {
+  background: var(--accent-green);
+  border: 1px solid var(--accent-green);
+  color: #fff;
+}
+
+.plan-btn-run:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-green) 80%, #fff 20%);
+  box-shadow: 0 0 10px rgba(166,227,161,0.25);
+}
+
+.plan-btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.plan-btn-cancel:hover:not(:disabled) {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+/* Post-submission note */
+.plan-submitted-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.plan-cancelled-note {
+  color: var(--accent-red);
+  opacity: 0.7;
+}

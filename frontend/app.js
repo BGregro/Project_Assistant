@@ -242,6 +242,11 @@ function handleServerEvent(type, data) {
       handleTaskStopped(data);
       break;
 
+    // Phase 3e — plan approval card
+    case 'task_plan':
+      handleTaskPlan(data);
+      break;
+
     default:
       console.warn('[ws] Unknown event type:', type);
   }
@@ -602,6 +607,113 @@ function handleTaskStopped(data) {
     scrollToBottom();
   }
   // reason === 'complete': agent already sent its final answer via 'message' event
+}
+
+// ============================================================
+// Phase 3e — Plan approval card
+// ============================================================
+
+function handleTaskPlan(data) {
+  const { plan_id, steps } = data;
+  if (!steps || !steps.length) return;
+
+  const card = document.createElement('div');
+  card.className = 'plan-card';
+  card.dataset.planId = plan_id;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'plan-card-header';
+  header.innerHTML = `
+    <span class="plan-card-icon">📋</span>
+    <span class="plan-card-title">Proposed Plan</span>
+    <span class="plan-card-count">${steps.length} step${steps.length !== 1 ? 's' : ''}</span>
+  `;
+  card.appendChild(header);
+
+  // Steps list
+  const stepsList = document.createElement('div');
+  stepsList.className = 'plan-steps';
+
+  steps.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = 'plan-step-row';
+    row.dataset.step = s.step;
+    row.innerHTML = `
+      <div class="plan-step-num">${s.step}</div>
+      <div class="plan-step-body">
+        <div class="plan-step-action">
+          <span class="plan-step-label" contenteditable="true" spellcheck="false"
+                data-step="${s.step}" data-field="action">${escapeHtml(s.action)}</span>
+        </div>
+        <div class="plan-step-details">${escapeHtml(s.details)}</div>
+      </div>
+    `;
+    stepsList.appendChild(row);
+  });
+  card.appendChild(stepsList);
+
+  // Actions row
+  const actions = document.createElement('div');
+  actions.className = 'plan-card-actions';
+
+  const btnRun = document.createElement('button');
+  btnRun.className = 'plan-btn plan-btn-run';
+  btnRun.innerHTML = '▶ Run Plan';
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'plan-btn plan-btn-cancel';
+  btnCancel.innerHTML = '✕ Cancel';
+
+  actions.appendChild(btnCancel);
+  actions.appendChild(btnRun);
+  card.appendChild(actions);
+
+  // Run Plan click — collect (possibly edited) actions
+  btnRun.addEventListener('click', () => {
+    btnRun.disabled = true;
+    btnCancel.disabled = true;
+
+    const editedSteps = steps.map((s) => {
+      const labelEl = card.querySelector(`[data-step="${s.step}"][data-field="action"]`);
+      const editedAction = labelEl ? labelEl.textContent.trim() : s.action;
+      // Only include if the user actually changed something
+      return { ...s, action: editedAction };
+    });
+
+    // Check if any step was actually edited
+    const wasEdited = editedSteps.some((s, i) => s.action !== steps[i].action);
+
+    sendWS({
+      type: 'plan_response',
+      plan_id,
+      approved: true,
+      edited_steps: wasEdited ? editedSteps : null,
+    });
+
+    // Collapse to a muted confirmation line
+    actions.innerHTML = '<span class="plan-submitted-note">Plan approved ✓ — running…</span>';
+    // Make steps non-editable
+    card.querySelectorAll('[contenteditable]').forEach(el => {
+      el.contentEditable = 'false';
+    });
+  });
+
+  // Cancel click
+  btnCancel.addEventListener('click', () => {
+    btnRun.disabled = true;
+    btnCancel.disabled = true;
+
+    sendWS({ type: 'plan_response', plan_id, approved: false, edited_steps: null });
+
+    actions.innerHTML = '<span class="plan-submitted-note plan-cancelled-note">Plan cancelled</span>';
+    card.querySelectorAll('[contenteditable]').forEach(el => {
+      el.contentEditable = 'false';
+    });
+  });
+
+  chatArea.appendChild(card);
+  scrollToBottom();
 }
 
 function resetTaskPanel() {

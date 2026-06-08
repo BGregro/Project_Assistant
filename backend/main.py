@@ -6,6 +6,8 @@ WebSocket message types (client → server):
     { "type": "confirm",               "confirmation_id": "…", "approved": bool }
     { "type": "clear" }
     { "type": "stop_task" }                                      ← Phase 3b
+    { "type": "plan_response",         "plan_id": "…", "approved": bool,
+                                       "edited_steps": [{…}] | null }   ← Phase 3e
     { "type": "set_optimizer",         "data": {"enabled": bool} }
     { "type": "set_local_mode",        "data": {"enabled": bool} }
     { "type": "set_model",             "data": {"model": "…"} }
@@ -17,12 +19,17 @@ WebSocket event types (server → client):
     confirm_required | message | error | cleared | optimizer_status
     tree_update | local_mode_status | model_status | local_agent_model_status | config_ack
     task_started | task_progress | task_stopped                   ← Phase 3b
+    task_plan                                                      ← Phase 3e
 
 Phase 3d changes:
     - TaskRunner now receives the config dict so it can read compression_threshold.
     - _apply_config() syncs the three new efficiency flags to agent attributes.
     - /status endpoint includes use_intent_routing, use_tool_compression,
       use_code_prevalidation so the settings panel can read them on page load.
+
+Phase 3e changes:
+    - pending_plans dict mirrors pending_confirmations; resolved by plan_response msgs.
+    - agent.run_with_task_runner() now accepts pending_plans kwarg.
 """
 
 import asyncio
@@ -48,7 +55,7 @@ from memory.context import load_history, save_history, trim_history
 from memory.embeddings import store_turn, search_similar, clear_all as clear_vectors
 from agent_tools.filesystem import register_all as register_filesystem_tools
 from agent_tools.capabilities import register_capabilities_tools
-from agent_tools.local_llm import is_ollama_available, summarize_history
+from agent_tools.local_llm import is_ollama_available, summarize_history, unload_model
 from agent_tools.web import register_web_tools
 from agent_tools.system_info import register_system_tools
 from agent_tools.file_analysis import register_file_analysis_tools
@@ -148,6 +155,13 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 @app.on_event("startup")
 async def _on_startup() -> None:
     await _autoload_generated_tools()
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    """Unload the local model from RAM when the server process exits."""
+    await unload_model(agent.local_model, agent.ollama_url)
+    logger.info("[shutdown] Local model unloaded.")
 
 
 @app.get("/", include_in_schema=False)
@@ -353,6 +367,7 @@ async def _embed_turn_bg(
 # ---------------------------------------------------------------------------
 
 pending_confirmations: dict = {}
+pending_plans:         dict = {}   # Phase 3e — keyed by plan_id
 
 
 @app.websocket("/ws")
@@ -393,6 +408,25 @@ async def websocket_endpoint(websocket: WebSocket):
                     f"from {len(history)} history entries."
                 )
             return (user_text, context_note, agent_messages)
+
+        elif msg_type == "plan_response":
+            # Phase 3e — user approved or rejected the plan card
+            plan_id      = raw.get("plan_id")
+            approved     = bool(raw.get("approved", False))
+            edited_steps = raw.get("edited_steps", None)  # list[dict] or null
+            if plan_id in pending_plans:
+                pending_plans[plan_id]["result"] = {
+                    "approved":     approved,
+                    "edited_steps": edited_steps,
+                }
+                pending_plans[plan_id]["event"].set()
+                logger.info(
+                    f"[ws] Plan '{plan_id}': "
+                    f"{'approved' if approved else 'rejected'}"
+                    f"{', edited' if edited_steps else ''}"
+                )
+            else:
+                logger.warning(f"[ws] Unknown plan_id: {plan_id!r}")
 
         elif msg_type == "stop_task":
             logger.info("[ws] stop_task received.")
@@ -481,6 +515,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     send_event=send_event,
                     pending_confirmations=pending_confirmations,
                     context_summary=context_note,
+                    pending_plans=pending_plans,        # Phase 3e
                 )
             )
 
@@ -517,6 +552,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("[ws] Client disconnected.")
+        # Unload model from RAM on disconnect — it will reload automatically
+        # on the next local LLM call when a new session starts.
+        await unload_model(agent.local_model, agent.ollama_url)
     except Exception as e:
         logger.exception("[ws] Unhandled error in WebSocket handler")
         try:

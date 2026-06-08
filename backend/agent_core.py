@@ -20,6 +20,13 @@ Phase 3b additions:
   - run_with_task_runner(): entry point that delegates to task_runner.run_task()
     instead of _run_claude(), keeping the existing run() method intact as fallback.
 
+Phase 3e additions:
+  - _should_plan(): heuristic that decides whether to show a plan card.
+  - _generate_plan(): one Haiku call that returns a structured step list.
+  - _wait_for_plan_response(): waits for user to approve/reject the plan card.
+  These are called from run_with_task_runner() before the prompt optimizer
+  so the approved plan can be prepended to the system prompt.
+
 Phase 3d additions:
   - Intent routing: classify_intent() decides which tier handles this turn before
     any Claude API call is made.
@@ -38,7 +45,9 @@ from the registry. This keeps the architecture modular.
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Callable, Awaitable
+from uuid import uuid4
 
 import anthropic
 
@@ -121,6 +130,116 @@ class AgentCore:
             "New tools are saved to agent_tools/generated/ and persist across restarts. "
             "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/."
         )
+
+    # ------------------------------------------------------------------
+    # Phase 3e: Task planning
+    # ------------------------------------------------------------------
+
+    _PLAN_KEYWORDS = frozenset([
+        "create", "build", "write", "research", "find", "develop",
+        "make", "analyze", "compare", "investigate", "optimize",
+        "design", "implement",
+    ])
+
+    def _should_plan(self, message: str, intent: str) -> bool:
+        """
+        Return True when the message is a complex, action-oriented task that
+        benefits from an explicit numbered plan shown to the user before
+        execution begins.
+
+        Rules (all must pass):
+          1. intent == "COMPLEX"      — routing already classified it as hard
+          2. len(message) > 80        — short messages are rarely multi-step
+          3. at least one action verb present — filters out explanatory requests
+             ("explain async/await in depth") that are COMPLEX but not task-like
+        """
+        if intent != "COMPLEX":
+            return False
+        if len(message) <= 80:
+            return False
+        lower = message.lower()
+        return any(kw in lower for kw in self._PLAN_KEYWORDS)
+
+    async def _generate_plan(
+        self,
+        message: str,
+        send_event: Callable[[str, dict], Awaitable[None]],
+        plan_id: str,
+    ) -> list[dict]:
+        """
+        Ask Claude (primary model — Haiku is fine, it's cheap) to produce a
+        numbered plan for the task.  Returns a list of step dicts, or an
+        empty list if generation or parsing fails.
+
+        On success, sends a ``task_plan`` WebSocket event to the frontend so
+        the approval card can be rendered immediately.
+        """
+        system_prompt = (
+            "You are a task planner. Given a user request, output ONLY a valid "
+            "JSON array of steps with no other text, no markdown fences, no "
+            "explanation. Each step must be: "
+            "{\"step\": N, \"action\": \"short verb phrase max 6 words\", "
+            "\"details\": \"one sentence describing what will be done and why\"}. "
+            "Maximum 8 steps. If the task is simple enough to do in 1-2 steps, "
+            "output only those steps."
+        )
+        try:
+            response = await self.client.messages.create(
+                model=self.primary_model,
+                max_tokens=1024,
+                system=system_prompt,
+                messages=[{"role": "user", "content": f"Plan this task: {message}"}],
+            )
+            raw = _extract_text(response)
+            # Strip accidental markdown fences before parsing
+            raw = re.sub(r"^```[a-z]*\s*", "", raw.strip(), flags=re.IGNORECASE)
+            raw = re.sub(r"\s*```$", "", raw.strip())
+            steps = json.loads(raw)
+            if not isinstance(steps, list) or not steps:
+                return []
+            # Normalise: ensure each entry has the expected keys
+            normalised = []
+            for i, s in enumerate(steps, start=1):
+                normalised.append({
+                    "step":    int(s.get("step", i)),
+                    "action":  str(s.get("action", f"Step {i}")),
+                    "details": str(s.get("details", "")),
+                })
+            await send_event("task_plan", {"plan_id": plan_id, "steps": normalised})
+            return normalised
+        except Exception as exc:
+            # Planning is optional — never let it block the task.
+            logger.warning(f"[agent] Plan generation failed (non-fatal): {exc}")
+            return []
+
+    async def _wait_for_plan_response(
+        self,
+        plan_id: str,
+        pending_plans: dict,
+        timeout: float = 300.0,
+    ) -> tuple[bool, list]:
+        """
+        Block until the user approves or rejects the plan card, or until the
+        5-minute timeout elapses.
+
+        Returns:
+            (approved: bool, edited_steps: list)
+            edited_steps is non-empty only when the user edited the plan before
+            approving; on rejection it is always [].
+        """
+        event = asyncio.Event()
+        pending_plans[plan_id] = {"event": event, "result": None}
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+            result = pending_plans[plan_id].get("result") or {}
+            approved     = bool(result.get("approved", False))
+            edited_steps = result.get("edited_steps") or []
+            return approved, edited_steps
+        except asyncio.TimeoutError:
+            logger.warning(f"[agent] Plan response for '{plan_id}' timed out after {timeout}s.")
+            return False, []
+        finally:
+            pending_plans.pop(plan_id, None)
 
     # ------------------------------------------------------------------
     # Public entry point — called from main.py WebSocket handler
@@ -252,6 +371,7 @@ class AgentCore:
         send_event: Callable[[str, dict], Awaitable[None]],
         pending_confirmations: dict,
         context_summary: str = "",
+        pending_plans: dict | None = None,       # Phase 3e
     ) -> str:
         """
         Entry point for the Phase 3b task runner.
@@ -265,7 +385,15 @@ class AgentCore:
         locally before the task runner is ever invoked. COMPLEX intents are
         signalled to task_runner via agent.complex_model so it can pass the
         right model to _run_claude_once().
+
+        Phase 3e: if the intent is COMPLEX and the message is action-oriented,
+        a plan is generated, shown to the user for approval, and—if approved—
+        prepended to the system prompt.  planning_plans dict is passed in from
+        main.py so the WebSocket handler can resolve approvals.
         """
+        # Ensure pending_plans is always a dict even when not supplied
+        if pending_plans is None:
+            pending_plans = {}
         # Store goal for compression context
         self._current_goal = user_message
 
@@ -304,6 +432,38 @@ class AgentCore:
                     "text": f"Intent: TOOL → routing to {self.primary_model}…"
                 })
 
+        # ── Phase 3e: Task planning ────────────────────────────────────
+        # Only triggered when intent is COMPLEX and the message is action-
+        # oriented (checked by _should_plan).  Planning never blocks a task —
+        # if generation fails or the user rejects the plan we proceed as normal.
+        plan_system_addon = ""
+        if not self.local_mode and self._should_plan(user_message, intent):
+            plan_id = str(uuid4())
+            await send_event("status", {"text": "Generating task plan…"})
+            steps = await self._generate_plan(user_message, send_event, plan_id)
+            if steps:
+                # Wait for user to approve / reject / edit
+                await send_event("status", {"text": "Waiting for plan approval…"})
+                approved, edited_steps = await self._wait_for_plan_response(
+                    plan_id, pending_plans
+                )
+                if not approved:
+                    await send_event("status", {"text": "Plan cancelled."})
+                    return "Plan cancelled by user."
+                # Use edited steps if the user changed anything, otherwise use generated
+                final_steps = edited_steps if edited_steps else steps
+                # Build a numbered plan text to prepend to the system prompt
+                plan_lines = [
+                    f"{s.get('step', i+1)}. {s.get('action','')}: {s.get('details','')}"
+                    for i, s in enumerate(final_steps)
+                ]
+                plan_text = "\n".join(plan_lines)
+                plan_system_addon = (
+                    f"\n\nExecute this plan step by step, in order:\n{plan_text}\n\n"
+                    "Do not skip steps. After completing each step, briefly confirm "
+                    "what was done before starting the next."
+                )
+
         # ── Prompt optimisation — only for TOOL / COMPLEX intents ─────
         # SIMPLE already returned above; no point optimizing a trivial message.
         optimized_message = user_message
@@ -326,6 +486,9 @@ class AgentCore:
         system = self._base_system_prompt
         if context_summary:
             system = f"{self._base_system_prompt}\n\n{context_summary}"
+        # Phase 3e: append the approved plan (empty string = no change)
+        if plan_system_addon:
+            system = system + plan_system_addon
 
         # ── Message list ───────────────────────────────────────────────
         messages = history + [{"role": "user", "content": optimized_message}]
