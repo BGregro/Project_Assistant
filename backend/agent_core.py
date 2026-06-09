@@ -158,7 +158,11 @@ class AgentCore:
             "targeted extraction (e.g. 'article', 'main', '#content')."
             "\n\nSave all generated files (reports, scripts, data, screenshots) to the "
             "outputs/ directory in the project root, not to backend/ or frontend/. "
-            "Use write_file with a path like 'outputs/report.md' for text files."
+            "Use write_file with a path like 'outputs/report.md' for text files. "
+            "Use list_outputs() at the start of any task that might produce files, "
+            "to check what already exists and avoid duplicating work. "
+            "If a report was already generated in a previous session, read it with "
+            "read_file before generating a new one."
         )
 
     # ------------------------------------------------------------------

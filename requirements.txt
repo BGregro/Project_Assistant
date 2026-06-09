@@ -4,6 +4,7 @@ anthropic>=0.49.0
 httpx>=0.28.0
 python-dotenv>=1.0.0
 websockets>=13.0
+# Also requires: ollama pull nomic-embed-text (for semantic memory)
 chromadb>=0.6.0
 psutil>=5.9.0
 # After pip install, run: playwright install chromium
