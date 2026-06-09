@@ -441,19 +441,22 @@ class TaskRunner:
         send_event: Callable[[str, dict], Awaitable[None]],
     ) -> list[dict]:
         """
-        Summarise completed task steps and prune old tool_result messages to
-        prevent Claude's context from overflowing during long autonomous runs.
+        Summarise completed task steps and prune old tool exchanges to prevent
+        Claude's context window from overflowing during long autonomous runs.
 
-        Strategy:
-          1. Collect completed step labels and tool names from self._current_task.
-          2. Build a plain-text steps summary and call summarize_completed_steps().
-          3. Find all tool_result messages in the messages list.
-          4. Keep the most recent _KEEP_RECENT_TOOL_EXCHANGES tool exchanges verbatim.
-          5. Remove the older tool_result messages and insert a synthetic user
-             message containing the summary in their place.
-          6. Reset self._token_estimate.
+        CRITICAL — Anthropic API constraint:
+        Every assistant turn that contains tool_use blocks MUST be immediately
+        followed by a user turn containing the matching tool_result blocks.
+        Pruning only the tool_result half orphans the tool_use blocks and causes
+        a 400 Bad Request on the very next API call.  This method therefore
+        always locates and removes COMPLETE PAIRS (assistant + user) together.
 
-        Returns the (possibly pruned) messages list.
+        CRITICAL — timeout/failure guard:
+        summarize_completed_steps() returns the raw steps_text unchanged when
+        the local LLM is offline or times out.  If we pruned messages without
+        a real summary we would silently corrupt the history.  We detect this
+        by comparing summary == steps_text and bail out (reset estimate only)
+        rather than corrupt the message sequence.
         """
         from agent_tools.local_llm import summarize_completed_steps
 
@@ -461,7 +464,7 @@ class TaskRunner:
         if not steps:
             return messages
 
-        # Build a readable steps summary for the local LLM
+        # ── Build steps text for summarization ───────────────────────────────
         step_lines = []
         for s in steps:
             status_marker = "✓" if s["status"] == "done" else "✗"
@@ -477,38 +480,85 @@ class TaskRunner:
             base_url=agent.ollama_url,
         )
 
-        # Identify positions of tool_result messages in the list
-        # A tool_result message looks like: {"role": "user", "content": [{"type": "tool_result", ...}]}
-        # or the individual {"type": "tool_result", ...} dicts inside a user content list.
-        # We target the outer user-role messages that contain only tool_result content blocks.
-        tool_result_indices = []
-        for i, msg in enumerate(messages):
-            if msg.get("role") != "user":
-                continue
-            content = msg.get("content")
-            if isinstance(content, list) and all(
-                isinstance(c, dict) and c.get("type") == "tool_result"
-                for c in content
-            ):
-                tool_result_indices.append(i)
-
-        # Keep the most recent N tool exchanges; summarise everything older
-        keep_count = _KEEP_RECENT_TOOL_EXCHANGES
-        if len(tool_result_indices) <= keep_count:
-            # Not enough old exchanges to make compression worthwhile yet
+        # ── Guard: bail if the summarizer failed ──────────────────────────────
+        # summarize_completed_steps() returns steps_text unchanged on timeout,
+        # Ollama offline, or any other error.  Proceeding would prune the
+        # conversation without any useful summary, corrupting message history.
+        if not summary or summary == steps_text:
+            logger.warning(
+                "[task_runner] Skipping context compression — summarizer returned "
+                "no usable output (local LLM offline or timed out). "
+                "Resetting token estimate to avoid immediate re-trigger."
+            )
             self._token_estimate = 0
             return messages
 
-        prune_indices = set(tool_result_indices[:-keep_count])
-        insertion_point = min(prune_indices)
+        # ── Identify complete (assistant, user) tool exchange pairs ───────────
+        # A valid pair is two adjacent messages where:
+        #   messages[i]   role="assistant"  content contains ≥1 tool_use block
+        #   messages[i+1] role="user"       content contains only tool_result blocks
+        # Both halves MUST be pruned together — never one without the other.
+        exchange_pairs: list[tuple[int, int]] = []
+        i = 0
+        while i < len(messages) - 1:
+            msg      = messages[i]
+            next_msg = messages[i + 1]
 
-        # Build new messages list: everything before the first pruned index,
-        # then the summary injection, then skip pruned messages, then keep the rest.
-        new_messages = []
+            # Detect tool_use assistant turn.
+            # Handles both live SDK objects (block.type) and dict history entries.
+            is_tool_use_turn = (
+                msg.get("role") == "assistant"
+                and isinstance(msg.get("content"), list)
+                and any(
+                    (isinstance(b, dict) and b.get("type") == "tool_use")
+                    or (hasattr(b, "type") and b.type == "tool_use")
+                    for b in msg["content"]
+                )
+            )
+
+            # Detect tool_result user turn immediately following.
+            next_content = next_msg.get("content")
+            is_tool_result_turn = (
+                next_msg.get("role") == "user"
+                and isinstance(next_content, list)
+                and len(next_content) > 0
+                and all(
+                    isinstance(c, dict) and c.get("type") == "tool_result"
+                    for c in next_content
+                )
+            )
+
+            if is_tool_use_turn and is_tool_result_turn:
+                exchange_pairs.append((i, i + 1))
+                i += 2   # both halves consumed — skip past the complete pair
+            else:
+                i += 1
+
+        # ── Keep the most recent N pairs; prune everything older ──────────────
+        keep_count = _KEEP_RECENT_TOOL_EXCHANGES
+        if len(exchange_pairs) <= keep_count:
+            # Not enough completed exchanges to compress yet
+            self._token_estimate = 0
+            return messages
+
+        pairs_to_prune = exchange_pairs[:-keep_count]
+        prune_indices: set[int] = set()
+        for assistant_idx, result_idx in pairs_to_prune:
+            prune_indices.add(assistant_idx)
+            prune_indices.add(result_idx)
+
+        # ── Rebuild message list ──────────────────────────────────────────────
+        # Insert the summary placeholder as role="assistant" at the position of
+        # the first pruned assistant turn.  Using role="assistant" prevents two
+        # consecutive user messages when compression fires multiple times, which
+        # would also cause a 400.
+        first_pruned = min(prune_indices)
+        new_messages: list[dict] = []
         summary_inserted = False
-        for i, msg in enumerate(messages):
-            if i in prune_indices:
-                if not summary_inserted:
+
+        for idx, msg in enumerate(messages):
+            if idx in prune_indices:
+                if not summary_inserted and idx == first_pruned:
                     new_messages.append({
                         "role":    "assistant",
                         "content": (
@@ -516,19 +566,20 @@ class TaskRunner:
                         ),
                     })
                     summary_inserted = True
-                # Skip the pruned tool_result message
+                # Drop this half of the pruned pair — never add it
                 continue
             new_messages.append(msg)
 
-        removed_count = len(prune_indices)
+        removed_pairs = len(pairs_to_prune)
         self._token_estimate = 0
         logger.info(
-            f"[task_runner] Compressed context. "
-            f"Removed {removed_count} tool_result message(s), added summary."
+            f"[task_runner] Compressed context: removed {removed_pairs} tool exchange "
+            f"pair(s) ({len(prune_indices)} messages), inserted summary."
         )
         await send_event("status", {"text": "Context compressed — continuing task…"})
 
         return new_messages
+
 
     # ------------------------------------------------------------------
     # Private helpers
