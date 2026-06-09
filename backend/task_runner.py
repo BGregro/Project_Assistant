@@ -352,7 +352,41 @@ class TaskRunner:
                             send_event=send_event,
                         )
 
-                # ── 4c. unexpected stop_reason ─────────────────────────
+                # ── 4c. max_tokens — Claude was cut off mid-response ─────────
+                elif response.stop_reason == "max_tokens":
+                    # Not fatal. Append whatever was generated as a partial
+                    # assistant turn and inject a continuation prompt so the
+                    # loop resumes from where it left off.
+                    partial = _extract_text(response)
+                    logger.warning(
+                        f"[task_runner] max_tokens at step {step_counter}. "
+                        f"Partial text: {len(partial)} chars. Continuing…"
+                    )
+                    await send_event("status", {
+                        "text": "Response limit reached — continuing…"
+                    })
+                    # Append partial output as a complete assistant turn
+                    if partial:
+                        messages.append({"role": "assistant", "content": partial})
+                    else:
+                        messages.append({"role": "assistant", "content": response.content})
+                    # Inject continuation prompt
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "Your previous response was cut off. "
+                            "Continue exactly where you stopped without repeating yourself."
+                        ),
+                    })
+                    await send_event("task_progress", {
+                        "step":       step_counter,
+                        "label":      "Continuing… (response limit)",
+                        "status":     "running",
+                        "elapsed_ms": _elapsed_ms(step_start_ms),
+                    })
+                    # Do NOT break — loop continues
+
+                # ── 4d. unexpected stop_reason ─────────────────────
                 else:
                     logger.warning(
                         f"[task_runner] Unexpected stop_reason: "

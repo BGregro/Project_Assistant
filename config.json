@@ -3,7 +3,9 @@
     "primary": "claude-haiku-4-5",
     "complex": "claude-sonnet-4-6",
     "local": "qwen2.5:14b",
-    "local_agent": "qwen2.5:14b"
+    "local_agent": "qwen2.5:14b",
+    "max_tokens_primary": 8192,
+    "max_tokens_complex": 16000
   },
   "use_prompt_optimizer": true,
   "use_intent_routing": true,

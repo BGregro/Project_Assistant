@@ -32,8 +32,70 @@
         "recall_memory"
       ],
       "duration_seconds": 4
+    },
+    {
+      "id": "52524145-59d3-4fb6-b482-1960db6807a0",
+      "timestamp": "2026-06-08T20:18:50.359688+00:00",
+      "goal": "What do you know about me? Tell me everything in your profile.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "read_user_profile"
+      ],
+      "duration_seconds": 4
+    },
+    {
+      "id": "27d2d21d-6ce6-41f1-9e5c-4b24c80ff545",
+      "timestamp": "2026-06-08T20:20:57.334409+00:00",
+      "goal": "Scan my system and tell me about my setup",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "scan_system"
+      ],
+      "duration_seconds": 11
+    },
+    {
+      "id": "cca0b516-73c8-40d9-9831-16772e21229e",
+      "timestamp": "2026-06-08T20:25:17.783775+00:00",
+      "goal": "Search the web for the best free resources to learn Rust programming and summarize what you find.",
+      "outcome": "success",
+      "summary": "Completed in 5 steps.",
+      "tools_used": [
+        "search_web",
+        "log_research",
+        "fetch_page"
+      ],
+      "duration_seconds": 200
+    },
+    {
+      "id": "2c1a632d-e888-4c35-ab67-c4262c7eec31",
+      "timestamp": "2026-06-08T20:33:28.073350+00:00",
+      "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and everything else you know about me). Use criteria: legal, passive income preferred, no customer service.",
+      "outcome": "failure",
+      "summary": "Failed after 9 steps: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.2: `tool_use` ids we",
+      "tools_used": [
+        "deep_research",
+        "read_user_profile",
+        "search_web",
+        "fetch_page"
+      ],
+      "duration_seconds": 412
     }
   ],
   "facts": [],
-  "research": []
+  "research": [
+    {
+      "id": "09eb08b9-0cd3-48ae-9419-ef77fb87b4ca",
+      "timestamp": "2026-06-08T20:25:14.118689+00:00",
+      "topic": "Best free resources to learn Rust programming 2025",
+      "findings": "## Top Free Resources for Learning Rust\n\n### Core Learning Platforms:\n1. **The Rust Programming Language (The Rust Book)** - Official free guide covering syntax, ownership, borrowing, lifetimes with examples and projects\n2. **LearningRust.org** - 26 interactive lessons with 100+ code examples, browser-based playground, covers ownership through async/await\n3. **Rust by Example** - Free interactive companion to The Rust Book with runnable code examples\n4. **Easy Rust** - Beginner-friendly e-book with simplified explanations, good for non-native English speakers\n\n### Practice & Exercises:\n5. **Rustlings** - Open-source collection of hands-on exercises on GitHub, gamified learning approach\n6. **Exercism Rust Track** - Coding challenges with optional mentor feedback\n7. **Rust Playground** - Free browser-based tool to write and test code without local installation\n\n### Video Learning:\n8. **freeCodeCamp Rust Course (YouTube)** - 14-hour comprehensive video tutorial with projects\n9. **Let's Get Rusty (YouTube)** - Concise video tutorials on specific topics like traits and async\n\n### Community & Reference:\n10. **Rust Official Website (rust-lang.org)** - Central hub with documentation, guides, and tool info\n11. **r/rust (Reddit)** - Active community for questions and tips\n12. **Rust Users Forum** - Official community forum with \"Learning\" category\n13. **New Rustacean Podcast** - Free podcast for learning on-the-go\n\n### Key Learning Approach:\n- Start with ownership and borrowing as core concepts\n- Practice with hands-on exercises daily\n- Use The Rust Book paired with Rust by Example for theory + practice\n- Complete 5-10 Rustlings exercises daily to build muscle memory\n- Leverage browser-based playgrounds before local installation\n\nAll resources are completely free and available in 2025.",
+      "sources": [
+        "learningrust.org",
+        "rustcodeweb.com 2025 article",
+        "search results for Rust learning resources"
+      ],
+      "relevance_score": 1.0
+    }
+  ]
 }

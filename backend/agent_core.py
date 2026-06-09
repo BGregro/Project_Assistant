@@ -88,6 +88,13 @@ class AgentCore:
         # Per-request timeout for the local agentic loop (large models need time on CPU)
         self.local_agent_timeout: float = float(config.get("local_agent_timeout", 300))
 
+        # Per-model max_tokens caps — read from config so they can be tuned without
+        # touching code.  Research/planning tasks need significantly more tokens than
+        # simple tool calls, so we use separate limits per model tier.
+        llm_cfg = config.get("llm", {})  # already read above, but re-read here for clarity
+        self.max_tokens_primary: int = int(llm_cfg.get("max_tokens_primary", 8192))
+        self.max_tokens_complex: int = int(llm_cfg.get("max_tokens_complex", 16000))
+
         ctx_cfg = config.get("context", {})
         self.max_iterations: int = ctx_cfg.get("max_iterations_per_turn", 10)
 
@@ -618,9 +625,16 @@ class AgentCore:
                             for COMPLEX intents without permanently changing the default.
         """
         model = model_override if model_override else self.primary_model
+        # Use the larger cap when running the complex model (sonnet) — research and
+        # planning tasks frequently generate more than 4096 tokens in a single turn.
+        max_tok = (
+            self.max_tokens_complex
+            if model == self.complex_model
+            else self.max_tokens_primary
+        )
         return await self.client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=max_tok,
             system=system,
             tools=get_all_definitions(),
             messages=messages,

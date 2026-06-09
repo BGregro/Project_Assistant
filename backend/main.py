@@ -293,6 +293,11 @@ def _apply_config(key: str, value) -> None:
         agent.use_code_prevalidation = bool(value)
     elif key == "context.compression_threshold":
         task_runner._compression_threshold = int(value)
+    # Phase 3h — per-model token caps
+    elif key == "llm.max_tokens_primary":
+        agent.max_tokens_primary = int(value)
+    elif key == "llm.max_tokens_complex":
+        agent.max_tokens_complex = int(value)
 
 
 # ---------------------------------------------------------------------------
