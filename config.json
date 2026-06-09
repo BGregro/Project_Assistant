@@ -15,6 +15,7 @@
   "local_mode": false,
   "local_agent_timeout": 300,
   "ollama_base_url": "http://localhost:11434",
+  "outputs_dir": "outputs",
   "tree_root": ".",
   "permissions": {
     "require_confirmation_for_write": true,

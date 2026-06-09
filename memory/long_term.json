@@ -125,6 +125,77 @@
         "read_user_profile"
       ],
       "duration_seconds": 1290
+    },
+    {
+      "id": "8590af1a-fc91-45f6-b5ea-e6a2198bfe8b",
+      "timestamp": "2026-06-09T07:56:49.866620+00:00",
+      "goal": "Open https://example.com and read its content using the browser.",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "browser_open",
+        "fetch_page"
+      ],
+      "duration_seconds": 5
+    },
+    {
+      "id": "6358366d-be15-4569-987f-108e7e8289f6",
+      "timestamp": "2026-06-09T08:02:14.321811+00:00",
+      "goal": "Open https://example.com and read its content using the browser.",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "fetch_page",
+        "browser_open"
+      ],
+      "duration_seconds": 5
+    },
+    {
+      "id": "25d6df2b-f188-4ed1-b0f3-595f5a11ae17",
+      "timestamp": "2026-06-09T08:11:50.313163+00:00",
+      "goal": "Open https://example.com and read its content using the browser.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "browser_open"
+      ],
+      "duration_seconds": 3
+    },
+    {
+      "id": "5b9d2790-2555-4f57-b60e-6faae2b4fca9",
+      "timestamp": "2026-06-09T08:14:20.956957+00:00",
+      "goal": "Open https://example.com and read its content using the browser",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "fetch_page",
+        "browser_open"
+      ],
+      "duration_seconds": 6
+    },
+    {
+      "id": "7e2e59c3-db85-4876-bd9b-a2603b28fe90",
+      "timestamp": "2026-06-09T08:17:16.735718+00:00",
+      "goal": "Open https://example.com and read its content using the browser",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "browser_read",
+        "browser_open"
+      ],
+      "duration_seconds": 21
+    },
+    {
+      "id": "ea01a27a-b4c0-4cd2-b2b5-b8a5a1644831",
+      "timestamp": "2026-06-09T08:19:18.182475+00:00",
+      "goal": "Open https://example.com and read its content using the browser",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "browser_open",
+        "browser_read"
+      ],
+      "duration_seconds": 10
     }
   ],
   "facts": [

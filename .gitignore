@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+venv_*/
+.venv/
+
+# Environment / secrets
+.env
+
+# Runtime memory (don't commit conversation history or vectors)
+memory/history.json
+memory/current_task.json
+memory/vectors/
+
+# Outputs (agent-generated files, not source)
+outputs/*
+!outputs/.gitkeep
+
+# Agent-generated tools (optional — commit if you want them persisted)
+# backend/agent_tools/generated/*.py
+
+# OS
+.DS_Store
+Thumbs.db

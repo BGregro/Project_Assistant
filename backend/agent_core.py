@@ -147,6 +147,18 @@ class AgentCore:
             "pages, evaluate findings against the criteria, log each angle with log_research, "
             "and produce a final ranked report saved as a .md file. "
             "Always read the user profile before research tasks that depend on personal fit."
+            "\n\nYou have browser tools for interacting with JavaScript-rendered web pages: "
+            "browser_open(url) navigates to a page in a real Chromium browser, "
+            "browser_read(selector) extracts visible text from it, and "
+            "browser_screenshot(filename) saves a PNG of the current page to outputs/. "
+            "Use browser tools when fetch_page returns empty or incomplete content — many "
+            "modern sites require JavaScript execution and will return nothing useful to a "
+            "plain HTTP fetch. Always call browser_open before browser_read. Use 'body' as "
+            "the default selector for full page text, or more specific CSS selectors for "
+            "targeted extraction (e.g. 'article', 'main', '#content')."
+            "\n\nSave all generated files (reports, scripts, data, screenshots) to the "
+            "outputs/ directory in the project root, not to backend/ or frontend/. "
+            "Use write_file with a path like 'outputs/report.md' for text files."
         )
 
     # ------------------------------------------------------------------

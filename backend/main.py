@@ -1,3 +1,12 @@
+import sys
+import asyncio
+
+# Windows + Python 3.12+: Playwright (and asyncio subprocesses in general) require
+# ProactorEventLoop to spawn child processes. Must be set before uvicorn initialises
+# its own event loop, which is why this sits above every other import.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 """
 main.py  —  FastAPI Application Entry Point
 
@@ -67,6 +76,14 @@ from agent_tools.self_knowledge import register_self_knowledge_tools      # Phas
 from agent_tools.profile_updater import register_profile_updater_tools    # Phase 3g
 from agent_tools.research_mode import register_research_tools              # Phase 3h
 
+# Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
+_browser_available = False
+try:
+    from agent_tools.browser import register_browser_tools, browser_tools_registered  # Phase 3i
+except ImportError:
+    register_browser_tools = None  # type: ignore
+    browser_tools_registered = False
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -107,6 +124,21 @@ register_memory_tools()                                                  # Phase
 register_self_knowledge_tools()                                          # Phase 3g
 register_profile_updater_tools()                                         # Phase 3g
 register_research_tools()                                                 # Phase 3h
+
+# Phase 3i — register browser tools if Playwright is installed
+if register_browser_tools is not None:
+    try:
+        register_browser_tools()
+        _browser_available = browser_tools_registered
+    except Exception as _br_err:
+        logger.warning(f"[startup] Browser tool registration failed (non-fatal): {_br_err}")
+
+try:
+    from agent_tools.browser import browser_tools_registered as _btr
+    _browser_available = _btr
+except Exception:
+    pass
+_browser_log = ", browser (browser_open, browser_read, browser_screenshot)" if _browser_available else ""
 logger.info(
     "[startup] Registered tools: filesystem (read_file, write_file, list_directory), "
     "capabilities (list_capabilities), "
@@ -118,7 +150,7 @@ logger.info(
     "memory (log_research, recall_memory, log_fact), "
     "self_knowledge (read_user_profile, scan_system), "
     "profile_updater (update_user_profile), "
-    "research (deep_research)"
+    f"research (deep_research){_browser_log}"
 )
 
 # ---------------------------------------------------------------------------
@@ -174,6 +206,12 @@ async def _on_shutdown() -> None:
     """Unload the local model from RAM when the server process exits."""
     await unload_model(agent.local_model, agent.ollama_url)
     logger.info("[shutdown] Local model unloaded.")
+    # Phase 3i — close Playwright browser if it was used this session
+    try:
+        from agent_tools.browser import close_browser
+        await close_browser()
+    except Exception as e:
+        logger.warning(f"[shutdown] Browser cleanup failed (non-fatal): {e}")
 
 
 @app.get("/", include_in_schema=False)
@@ -215,6 +253,8 @@ async def status():
         "embeddings_count":        _get_embeddings_count(),
         # Phase 3g — user profile presence indicator
         "profile_loaded":          (Path(__file__).parent.parent / "memory" / "user_profile.json").exists(),
+        # Phase 3i — browser tool availability
+        "browser_available":       _browser_available,
     })
 
 
