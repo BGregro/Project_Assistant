@@ -81,6 +81,20 @@
         "fetch_page"
       ],
       "duration_seconds": 412
+    },
+    {
+      "id": "88420b0f-8750-4d98-bda4-4adda269ee3c",
+      "timestamp": "2026-06-09T05:55:11.921224+00:00",
+      "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and other information you have about me). Use criteria: legal, passive income preferred, no customer service.",
+      "outcome": "failure",
+      "summary": "Failed after 12 steps: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.6: `tool_use` ids we",
+      "tools_used": [
+        "read_user_profile",
+        "deep_research",
+        "fetch_page",
+        "search_web"
+      ],
+      "duration_seconds": 609
     }
   ],
   "facts": [],

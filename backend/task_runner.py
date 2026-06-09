@@ -510,7 +510,7 @@ class TaskRunner:
             if i in prune_indices:
                 if not summary_inserted:
                     new_messages.append({
-                        "role":    "user",
+                        "role":    "assistant",
                         "content": (
                             f"[Context compressed — summary of completed steps:\n{summary}]"
                         ),
