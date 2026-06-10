@@ -309,7 +309,7 @@ async def status():
         "tree_root":               config.get("tree_root", "."),
         "embeddings_count":        _get_embeddings_count(),
         # Phase 3g — user profile presence indicator
-        "profile_loaded":          (Path(__file__).parent.parent / "memory" / "user_profile.json").exists(),
+        "profile_loaded":          (Path(__file__).resolve().parent.parent / "memory" / "user_profile.json").exists(),
         # Phase 3i — browser tool availability
         "browser_available":       _browser_available,
     })

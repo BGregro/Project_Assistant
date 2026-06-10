@@ -128,6 +128,7 @@ function connectWS() {
     console.log('[ws] Connected.');
     setConnDot('connected');
     setWaiting(false);
+    if (!taskIsRunning) setStatusBar(STATUS_IDLE_TEXT, 'idle');
   });
   ws.addEventListener('message', (e) => {
     let msg;
@@ -164,7 +165,7 @@ function setConnDot(state) {
 // ============================================================
 
 const STATUS_IDLE_TEXT = 'Idle';
-const STATUS_IDLE_MS   = 8000;
+const STATUS_IDLE_MS   = 60000;
 
 function setStatusBar(text, mode = 'active') {
   // mode: 'active' (amber), 'error' (red), 'done' (green), 'idle'
@@ -1001,7 +1002,17 @@ function restoreLastTaskTimeline(task) {
   if (placeholder) placeholder.remove();
 
   const steps = task.steps || [];
-  if (!steps.length) return;
+  if (!steps.length) {
+    const panel = document.getElementById('task-progress-panel');
+    if (!panel) return;
+    const el = document.createElement('div');
+    el.className = 'task-step done';
+    el.innerHTML = `<span class="step-dot done"></span>
+        <span class="step-label">${escapeHtml((task.initial_message || 'Unknown task').slice(0, 80))}</span>
+        <span class="step-status" style="margin-left:auto;font-size:0.75em;opacity:0.6">✓ ${task.status || 'complete'}</span>`;
+    panel.appendChild(el);
+    return;
+  }
 
   steps.forEach((s) => {
     const stepKey = `step-${s.step}`;
@@ -1442,16 +1453,7 @@ function populateSettingsFromStatus(data) {
     if (el) el.textContent = `Semantic memory: ${data.embeddings_count} entries`;
   }
 
-  const profileEl = document.getElementById('mem-profile-status');
-  if (profileEl) {
-    if (data.profile_loaded === true) {
-      profileEl.textContent = 'Profile: loaded ✓';
-      profileEl.style.color = 'var(--green)';
-    } else {
-      profileEl.textContent = 'Profile: not found ⚠';
-      profileEl.style.color = 'var(--amber)';
-    }
-  }
+  updateProfileStatus(data.profile_loaded);
 
   // Update legacy status-pill state (kept for /status polling logic)
   if (statusClaude && statusClaude.classList) {
@@ -1571,6 +1573,13 @@ async function fetchMemoryCounts() {
 // Status polling — /status
 // ============================================================
 
+function updateProfileStatus(loaded) {
+  const el = document.getElementById('mem-profile-status');
+  if (!el) return;
+  el.textContent = loaded ? 'Profile: loaded ✓' : 'Profile: not found ⚠';
+  el.style.color = loaded ? 'var(--accent-green)' : 'var(--accent-amber)';
+}
+
 async function pollStatus() {
   try {
     const res  = await fetch('/status');
@@ -1685,6 +1694,16 @@ async function init() {
 
   // Load task history (and check for interrupted task)
   loadTaskHistory();
+
+  // Standalone profile status update — fires once shortly after load to
+  // ensure the indicator is correct even if pollStatus races with the server.
+  setTimeout(async () => {
+    try {
+      const r = await fetch('/status');
+      const d = await r.json();
+      updateProfileStatus(d.profile_loaded);
+    } catch(e) {}
+  }, 500);
 }
 
 init();

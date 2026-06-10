@@ -64,7 +64,7 @@ _MAX_RESEARCH = 200
 
 # Ollama embedding constants (same as embeddings.py)
 _EMBED_MODEL   = "nomic-embed-text"
-_EMBED_TIMEOUT = 30.0
+_EMBED_TIMEOUT = 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +210,17 @@ def _maybe_migrate() -> None:
     """
     global _migration_done
     if _migration_done:
+        return
+
+    # Quick health check — if Ollama is not reachable, skip migration entirely
+    # so we don't block the event loop trying to embed on startup.
+    try:
+        base_url = _get_ollama_base_url()
+        with httpx.Client(timeout=2.0) as client:
+            client.get(f"{base_url}/api/tags")
+    except Exception:
+        logger.warning("[long_term] Ollama not reachable — skipping semantic index migration")
+        _migration_done = True
         return
 
     try:
@@ -659,8 +670,11 @@ def semantic_query_research(query: str, n_results: int = 3) -> list[dict]:
 
         return output
 
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("[long_term] Semantic search failed/timed out — falling back to substring search")
+        return query_research(query, n_results)
     except Exception as e:
-        logger.warning(f"[long_term] semantic_query_research failed: {e} — using substring fallback.")
+        logger.warning("[long_term] Semantic search failed/timed out — falling back to substring search")
         return query_research(query, n_results)
 
 

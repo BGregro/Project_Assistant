@@ -200,6 +200,26 @@ class AgentCore:
             "for this project — avoid creating duplicates."
         )
 
+        # Phase 3g: Always inject user profile into the base system prompt at
+        # init time so Claude has personal context in every conversation without
+        # needing a tool call or keyword-based detection.
+        # Falls back silently if the file is missing or malformed.
+        import json as _json
+        import pathlib as _pathlib
+        _profile_path = _pathlib.Path(__file__).resolve().parent.parent / "memory" / "user_profile.json"
+        if _profile_path.exists():
+            try:
+                _profile = _json.loads(_profile_path.read_text(encoding="utf-8"))
+                self._base_system_prompt += (
+                    "\n\nUser profile (always available — no tool call needed):\n"
+                    + _json.dumps(_profile, indent=2)
+                )
+                import logging as _logging
+                _logging.getLogger(__name__).info("[agent] User profile loaded into base system prompt.")
+            except Exception as _e:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(f"[agent] Could not load user profile: {_e}")
+
     # ------------------------------------------------------------------
     # Phase 3g: Self-directed task detection
     # ------------------------------------------------------------------
@@ -439,17 +459,7 @@ class AgentCore:
         if context_summary:
             system = f"{self._base_system_prompt}\n\n{context_summary}"
 
-        # Phase 3g (run path): inject user profile for self-directed tasks.
-        if self._is_self_directed(user_message):
-            import pathlib
-            _profile_path = pathlib.Path(__file__).parent.parent / "memory" / "user_profile.json"
-            if _profile_path.exists():
-                try:
-                    _profile = json.loads(_profile_path.read_text(encoding="utf-8"))
-                    system += "\n\nUser profile:\n" + json.dumps(_profile, indent=2)
-                    logger.info("[agent] User profile injected into system prompt (run path).")
-                except Exception as _prof_err:
-                    logger.warning(f"[agent] Could not inject user profile (non-fatal): {_prof_err}")
+        # Phase 3g: Profile is already in _base_system_prompt (injected at init).
 
         # ----------------------------------------------------------------
         # Step 4: Build message list
@@ -621,19 +631,7 @@ class AgentCore:
         except Exception as _lt_err:
             logger.warning(f"[agent] Long-term context lookup failed (non-fatal): {_lt_err}")
 
-        # Phase 3g: inject user profile for self-directed tasks.
-        # This avoids a read_user_profile tool round-trip when Claude is acting
-        # on the user's behalf or learning about the user's environment.
-        if self._is_self_directed(user_message):
-            import pathlib
-            profile_path = pathlib.Path(__file__).parent.parent / "memory" / "user_profile.json"
-            if profile_path.exists():
-                try:
-                    profile = json.loads(profile_path.read_text(encoding="utf-8"))
-                    system += f"\n\nUser profile:\n{json.dumps(profile, indent=2)}"
-                    logger.info("[agent] User profile injected into system prompt.")
-                except Exception as _prof_err:
-                    logger.warning(f"[agent] Could not inject user profile (non-fatal): {_prof_err}")
+        # Phase 3g: Profile is already in _base_system_prompt (injected at init).
 
         # ── Message list ───────────────────────────────────────────────
         messages = history + [{"role": "user", "content": optimized_message}]
