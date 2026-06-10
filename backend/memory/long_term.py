@@ -183,13 +183,13 @@ def load() -> dict:
     the first semantic_query_research() call so that Ollama has time to warm up
     before embeddings are requested (see _maybe_migrate()).
     """
-    empty: dict = {"tasks": [], "facts": [], "research": []}
+    empty: dict = {"tasks": [], "facts": [], "research": [], "projects": []}
     if not _STORE_FILE.exists():
         return empty
     try:
         with open(_STORE_FILE, encoding="utf-8") as f:
             data = json.load(f)
-        # Ensure all three top-level keys exist (forward-compat)
+        # Ensure all four top-level keys exist (forward-compat)
         for key in empty:
             data.setdefault(key, [])
     except Exception as e:
@@ -446,6 +446,86 @@ def log_research(
             f"[long_term] ChromaDB upsert failed for research entry '{topic[:40]}': {e} "
             f"(entry saved to JSON — will be re-indexed on next startup)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Project logging  (Phase 4d)
+# ---------------------------------------------------------------------------
+
+_MAX_PROJECTS = 50
+
+
+def log_project(
+    name: str,
+    description: str,
+    structure: list[str],
+    dependencies: list[str],
+    entry_point: str,
+    outcome: str,
+    lessons: str = "",
+) -> None:
+    """
+    Save a completed software project to long-term memory.
+
+    Called automatically by run_project_test when a project passes its test
+    (or when the agent marks a project done).  Previous entries for the same
+    project name are kept — multiple attempts are all recorded so lessons
+    accumulate over time.
+
+    Args:
+        name:         Short project identifier (e.g. "todo_cli").
+        description:  One-sentence description of what the project does.
+        structure:    List of relative file paths included in the project.
+        dependencies: Python packages / system deps required (from scaffold).
+        entry_point:  File that starts the project (e.g. "main.py").
+        outcome:      "success", "failure", or "partial".
+        lessons:      Free-text notes — include failure patterns here so future
+                      similar projects benefit from what went wrong.
+    """
+    data = load()
+    entry = {
+        "id":           str(uuid4()),
+        "timestamp":    _now_iso(),
+        "name":         name,
+        "description":  description,
+        "file_count":   len(structure),
+        "structure":    list(structure),
+        "dependencies": list(dependencies),
+        "entry_point":  entry_point,
+        "outcome":      outcome,
+        "lessons":      lessons,
+    }
+    data["projects"].append(entry)
+    # Keep only the most recent _MAX_PROJECTS entries
+    if len(data["projects"]) > _MAX_PROJECTS:
+        data["projects"] = data["projects"][-_MAX_PROJECTS:]
+    save(data)
+    logger.info(
+        f"[long_term] Project logged: name={name!r}, outcome={outcome!r}, "
+        f"files={len(structure)}"
+    )
+
+
+def query_projects(keyword: str = "", last_n: int = 5) -> list:
+    """
+    Return up to last_n project entries, optionally filtered by keyword.
+
+    Keyword matching is case-insensitive and checks both name and description.
+    Returns the most recent entries (chronological order, newest last).
+
+    Args:
+        keyword: Substring to filter by (empty = return most recent projects).
+        last_n:  Maximum number of entries to return.
+    """
+    projects = load()["projects"]
+    if keyword:
+        kw = keyword.lower()
+        projects = [
+            p for p in projects
+            if kw in p.get("name", "").lower()
+            or kw in p.get("description", "").lower()
+        ]
+    return projects[-last_n:]
 
 
 # ---------------------------------------------------------------------------

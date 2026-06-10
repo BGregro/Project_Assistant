@@ -90,6 +90,22 @@ async def _log_fact(key: str, value: str, source: str) -> dict:
     return {"success": True}
 
 
+async def _recall_projects(query: str = "") -> dict:
+    """
+    Search long-term memory for past software projects that match a keyword.
+
+    Call this at the start of any software development task to check whether
+    a similar project has been built before — its structure, dependencies, and
+    lessons learned can inform the new scaffold.
+
+    Args:
+        query: Keyword or project name fragment to search for.
+                Pass an empty string to return the 5 most recent projects.
+    """
+    projects = long_term.query_projects(keyword=query, last_n=5)
+    return {"success": True, "projects": projects}
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -162,9 +178,34 @@ def register_memory_tools() -> None:
     )
 
     register_tool(
+        name="recall_projects",
+        description=(
+            "Search long-term memory for past software projects that match a keyword or name. "
+            "Call this at the start of any development task to check whether something similar "
+            "has been built before — reuse structure, dependencies, and lessons learned. "
+            "Pass an empty query to see the 5 most recently built projects."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type":        "string",
+                    "description": (
+                        "Keyword or project name to search for "
+                        "(e.g. 'cli', 'flask', 'todo'). "
+                        "Empty string returns the 5 most recent projects."
+                    ),
+                },
+            },
+            "required": [],
+        },
+        handler=_recall_projects,
+        is_destructive=False,
+    )
+
+    register_tool(
         name="log_fact",
         description=(
-            "Store a key-value fact in long-term memory (e.g. a URL, version number, "
             "config value, or any piece of information worth remembering across sessions). "
             "If a fact with the same key already exists it will be updated, not duplicated."
         ),

@@ -142,11 +142,22 @@ def _build_tree(root: Path, max_depth: int = 3) -> str:
 def _safe_path(path_str: str) -> pathlib.Path:
     """
     Normalise a path string into an absolute pathlib.Path.
-    Handles: '~', '%USERPROFILE%', relative paths, forward/backslashes.
-    Using os.path.expandvars first handles Windows %ENV_VAR% syntax.
+    Handles: '~', '%USERPROFILE%', environment variables, forward/backslashes.
+
+    IMPORTANT: relative paths are resolved relative to the PROJECT ROOT
+    (the directory containing config.json), NOT the CWD. The server runs
+    from backend/, so resolving against CWD would place files like
+    'outputs/foo.py' inside backend/outputs/ instead of the intended
+    project-root outputs/.
     """
     expanded = os.path.expandvars(os.path.expanduser(str(path_str)))
-    return pathlib.Path(expanded).resolve()
+    p = pathlib.Path(expanded)
+    if not p.is_absolute():
+        # Anchor to project root: this file lives at backend/agent_tools/filesystem.py
+        # so three .parent calls reach the project root.
+        project_root = pathlib.Path(__file__).parent.parent.parent
+        p = project_root / p
+    return p.resolve()
 
 
 # ---------------------------------------------------------------------------

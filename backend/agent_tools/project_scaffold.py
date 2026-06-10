@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 
 from agent_tools import register_tool
@@ -178,6 +179,24 @@ async def scaffold_project(
             f"[scaffold] Scaffold saved: {saved_to} "
             f"({file_count} files, entry={scaffold['entry_point']!r})"
         )
+
+        # ── Create initial progress.json if it doesn't exist yet ─────────────
+        # project_manager.py reads this file to track which files are done.
+        # Creating it here (at scaffold time) ensures the file always exists
+        # before the agent starts calling get_project_status / mark_file_complete.
+        progress_path = project_out_dir / "progress.json"
+        if not progress_path.exists():
+            initial_progress = {
+                "project_name":    name,
+                "created_at":      datetime.utcnow().isoformat(),
+                "completed_files": [],
+                "last_test":       None,
+                "test_attempts":   0,
+                "test_history":    [],
+            }
+            with open(progress_path, "w", encoding="utf-8") as f:
+                json.dump(initial_progress, f, indent=2)
+            logger.info(f"[scaffold] Initial progress.json created for '{name}'.")
     except Exception as e:
         logger.error(f"[scaffold] Could not save scaffold to {scaffold_path}: {e}")
         # Still return the scaffold even if save failed — agent can proceed
