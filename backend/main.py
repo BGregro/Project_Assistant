@@ -554,6 +554,14 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_event(event_type: str, data) -> None:
         await websocket.send_json({"type": event_type, "data": data})
 
+    # Emit initial file tree so the Files tab is populated on first load
+    try:
+        from agent_tools.filesystem import _build_tree, _get_tree_root
+        tree_str = _build_tree(_get_tree_root())
+        await send_event("tree_update", {"tree": tree_str})
+    except Exception as _te:
+        logger.debug(f"[ws] Initial tree emit failed (non-fatal): {_te}")
+
     # Phase 4.5 — make this connection's send_event available to the
     # execution streaming callback so execute_code can push live output.
     _active_send_event[0] = send_event

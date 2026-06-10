@@ -128,7 +128,7 @@ function connectWS() {
     console.log('[ws] Connected.');
     setConnDot('connected');
     setWaiting(false);
-    if (!taskIsRunning) setStatusBar(STATUS_IDLE_TEXT, 'idle');
+    if (!isTaskRunning) setStatusBar(STATUS_IDLE_TEXT, 'idle');
   });
   ws.addEventListener('message', (e) => {
     let msg;
@@ -353,7 +353,10 @@ function appendUserMessage(text) {
 }
 
 function appendAgentMessage(text, source = 'claude') {
-  const target = _currentChatTarget();
+  // Final agent replies always go directly to chatArea — never inside a
+  // task container body.  The task body uses display:none when collapsed,
+  // so replies buried there become invisible.  Appending to chatArea
+  // places the reply below the task container and keeps it always visible.
   const row = document.createElement('div');
   row.className = 'msg-row agent-row';
   const localClass  = source === 'local' ? ' local-source' : '';
@@ -362,7 +365,7 @@ function appendAgentMessage(text, source = 'claude') {
     <span class="msg-role">${escapeHtml(sourceLabel)}</span>
     <div class="msg-bubble${localClass}">${renderMarkdownWithCode(text)}</div>
   `;
-  target.appendChild(row);
+  chatArea.appendChild(row);
   row.querySelectorAll('.code-block').forEach(attachCopyBtn);
   scrollToBottom();
 }
@@ -489,11 +492,11 @@ function closeTaskContainer(status) {
   // Freeze elapsed time
   updateTaskContainerMeta();
 
-  // Collapse after completion (small delay so user can see the final state)
+  // Collapse after completion (10s delay so user can read the final output)
   if (status === 'complete') {
     setTimeout(() => {
       if (activeTaskContainer) activeTaskContainer.classList.remove('open');
-    }, 1200);
+    }, 10000);
   }
 
   stopTaskRunning();

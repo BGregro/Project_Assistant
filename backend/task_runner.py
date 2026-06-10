@@ -156,6 +156,8 @@ class TaskRunner:
         self._token_estimate = 0
         # Reset Phase 4a project manifest for this task
         self._project_manifest = None
+        # Reset consecutive failure tracker for this task
+        self._consecutive_failures: dict[str, int] = {}
         # Drain any leftover messages from a previous session
         while not self._message_queue.empty():
             try:
@@ -179,7 +181,21 @@ class TaskRunner:
 
         # ── Agentic loop ───────────────────────────────────────────────
         try:
+            _iteration = 0
+            _max_iterations = getattr(agent, "max_iterations", 30)
             while True:
+                _iteration += 1
+                if _iteration > _max_iterations:
+                    msg = (
+                        f"Agent reached the maximum number of iterations "
+                        f"({_max_iterations}) without completing the task."
+                    )
+                    logger.warning(f"[task_runner] {msg}")
+                    await send_event("error", {"text": msg})
+                    self._current_task["status"] = "failed"
+                    self._save_task()
+                    await send_event("task_stopped", {"reason": "error", "error": msg})
+                    return msg
 
                 # ── 1. Check for cancellation ──────────────────────────
                 if self._cancel_event.is_set():
@@ -295,6 +311,8 @@ class TaskRunner:
                     messages.append({"role": "assistant", "content": response.content})
 
                     tool_results = []
+                    if not hasattr(self, '_consecutive_failures'):
+                        self._consecutive_failures: dict[str, int] = {}
                     for block in tool_use_blocks:
                         # Mark thinking step done
                         await send_event("task_progress", {
@@ -361,6 +379,32 @@ class TaskRunner:
                         # Parse success flag from the serialised result
                         success = _result_success(result_msg)
                         tool_status = "done" if success else "failed"
+
+                        # ── Consecutive failure guard ──────────────────────
+                        # If the same tool fails 3 times in a row, inject a
+                        # stop hint so Claude doesn't loop indefinitely.
+                        if not success:
+                            self._consecutive_failures[block.name] = (
+                                self._consecutive_failures.get(block.name, 0) + 1
+                            )
+                            if self._consecutive_failures[block.name] >= 3:
+                                logger.warning(
+                                    f"[task_runner] Tool '{block.name}' failed "
+                                    f"{self._consecutive_failures[block.name]} times "
+                                    f"in a row — injecting stop hint."
+                                )
+                                messages.append({
+                                    "role": "user",
+                                    "content": (
+                                        f"The tool '{block.name}' has failed "
+                                        f"{self._consecutive_failures[block.name]} times in a row. "
+                                        "Please stop retrying it. Either use a different approach "
+                                        "or end the task with an explanation of what went wrong."
+                                    ),
+                                })
+                                self._consecutive_failures[block.name] = 0
+                        else:
+                            self._consecutive_failures[block.name] = 0
 
                         await send_event("task_progress", {
                             "step":       step_counter,

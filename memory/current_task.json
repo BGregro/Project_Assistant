@@ -1,14 +1,7 @@
 {
-  "id": "8602f328-0bc2-4351-aa42-40b9fdebcc7f",
-  "started_at": "2026-06-10T13:50:51.752925+00:00",
+  "id": "93ce4da2-ea6b-40d2-a683-33df7c89c13d",
+  "started_at": "2026-06-10T14:30:14.939248+00:00",
   "initial_message": "what do you know about me?",
-  "steps": [
-    {
-      "step": 2,
-      "tool": "read_user_profile",
-      "status": "done",
-      "elapsed_ms": 0
-    }
-  ],
+  "steps": [],
   "status": "complete"
 }

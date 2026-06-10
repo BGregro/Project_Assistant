@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 def _profile_path() -> Path:
     """Absolute path to memory/user_profile.json (project root / memory /)."""
-    return Path(__file__).parent.parent.parent / "memory" / "user_profile.json"
+    return Path(__file__).resolve().parent.parent.parent / "memory" / "user_profile.json"
 
 
 def _agent_root() -> Path:
@@ -256,10 +256,10 @@ def register_self_knowledge_tools() -> None:
         name="read_user_profile",
         description=(
             "Read the user's profile from memory/user_profile.json. "
-            "The profile contains the user's name, skills, education, available time, "
-            "hardware, constraints, goals, accounts, current projects, and interests. "
-            "Use this at the start of any task that requires understanding what the user "
-            "can do, what they want to achieve, or what resources they have available. "
+            "NOTE: The user profile is already injected into your system prompt at the "
+            "start of every conversation — you do NOT need to call this tool to access it. "
+            "Only call this tool if you specifically need to re-read the raw file, for "
+            "example after the user has updated their profile mid-session. "
             "Returns the full profile as a dict, or an error message if the file is missing."
         ),
         input_schema={
