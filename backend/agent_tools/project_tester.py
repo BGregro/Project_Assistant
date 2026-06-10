@@ -191,6 +191,16 @@ async def run_project_test(
         if not command:
             command = "python main.py"
 
+    # ── Strip outputs/{project_name}/ prefix if agent passed a full path ──────
+    # The subprocess runs with cwd=project_dir, so only the filename or a short
+    # project-relative path is needed. Strip any leading outputs/{name}/ prefix
+    # the agent may have accidentally included.
+    for prefix in [f"outputs/{project_name}/", f"outputs\\{project_name}\\"]:
+        if command.startswith(prefix):
+            command = command[len(prefix):]
+            logger.debug(f"[project_tester] Stripped path prefix \u2192 {command!r}")
+            break
+
     # ── Load / initialise progress ────────────────────────────────────────────
     progress: dict = _load_json(progress_path) or {
         "project_name":    project_name,
