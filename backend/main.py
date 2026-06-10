@@ -78,6 +78,7 @@ from agent_tools.research_mode import register_research_tools              # Pha
 from agent_tools.project_scaffold import register_scaffold_tools            # Phase 4a
 from agent_tools.project_manager import register_project_manager_tools      # Phase 4b
 from agent_tools.project_tester import register_project_tester_tools        # Phase 4b/4c
+from agent_tools.github_tool import register_github_tools                   # Phase 5a
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -131,6 +132,15 @@ register_scaffold_tools()                                                   # Ph
 register_project_manager_tools()                                            # Phase 4b
 register_project_tester_tools()                                             # Phase 4b/4c
 
+# Phase 5a — GitHub integration (registered even without a token; tools return
+# a helpful error message if GITHUB_TOKEN is not set when called)
+try:
+    register_github_tools()
+except Exception as _gh_err:
+    logger.warning(f"[startup] GitHub tool registration failed (non-fatal): {_gh_err}")
+_github_token_status = "set" if os.getenv("GITHUB_TOKEN") else "NOT SET"
+logger.info(f"[startup] github (token: {_github_token_status})")
+
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
     try:
@@ -157,7 +167,9 @@ logger.info(
     "self_knowledge (read_user_profile, scan_system), "
     "profile_updater (update_user_profile), "
     "research (deep_research), "
-    f"project_scaffold (scaffold_project){_browser_log}"
+    "project_scaffold (scaffold_project), "
+    f"github (github_list_repos, github_create_repo, github_push_file, "
+    f"github_read_file, github_list_files, github_create_issue){_browser_log}"
 )
 
 # ---------------------------------------------------------------------------

@@ -278,6 +278,16 @@ async def run_project_test(
             failed_attempts=progress["test_attempts"] - 1,  # -1 for the passing run
             progress=progress,
         )
+        # ── Phase 5a: flag that this project hasn't been pushed to GitHub yet ──
+        # The agent can check this flag and offer to push the project.
+        # Only set it if not already True (don't reset after a re-test).
+        if not progress.get("github_pushed"):
+            progress["github_pushed"] = False
+            _save_json(progress_path, progress)
+            logger.debug(
+                f"[project_tester] Set github_pushed=false for '{project_name}' — "
+                "agent can offer to push to GitHub."
+            )
 
     return {
         "success":     True,

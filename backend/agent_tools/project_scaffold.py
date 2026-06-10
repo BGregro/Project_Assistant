@@ -162,6 +162,9 @@ async def scaffold_project(
     scaffold.setdefault("dependencies",         [])
     scaffold.setdefault("implementation_order", [])
     scaffold.setdefault("notes",                "")
+    # Phase 5a — set to the repo's full_name (e.g. "username/project") after
+    # the agent pushes the project to GitHub; null means not yet pushed.
+    scaffold.setdefault("github_repo",          None)
 
     structure: list = scaffold.get("structure", [])
     file_count = len(structure)

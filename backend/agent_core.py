@@ -185,6 +185,19 @@ class AgentCore:
             "lines to change, then patch_file to apply the edit. "
             "If a project requires packages not yet installed, call install_package for each "
             "dependency before running the project. Check scaffold dependencies first."
+            "\n\nGITHUB WORKFLOW: You have GitHub tools for managing code repositories. "
+            "After completing and testing a project successfully (run_project_test passes), "
+            "offer to push it to GitHub. If the user agrees: "
+            "(1) Call github_create_repo using the project name as the repo name "
+            "and the scaffold description as the repo description. "
+            "(2) Call github_push_file for each file in implementation_order from the scaffold, "
+            "reading each file from outputs/{project_name}/ with read_file first. "
+            "(3) After all files are pushed, update scaffold.json to set github_repo "
+            "to the repo's full_name (e.g. 'username/project-name'). "
+            "For research reports and other valuable outputs, you can also push them to a "
+            "dedicated notes or research repo if the user has one. "
+            "Before creating a repo, call github_list_repos to check if one already exists "
+            "for this project — avoid creating duplicates."
         )
 
     # ------------------------------------------------------------------
