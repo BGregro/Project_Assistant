@@ -179,6 +179,12 @@ class AgentCore:
             "(8) Report completion with a summary of what was built. "
             "Always use this exact sequence — it ensures nothing is missed and the project "
             "works before you declare it done."
+            "\n\nWhen editing an existing file, prefer patch_file over write_file — "
+            "it modifies only the specified lines and preserves the rest. "
+            "Use analyze_file first to see line counts, then read_file to find the exact "
+            "lines to change, then patch_file to apply the edit. "
+            "If a project requires packages not yet installed, call install_package for each "
+            "dependency before running the project. Check scaffold dependencies first."
         )
 
     # ------------------------------------------------------------------

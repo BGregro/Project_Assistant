@@ -410,12 +410,177 @@ async def list_outputs() -> dict[str, Any]:
     }
 
 
+async def patch_file(path: str, start_line: int, end_line: int, new_content: str) -> dict[str, Any]:
+    """
+    Apply a targeted edit to a specific line range in a file.
+
+    Replaces lines start_line..end_line (1-indexed, inclusive) with new_content.
+    All lines outside the specified range are preserved exactly.
+
+    This is the preferred tool for modifying an existing file — it avoids
+    rewriting lines you don't intend to change, which reduces errors and makes
+    diffs easy to review.
+
+    Workflow:
+        1. Call analyze_file to see the total line count.
+        2. Call read_file to identify the exact lines you want to change.
+        3. Call patch_file with the line range and the replacement text.
+
+    Args:
+        path:        Path to the file to edit.
+        start_line:  First line to replace (1-indexed, inclusive).
+        end_line:    Last line to replace (1-indexed, inclusive).
+                     Must be >= start_line and <= total line count.
+        new_content: Replacement text. May contain any number of lines.
+                     Does not need to contain a trailing newline — one will
+                     be added automatically if the original file used them.
+
+    Returns:
+        {
+            "success":       bool,
+            "path":          str,
+            "lines_replaced": int,   # end_line - start_line + 1
+            "lines_written":  int,   # number of lines in new_content
+        }
+
+    DESTRUCTIVE: modifies the file in place.
+    """
+    p = _safe_path(path)
+    logger.info(f"[filesystem] patch_file: {p} lines {start_line}-{end_line}")
+
+    if not p.exists():
+        return {"success": False, "error": f"File not found: {p}"}
+    if not p.is_file():
+        return {"success": False, "error": f"Path exists but is not a file: {p}"}
+
+    try:
+        raw = p.read_text(encoding="utf-8", errors="replace")
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied reading: {p}"}
+    except Exception as e:
+        return {"success": False, "error": f"Could not read file: {e}"}
+
+    # Split preserving line endings so we can reconstruct faithfully.
+    # splitlines(keepends=True) keeps "\n", "\r\n", "\r" attached to each line.
+    lines = raw.splitlines(keepends=True)
+    total = len(lines)
+
+    # ---- Validate range -------------------------------------------------
+    if start_line < 1:
+        return {"success": False, "error": f"start_line must be >= 1, got {start_line}"}
+    if end_line < start_line:
+        return {
+            "success": False,
+            "error": f"end_line ({end_line}) must be >= start_line ({start_line})",
+        }
+    if end_line > total:
+        return {
+            "success": False,
+            "error": (
+                f"end_line ({end_line}) exceeds file length ({total} lines). "
+                f"Use analyze_file to check the line count first."
+            ),
+        }
+
+    # ---- Determine the line ending used by the file (default \n) --------
+    # Peek at the first line that has an ending; fall back to \n.
+    file_eol = "\n"
+    for ln in lines:
+        if ln.endswith("\r\n"):
+            file_eol = "\r\n"
+            break
+        if ln.endswith("\n"):
+            file_eol = "\n"
+            break
+        if ln.endswith("\r"):
+            file_eol = "\r"
+            break
+
+    # ---- Build replacement lines ----------------------------------------
+    # Split new_content into lines, then ensure every line ends with the
+    # file's native line ending (unless it's the very last line of the file,
+    # which we handle below).
+    replacement_raw = new_content.splitlines()
+    replacement_lines = [ln + file_eol for ln in replacement_raw]
+
+    # If the patch covers the last line of the file AND the original last line
+    # had no trailing newline, strip the EOL from the last replacement line too.
+    if end_line == total and not lines[-1].endswith(("\n", "\r")):
+        if replacement_lines:
+            replacement_lines[-1] = replacement_lines[-1].rstrip("\r\n")
+
+    # ---- Splice ---------------------------------------------------------
+    # lines is 0-indexed; start_line/end_line are 1-indexed.
+    before = lines[: start_line - 1]
+    after  = lines[end_line:]
+    new_lines = before + replacement_lines + after
+
+    try:
+        p.write_text("".join(new_lines), encoding="utf-8")
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied writing: {p}"}
+    except Exception as e:
+        return {"success": False, "error": f"Could not write file: {e}"}
+
+    lines_replaced = end_line - start_line + 1
+    lines_written  = len(replacement_raw)
+    logger.info(
+        f"[filesystem] patch_file OK: replaced {lines_replaced} lines "
+        f"with {lines_written} lines in {p}"
+    )
+    return {
+        "success":        True,
+        "path":           str(p),
+        "lines_replaced": lines_replaced,
+        "lines_written":  lines_written,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Registration — call this once at startup from main.py
 # ---------------------------------------------------------------------------
 
 def register_all() -> None:
     """Register all filesystem tools into the global tool registry."""
+
+    register_tool(
+        name="patch_file",
+        description=(
+            "Apply a targeted edit to a specific line range in a file. "
+            "Use this instead of write_file when modifying part of an existing file — "
+            "it preserves all other content. "
+            "start_line and end_line are 1-indexed and inclusive. "
+            "Use analyze_file first to see line counts, then read_file to find the exact "
+            "lines to change, then patch_file to apply the edit."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to edit.",
+                },
+                "start_line": {
+                    "type": "integer",
+                    "description": "First line to replace (1-indexed, inclusive).",
+                },
+                "end_line": {
+                    "type": "integer",
+                    "description": "Last line to replace (1-indexed, inclusive). Must be >= start_line.",
+                },
+                "new_content": {
+                    "type": "string",
+                    "description": (
+                        "Replacement text for the specified line range. "
+                        "May contain multiple lines. No trailing newline needed."
+                    ),
+                },
+            },
+            "required": ["path", "start_line", "end_line", "new_content"],
+        },
+        handler=patch_file,
+        is_destructive=True,  # modifies an existing file in place
+    )
 
     register_tool(
         name="read_file",

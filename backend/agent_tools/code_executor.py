@@ -1,30 +1,66 @@
 """
-code_executor.py  —  Code Execution Tool (Phase 3a)
+code_executor.py  —  Code Execution Tool (Phase 3a / Phase 4.5)
 
-Registers one tool:
+Registers two tools:
     execute_code(code, language)  —  runs a Python or Bash snippet in a subprocess
                                      and returns stdout, stderr, and exit code.
+                                     Phase 4.5: streams stdout line-by-line to the
+                                     frontend via _send_event_callback so long-running
+                                     scripts feel live rather than frozen.
+
+    install_package(package, version)  —  pip-installs a package into the current
+                                          Python environment.  Flagged DESTRUCTIVE.
 
 ⚠️  SECURITY NOTICE:
-    This tool runs code DIRECTLY on the host machine with the same permissions
+    execute_code runs code DIRECTLY on the host machine with the same permissions
     as the Python process running the agent.  There is NO network restriction,
     NO filesystem sandboxing, and NO resource capping beyond the configurable
     timeout.  The permission layer marks this tool as destructive so the user
     is prompted to approve each execution before it runs.  Never allow the
     agent to call this tool without that approval step.
+
+    install_package modifies the Python environment — installing packages from
+    untrusted sources can introduce malicious code.  It is also flagged as
+    destructive and requires user confirmation before running.
 """
 
 import json
 import logging
+import re
 import subprocess
 import sys
 import tempfile
 import os
+import threading
 from pathlib import Path
+from typing import Callable
 
 from agent_tools import register_tool
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Streaming callback — set by main.py at startup
+# ---------------------------------------------------------------------------
+
+# Set via set_send_event_callback() once the WebSocket send_event function is
+# available.  execute_code calls this with ("execution_output", {...}) for each
+# stdout line so the frontend can update the tool block in real time.
+_send_event_callback: Callable | None = None
+
+
+def set_send_event_callback(cb: Callable) -> None:
+    """
+    Register the async send_event function so execute_code can stream output.
+
+    Called from main.py after the agent is initialised.  The callback must
+    accept (event_type: str, data: dict) and schedule the coroutine safely
+    across thread boundaries (main.py wraps it with asyncio.run_coroutine_threadsafe).
+    """
+    global _send_event_callback
+    _send_event_callback = cb
+    logger.info("[code_executor] Streaming callback registered.")
+
 
 # ---------------------------------------------------------------------------
 # Config helper
@@ -114,25 +150,57 @@ async def execute_code(code: str, language: str = "python") -> dict:
                 cmd = ["bash", "-c", code]
 
         # ------------------------------------------------------------------
-        # Run the subprocess
+        # Run the subprocess with Popen so we can stream stdout line-by-line
         # ------------------------------------------------------------------
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
         )
 
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+
+        # --- Stream stdout -----------------------------------------------
+        # Read line-by-line; fire the callback for each line so the frontend
+        # can append it to the active tool block in real time.
+        # proc.stdout is None only if stdout wasn't piped — it always is here.
+        try:
+            for line in proc.stdout:  # type: ignore[union-attr]
+                stdout_lines.append(line)
+                if _send_event_callback is not None:
+                    try:
+                        _send_event_callback(
+                            "execution_output",
+                            {"line": line.rstrip("\r\n"), "stream": "stdout"},
+                        )
+                    except Exception as cb_err:
+                        logger.debug(f"[code_executor] Streaming callback error (non-fatal): {cb_err}")
+
+            # Wait for process to finish; enforce the timeout here.
+            _, stderr_raw = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()  # drain pipes to avoid zombie
+            raise  # re-raised → caught by the outer TimeoutExpired handler
+
+        stderr_lines = stderr_raw.splitlines(keepends=True) if stderr_raw else []
+
+        stdout_str = "".join(stdout_lines)
+        stderr_str = "".join(stderr_lines)
+        returncode  = proc.returncode
+
         logger.info(
-            f"[code_executor] Finished — exit_code={proc.returncode}, "
-            f"stdout={len(proc.stdout)} chars, stderr={len(proc.stderr)} chars"
+            f"[code_executor] Finished — exit_code={returncode}, "
+            f"stdout={len(stdout_str)} chars, stderr={len(stderr_str)} chars"
         )
 
         return {
-            "success":   proc.returncode == 0,
-            "stdout":    proc.stdout,
-            "stderr":    proc.stderr,
-            "exit_code": proc.returncode,
+            "success":   returncode == 0,
+            "stdout":    stdout_str,
+            "stderr":    stderr_str,
+            "exit_code": returncode,
             "language":  lang,
         }
 
@@ -177,15 +245,128 @@ async def execute_code(code: str, language: str = "python") -> dict:
 
 
 # ---------------------------------------------------------------------------
+# install_package
+# ---------------------------------------------------------------------------
+
+# Allowlist pattern: only plain package names are accepted.
+# Rejects anything with shell metacharacters, paths, or injection attempts.
+_PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+async def install_package(package: str, version: str = "") -> dict:
+    """
+    Install a Python package into the current environment using pip.
+
+    ⚠️  SECURITY NOTICE: Installing packages from untrusted sources can
+    introduce malicious code into the environment.  Always confirm the package
+    name and source before approving this tool call.
+
+    Args:
+        package:  The package name, e.g. "requests" or "numpy".
+                  Must match ^[a-zA-Z0-9_\\-.]+$ to prevent injection.
+        version:  Optional exact version string, e.g. "2.28.1".
+                  If provided, pip is called as: pip install package==version.
+                  Leave empty to install the latest compatible version.
+
+    Returns:
+        {
+            "success":   bool,
+            "package":   str,
+            "version":   str,          # echoes version arg (may be "")
+            "stdout":    str,          # last 500 chars of pip stdout
+            "stderr":    str,          # last 500 chars of pip stderr
+            "exit_code": int,
+        }
+
+    DESTRUCTIVE: modifies the Python environment — requires user approval.
+    """
+    # ---- Validate package name ------------------------------------------
+    pkg = package.strip()
+    if not pkg:
+        return {
+            "success":   False,
+            "package":   package,
+            "version":   version,
+            "stdout":    "",
+            "stderr":    "Package name cannot be empty.",
+            "exit_code": -1,
+        }
+    if not _PACKAGE_NAME_RE.match(pkg):
+        return {
+            "success":   False,
+            "package":   package,
+            "version":   version,
+            "stdout":    "",
+            "stderr":    (
+                f"Invalid package name: {package!r}. "
+                "Only letters, digits, hyphens, underscores, and dots are allowed."
+            ),
+            "exit_code": -1,
+        }
+
+    # ---- Build pip spec -------------------------------------------------
+    ver = version.strip()
+    spec = f"{pkg}=={ver}" if ver else pkg
+
+    logger.info(f"[code_executor] install_package: pip install {spec}")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", spec],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        success    = result.returncode == 0
+        stdout_out = result.stdout[-500:] if len(result.stdout) > 500 else result.stdout
+        stderr_out = result.stderr[-500:] if len(result.stderr) > 500 else result.stderr
+
+        if success:
+            logger.info(f"[code_executor] install_package OK: {spec}")
+        else:
+            logger.warning(f"[code_executor] install_package FAILED: {spec} — {stderr_out[:200]}")
+
+        return {
+            "success":   success,
+            "package":   pkg,
+            "version":   ver,
+            "stdout":    stdout_out,
+            "stderr":    stderr_out,
+            "exit_code": result.returncode,
+        }
+
+    except subprocess.TimeoutExpired:
+        logger.warning(f"[code_executor] install_package timed out after 120s: {spec}")
+        return {
+            "success":   False,
+            "package":   pkg,
+            "version":   ver,
+            "stdout":    "",
+            "stderr":    "pip install timed out after 120 seconds.",
+            "exit_code": -1,
+        }
+    except Exception as e:
+        logger.exception(f"[code_executor] install_package unexpected error: {spec}")
+        return {
+            "success":   False,
+            "package":   pkg,
+            "version":   ver,
+            "stdout":    "",
+            "stderr":    str(e),
+            "exit_code": -1,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
 def register_code_executor_tools() -> None:
     """
-    Register execute_code with the tool registry.
+    Register execute_code and install_package with the tool registry.
 
-    The tool is marked destructive=True so the permission layer will ask the
-    user to confirm before the agent runs any code.
+    Both tools are marked destructive=True so the permission layer will ask
+    the user to confirm before execution.
     """
     register_tool(
         name="execute_code",
@@ -222,3 +403,40 @@ def register_code_executor_tools() -> None:
         is_destructive=True,
     )
     logger.info("[code_executor] Registered tool: execute_code (destructive)")
+
+    register_tool(
+        name="install_package",
+        description=(
+            "Install a Python package into the current environment using pip. "
+            "Use this before running code that requires a package not yet installed. "
+            "Check scaffold_project dependencies first to know what packages are needed. "
+            "Accepts an optional exact version string (e.g. '2.28.1'); "
+            "omit version to install the latest compatible release. "
+            "⚠️ Only install packages from trusted sources — pip install runs "
+            "arbitrary code from PyPI."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "package": {
+                    "type": "string",
+                    "description": (
+                        "Package name to install, e.g. 'requests' or 'numpy'. "
+                        "Must be a plain name — no shell operators, paths, or extras."
+                    ),
+                },
+                "version": {
+                    "type": "string",
+                    "description": (
+                        "Optional exact version, e.g. '2.28.1'. "
+                        "Leave empty to install the latest compatible version."
+                    ),
+                },
+            },
+            "required": ["package"],
+        },
+        handler=install_package,
+        is_destructive=True,  # modifies the Python environment
+    )
+    logger.info("[code_executor] Registered tool: install_package (destructive)")
+

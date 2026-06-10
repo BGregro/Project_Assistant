@@ -68,7 +68,7 @@ from agent_tools.local_llm import is_ollama_available, summarize_history, unload
 from agent_tools.web import register_web_tools
 from agent_tools.system_info import register_system_tools
 from agent_tools.file_analysis import register_file_analysis_tools
-from agent_tools.code_executor import register_code_executor_tools
+from agent_tools.code_executor import register_code_executor_tools, set_send_event_callback
 from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c
 from agent_tools.hot_reload import hot_reload_tool, list_generated_tools  # Phase 3c
 from agent_tools.memory_tool import register_memory_tools                 # Phase 3f
@@ -189,6 +189,44 @@ agent       = AgentCore(config)
 task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 
 # ---------------------------------------------------------------------------
+# Phase 4.5 — Streaming execution output
+#
+# execute_code uses subprocess.Popen and emits each stdout line via this
+# callback so the frontend can update the tool block in real time.
+# The callback must be thread-safe: Popen reads stdout in the async event
+# loop thread (since execute_code is awaited), so asyncio.ensure_future is
+# sufficient here.  We store the callback now; the actual send_event coroutine
+# is only available per-WebSocket-connection, so we forward to whichever
+# send_event is active at call time via a closure-based indirection below.
+# ---------------------------------------------------------------------------
+
+# This list holds the most recent WebSocket send_event so the module-level
+# callback can reach it.  A list is used (instead of a plain variable) so the
+# closure captures the container, not a snapshot of the value.
+_active_send_event: list = [None]
+
+def _execution_output_callback(event_type: str, data: dict) -> None:
+    """
+    Thread-safe bridge: called from execute_code (sync context inside the
+    async loop) to push a streaming line event to the frontend.
+
+    Since execute_code is an async function awaited inside the WebSocket
+    handler, it runs in the event loop thread — asyncio.ensure_future is safe.
+    """
+    fn = _active_send_event[0]
+    if fn is None:
+        return
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(fn(event_type, data))
+    except Exception as e:
+        logger.debug(f"[main] Streaming callback dispatch error (non-fatal): {e}")
+
+set_send_event_callback(_execution_output_callback)
+logger.info("[startup] Execution streaming callback registered.")
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -266,13 +304,46 @@ async def status():
 
 
 # ---------------------------------------------------------------------------
-# Phase 3b: GET /task — return last persisted task state
+# Phase 3b / Phase 4.5: GET /task — return last persisted task state.
+# Phase 4.5 extension: optional ?history=N query parameter returns the last N
+# completed tasks from long_term.json under a "history" key.  The frontend
+# calls this on connect to populate the task history list in the Tasks tab.
 # ---------------------------------------------------------------------------
 
 @app.get("/task")
-async def get_task():
+async def get_task(history: int = 0):
+    """
+    Return the current/last task state.
+
+    Query parameters:
+        history  — if > 0, also include the last N tasks from long_term.json
+                   under a "history" key.  Default 0 (no history returned).
+
+    Response shape:
+        {
+            "id":              str | null,
+            "status":          "running" | "complete" | "cancelled" | null,
+            "initial_message": str | null,
+            "steps":           [...],
+            "history":         [...],   # only when history > 0
+        }
+    """
     data = task_runner.load_last_task()
-    return JSONResponse(data if data is not None else {})
+    result = data if data is not None else {}
+
+    if history > 0:
+        try:
+            from memory.long_term import load as load_long_term
+            lt = load_long_term()
+            tasks = lt.get("tasks", [])
+            # Return the last N tasks (most recent at end of list)
+            result["history"] = tasks[-history:] if len(tasks) > history else tasks
+        except Exception as e:
+            logger.warning(f"[task] Could not load task history: {e}")
+            result["history"] = []
+
+    return JSONResponse(result)
+
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +542,10 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_event(event_type: str, data) -> None:
         await websocket.send_json({"type": event_type, "data": data})
 
+    # Phase 4.5 — make this connection's send_event available to the
+    # execution streaming callback so execute_code can push live output.
+    _active_send_event[0] = send_event
+
     async def dispatch(raw: dict):
         msg_type = raw.get("type")
 
@@ -641,6 +716,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("[ws] Client disconnected.")
+        _active_send_event[0] = None  # Phase 4.5 — stop streaming to dead socket
         # Unload model from RAM on disconnect — it will reload automatically
         # on the next local LLM call when a new session starts.
         await unload_model(agent.local_model, agent.ollama_url)

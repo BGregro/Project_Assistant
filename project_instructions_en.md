@@ -69,7 +69,7 @@ pipeline, not just a fallback.
 - `local_agent`: Ollama model for local mode agentic loop (qwen2.5:14b)
 - `local_agent_timeout`: per-request timeout in seconds (default 300)
 
-## Current Tool Inventory (Phase 3i complete)
+## Current Tool Inventory (Phase 4 complete)
 All tools are registered at startup and visible to Claude via the tool registry.
 
 | Tool | File | Description |
@@ -78,17 +78,20 @@ All tools are registered at startup and visible to Claude via the tool registry.
 | `write_file` | filesystem.py | Write/append to a file (permission check) |
 | `list_directory` | filesystem.py | List directory contents + emit tree update |
 | `list_outputs` | filesystem.py | List files in outputs/ directory |
+| `patch_file` | filesystem.py | Apply targeted line-range edits to a file |
 | `list_capabilities` | capabilities.py | Introspect live tool registry at call time |
 | `search_web` | web.py | SearXNG search with DDG fallback |
 | `fetch_page` | web.py | Fetch + strip HTML from any URL |
 | `get_system_info` | system_info.py | CPU, RAM, disk, running Ollama models |
 | `analyze_file` | file_analysis.py | Size, lines, words, estimated token count |
-| `execute_code` | code_executor.py | Run Python or Bash in a subprocess sandbox |
+| `execute_code` | code_executor.py | Run Python or Bash in subprocess sandbox |
+| `install_package` | code_executor.py | pip install a package with confirmation |
 | `write_tool` | tool_writer.py | Write a new tool file to agent_tools/generated/ |
 | `reload_tool` | tool_writer.py | Hot-reload a generated tool into the live registry |
 | `log_research` | memory_tool.py | Save research findings to long-term memory |
 | `recall_memory` | memory_tool.py | Query past tasks, facts, and research |
 | `log_fact` | memory_tool.py | Store a specific fact to long-term memory |
+| `recall_projects` | memory_tool.py | Query past built projects |
 | `read_user_profile` | self_knowledge.py | Read memory/user_profile.json |
 | `scan_system` | self_knowledge.py | Scan installed tools, packages, projects |
 | `update_user_profile` | profile_updater.py | Update fields in user_profile.json |
@@ -96,6 +99,10 @@ All tools are registered at startup and visible to Claude via the tool registry.
 | `browser_open` | browser.py | Navigate to URL in headless Chromium |
 | `browser_read` | browser.py | Extract text from current browser page |
 | `browser_screenshot` | browser.py | Save PNG of current browser page |
+| `scaffold_project` | project_scaffold.py | Generate project architecture before coding |
+| `get_project_status` | project_manager.py | Check which files are done vs pending |
+| `mark_file_complete` | project_manager.py | Mark a project file as implemented |
+| `run_project_test` | project_tester.py | Run project entry point and capture output |
 
 Generated tools live in `agent_tools/generated/` and auto-load on startup.
 All generated files (reports, scripts, data) are saved to `outputs/`.
@@ -103,9 +110,11 @@ All generated files (reports, scripts, data) are saved to `outputs/`.
 ## Memory Architecture
 - **Short-term:** last N conversation turns (verbatim, JSON)
 - **Semantic:** ChromaDB vector store with nomic-embed-text embeddings
-- **Long-term:** `memory/long_term.json` — tasks, facts, research entries
+- **Long-term:** `memory/long_term.json` — tasks, facts, research, projects
 - **Research index:** ChromaDB collection for semantic research retrieval
 - **User profile:** `memory/user_profile.json` — manually maintained
+- **Task checkpoint:** `memory/current_task.json` — last task state, survives reconnect
+- **Project progress:** `outputs/{name}/progress.json` — per-project build state
 
 ## Development Phases
 
@@ -117,37 +126,36 @@ All generated files (reports, scripts, data) are saved to `outputs/`.
 - 3g Deep self-knowledge, 3h Structured research, 3i Browser automation
 - Gap fixes: semantic memory matching, outputs awareness
 
-### Phase 4 – Software Development Agent (CURRENT TARGET)
-The agent can generate complete multi-file software projects autonomously,
-test them, iterate on failures, and deliver working standalone codebases.
+### Phase 4 – Software Development Agent ✓ COMPLETE
+- 4a Project scaffolding (scaffold_project tool)
+- 4b Incremental implementation with progress tracking
+- 4c Integration testing (run_project_test tool)
+- 4d Project memory (logged to long_term.json on success)
 
-**4a – Project scaffolding**
-Before writing any code, agent generates a complete project spec:
-directory structure, file list, purpose of each file, interfaces between
-files, dependencies, and entry point. Shown to user for approval.
-Implemented as a new `scaffold_project` tool.
+### Phase 4.5 – Quality & Reliability (CURRENT TARGET)
+Targeted improvements that make existing capabilities work better:
 
-**4b – Incremental implementation with testing**
-Agent writes files one at a time following the approved scaffold.
-After each file: runs relevant unit tests if applicable, fixes issues.
-Tracks which files are done vs pending in the task checkpoint.
-Project manifest stays in context so Claude never loses track of structure.
+**patch_file tool** — targeted line-range edits instead of full rewrites.
+Essential for editing large files without rewriting them entirely.
 
-**4c – Integration testing**
-After all files written, agent runs the project entry point automatically.
-Captures stdout/stderr, identifies failures, iterates until clean run
-or reports exactly what manual steps are needed to finish.
+**install_package tool** — pip install with confirmation.
+Unblocks all projects that have dependencies.
 
-**4d – Project memory**
-Completed projects stored in long-term memory with their structure,
-dependencies, and lessons learned. Agent can reference past projects
-when building something similar.
+**Streaming execution** — stdout streamed line-by-line to UI during execute_code.
+Makes long-running scripts visible in real time instead of a black box.
+
+**UI overhaul** — cleaner header, collapsible task runs in chat, task history
+in right panel, status bar at bottom, better tool call blocks.
+
+**State persistence on reconnect** — UI reconstructs last task state from
+current_task.json when WebSocket reconnects after browser close/reopen.
 
 ### Phase 5 – External Service Integrations (PLANNED)
-- 5a: Authenticated API access (OAuth flows via browser automation)
+- 5a: GitHub integration (personal access token, repo/file operations)
 - 5b: Credential management (encrypted local storage)
-- 5c: Platform integrations (GitHub, YouTube, etc.)
+- 5c: Additional platform integrations (YouTube Data API, etc.)
 - 5d: Write-mode browser automation (form filling, clicking)
+- 5e: Scheduled/recurring tasks
 
 ## Project Structure
 ```
@@ -159,26 +167,29 @@ agent/
 │   ├── run.py                   # Windows-compatible server launcher
 │   ├── agent_tools/
 │   │   ├── __init__.py          # Tool registry
-│   │   ├── filesystem.py        # File tools + list_outputs
+│   │   ├── filesystem.py        # File tools + list_outputs + patch_file
 │   │   ├── capabilities.py      # list_capabilities
 │   │   ├── web.py               # search_web, fetch_page
 │   │   ├── system_info.py       # get_system_info
 │   │   ├── file_analysis.py     # analyze_file
 │   │   ├── local_llm.py         # Ollama client, all local LLM tasks
-│   │   ├── code_executor.py     # execute_code
+│   │   ├── code_executor.py     # execute_code, install_package
 │   │   ├── tool_writer.py       # write_tool, reload_tool
 │   │   ├── hot_reload.py        # validation + importlib hot-reload
-│   │   ├── memory_tool.py       # log_research, recall_memory, log_fact
+│   │   ├── memory_tool.py       # log_research, recall_memory, log_fact, recall_projects
 │   │   ├── self_knowledge.py    # read_user_profile, scan_system
 │   │   ├── profile_updater.py   # update_user_profile
 │   │   ├── research_mode.py     # deep_research
 │   │   ├── browser.py           # browser_open, browser_read, browser_screenshot
+│   │   ├── project_scaffold.py  # scaffold_project
+│   │   ├── project_manager.py   # get_project_status, mark_file_complete
+│   │   ├── project_tester.py    # run_project_test
 │   │   ├── generated/           # agent-written tools (auto-loaded)
 │   │   └── SEARXNG_SETUP.md
 │   └── memory/
 │       ├── context.py           # History load/save/trim
 │       ├── embeddings.py        # ChromaDB vector store
-│       └── long_term.py         # Tasks, facts, research + semantic index
+│       └── long_term.py         # Tasks, facts, research, projects + semantic index
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
@@ -188,8 +199,12 @@ agent/
 │   ├── current_task.json
 │   ├── long_term.json
 │   ├── user_profile.json
-│   └── vectors/                 # ChromaDB persistent storage
-├── outputs/                     # All agent-generated files go here
+│   └── vectors/
+├── outputs/
+│   └── {project_name}/
+│       ├── scaffold.json
+│       ├── progress.json
+│       └── (project files)
 ├── config.json
 ├── .env
 ├── requirements.txt

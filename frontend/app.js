@@ -1,21 +1,17 @@
 /**
- * app.js  —  Phase 3 Frontend WebSocket Client
+ * app.js  —  Phase 4.5 Frontend
  *
- * Phase 3 additions over Phase 2:
- *   - Two-panel layout: right panel with Tasks / Files / Memory tabs
- *   - Right panel collapse/expand
- *   - task_progress WebSocket event → live step timeline in Tasks tab
- *   - task_stopped event → stop button, badge update, step cancellation
- *   - Stop button (sends stop_task, disables itself)
- *   - Task status badge (idle / thinking / executing / waiting)
- *   - Tool calls/results wrapped in collapsible <details class="tool-block">
- *     tracked by tool-use ID so result attaches to the correct block
- *   - execute_code tool: code input rendered as syntax-highlighted block
- *   - Thinking indicator: shows below last message, updates label per tool
- *   - Memory tab: recent history rows + vector store count from /status
- *   - Copy-to-clipboard buttons on code blocks
- *
- * All Phase 2 functionality is preserved exactly.
+ * Changes from Phase 3 / 4:
+ *   - Header toolbar: connection dot (green/amber/red), icon buttons only
+ *   - Status bar (below input): shows last status event, auto-clears in 8s
+ *     Status events no longer render as chat bubbles
+ *   - Task-run containers: tool blocks + final reply grouped under a
+ *     collapsible header (goal / badge / step-count / elapsed)
+ *   - Task history: loaded from GET /task?history=10, shown in Tasks tab
+ *   - State restore on reconnect: last complete/cancelled task restores
+ *     step timeline; interrupted-banner for status="running"
+ *   - Settings panel gains "Active model" read-only display
+ *   - All Phase 3 / 4 functionality fully preserved
  */
 
 'use strict';
@@ -27,41 +23,32 @@ const chatArea   = document.getElementById('chat-area');
 const userInput  = document.getElementById('user-input');
 const btnSend    = document.getElementById('btn-send');
 const btnClear   = document.getElementById('btn-clear');
-const statusLine = document.getElementById('status-line');
-const statusText = document.getElementById('status-text');
 
-// Model bar
-const modelDisplay   = document.getElementById('model-display');
-const optimizerBadge = document.getElementById('optimizer-badge');
-const localModeBadge = document.getElementById('local-mode-badge');
+// Connection dot (new header)
+const connDot = document.getElementById('conn-dot');
 
-// Optimizer indicator (footer)
+// Status bar (new, below input)
+const statusBarDot  = document.getElementById('status-bar-dot');
+const statusBarText = document.getElementById('status-bar-text');
+
+// Stop button (now in header toolbar)
+const btnStop = document.getElementById('btn-stop');
+
+// Legacy refs kept so nothing crashes
+const statusClaude = document.getElementById('status-claude') || {};
+const statusOllama = document.getElementById('status-ollama') || {};
+
+// Optimizer indicator (chat area)
 const optimizerIndicator = document.getElementById('optimizer-indicator');
 
-// Status pills
-const statusClaude = document.getElementById('status-claude');
-const statusOllama = document.getElementById('status-ollama');
-
-// Confirmation modal
-const confirmModal  = document.getElementById('confirm-modal');
-const modalToolName = document.getElementById('modal-tool-name');
-const modalDetails  = document.getElementById('modal-details');
-const btnApprove    = document.getElementById('btn-approve');
-const btnDeny       = document.getElementById('btn-deny');
-
-// Phase 3: task controls
-const btnStop         = document.getElementById('btn-stop');
-const taskStatusBadge = document.getElementById('task-status-badge');
-const taskBadgeLabel  = document.getElementById('task-badge-label');
+// Thinking indicator
 const thinkingIndicator = document.getElementById('thinking-indicator');
-const thinkingLabel   = document.getElementById('thinking-label');
+const thinkingLabel     = document.getElementById('thinking-label');
 
 // Files tab tree
 const treeContent = document.getElementById('tree-content');
 
-// ============================================================
-// DOM references — settings panel
-// ============================================================
+// Settings panel
 const settingsPanel    = document.getElementById('settings-panel');
 const settingsBackdrop = document.getElementById('settings-backdrop');
 const btnSettingsOpen  = document.getElementById('btn-settings');
@@ -70,6 +57,7 @@ const btnSettingsClose = document.getElementById('btn-settings-close');
 const btnModeOnline  = document.getElementById('btn-mode-online');
 const btnModeLocal   = document.getElementById('btn-mode-local');
 const modeModelLabel = document.getElementById('mode-active-model-name');
+const activeModelDisplay = document.getElementById('active-model-display');
 
 const selPrimaryModel    = document.getElementById('sel-primary-model');
 const selLocalAgentModel = document.getElementById('sel-local-agent-model');
@@ -92,6 +80,13 @@ const toggleEmbeddings    = document.getElementById('toggle-embeddings');
 const toggleEmbeddingsLbl = document.getElementById('toggle-embeddings-label');
 const inpTreeRoot         = document.getElementById('inp-tree-root');
 
+// Confirmation modal
+const confirmModal  = document.getElementById('confirm-modal');
+const modalToolName = document.getElementById('modal-tool-name');
+const modalDetails  = document.getElementById('modal-details');
+const btnApprove    = document.getElementById('btn-approve');
+const btnDeny       = document.getElementById('btn-deny');
+
 // ============================================================
 // State
 // ============================================================
@@ -104,26 +99,50 @@ let currentPrimaryModel   = 'claude-haiku-4-5';
 let currentLocalModel     = 'qwen2.5:14b';
 
 // Phase 3 state
-let activeTaskSteps = {};    // stepN → DOM element
+let activeTaskSteps  = {};   // stepN → DOM element (right-panel timeline)
 let pendingToolBlocks = {};  // tool_use_id → <details> element
-let isTaskRunning = false;
+let isTaskRunning    = false;
+
+// Phase 4.5 — task run container tracking
+let activeTaskContainer  = null;   // current .task-run-container DOM element
+let taskRunStartMs       = 0;      // Date.now() when task started
+let taskRunStepCount     = 0;      // total steps received for current run
+let currentTaskGoal      = '';     // first 60 chars of triggering message
+let statusBarTimer       = null;   // auto-clear timer for status bar
+
+// Phase 3h — research progress
+let _researchTotal   = 0;
+let _researchCurrent = 0;
 
 // ============================================================
-// WebSocket
+// WebSocket — connection + reconnect
 // ============================================================
 
 function connectWS() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
-  ws.addEventListener('open',    ()  => { console.log('[ws] Connected.'); setWaiting(false); });
+  setConnDot('reconnecting');
+
+  ws.addEventListener('open', () => {
+    console.log('[ws] Connected.');
+    setConnDot('connected');
+    setWaiting(false);
+  });
   ws.addEventListener('message', (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { console.error('[ws] Bad JSON:', e.data); return; }
     handleServerEvent(msg.type, msg.data);
   });
-  ws.addEventListener('close', () => { console.warn('[ws] Disconnected. Reconnecting…'); setTimeout(connectWS, 2000); });
-  ws.addEventListener('error', (e) => console.error('[ws] Error:', e));
+  ws.addEventListener('close', () => {
+    console.warn('[ws] Disconnected. Reconnecting…');
+    setConnDot('reconnecting');
+    setTimeout(connectWS, 2000);
+  });
+  ws.addEventListener('error', (e) => {
+    console.error('[ws] Error:', e);
+    setConnDot('disconnected');
+  });
 }
 
 function sendWS(payload) {
@@ -134,15 +153,44 @@ function sendWS(payload) {
   }
 }
 
+// Connection dot: 'connected' | 'reconnecting' | 'disconnected'
+function setConnDot(state) {
+  if (!connDot) return;
+  connDot.className = 'conn-dot ' + state;
+}
+
+// ============================================================
+// Status bar — replaces inline status bubbles
+// ============================================================
+
+const STATUS_IDLE_TEXT = 'Idle';
+const STATUS_IDLE_MS   = 8000;
+
+function setStatusBar(text, mode = 'active') {
+  // mode: 'active' (amber), 'error' (red), 'done' (green), 'idle'
+  if (!statusBarDot || !statusBarText) return;
+  clearTimeout(statusBarTimer);
+  statusBarText.textContent = text || STATUS_IDLE_TEXT;
+  statusBarDot.className = 'status-bar-dot ' + (mode === 'idle' ? '' : mode);
+  if (mode !== 'idle') {
+    statusBarTimer = setTimeout(() => setStatusBar(STATUS_IDLE_TEXT, 'idle'), STATUS_IDLE_MS);
+  }
+}
+
+function clearStatusBar() {
+  setStatusBar(STATUS_IDLE_TEXT, 'idle');
+}
+
 // ============================================================
 // Server event dispatcher
 // ============================================================
 
 function handleServerEvent(type, data) {
   switch (type) {
+
+    // Status events → status bar only, never a chat bubble
     case 'status':
-      showStatus(data.text);
-      updateTaskBadge('thinking');
+      setStatusBar(data.text, 'active');
       break;
 
     case 'prompt_optimized':
@@ -151,15 +199,17 @@ function handleServerEvent(type, data) {
       break;
 
     case 'tool_call':
-      // Update thinking label to reflect active tool
       setThinkingLabel(toolActionLabel(data.tool));
+      setStatusBar(toolActionLabel(data.tool), 'active');
       appendToolBlock(data.tool, data.input, data.tool_use_id);
-      updateTaskBadge('executing');
       break;
 
     case 'tool_result':
       updateToolBlock(data.tool_use_id || data.tool, data.success, data.result);
-      updateTaskBadge('thinking');
+      break;
+
+    case 'execution_output':
+      appendExecutionOutputLine(data.line, data.stream);
       break;
 
     case 'tool_denied':
@@ -168,28 +218,26 @@ function handleServerEvent(type, data) {
 
     case 'confirm_required':
       openConfirmModal(data.confirmation_id, data.tool, data.input);
-      updateTaskBadge('waiting');
+      setStatusBar('Waiting for approval…', 'active');
       break;
 
     case 'message':
-      hideStatus();
       hideOptimizerIndicator();
       hideThinkingIndicator();
       appendAgentMessage(data.text, data.source);
       setWaiting(false);
-      updateTaskBadge('idle');
-      stopTaskRunning();
+      closeTaskContainer('complete');
       updateMemoryHistory(data.text, 'agent');
+      setStatusBar('Done', 'done');
       break;
 
     case 'error':
-      hideStatus();
       hideOptimizerIndicator();
       hideThinkingIndicator();
       appendErrorMessage(data.text);
       setWaiting(false);
-      updateTaskBadge('idle');
-      stopTaskRunning();
+      closeTaskContainer('failed');
+      setStatusBar('Error: ' + (data.text || '').slice(0, 80), 'error');
       break;
 
     case 'cleared':
@@ -224,13 +272,7 @@ function handleServerEvent(type, data) {
       flashAckForKey(data.key);
       break;
 
-    // --- Phase 3 new events ---
-
     case 'task_started':
-      // The backend confirmed a task is now running. Show the Stop button
-      // and switch the badge to 'running'.  The frontend already called
-      // startTaskRunning() in sendMessage(), so this is a belt-and-braces
-      // confirmation that both sides agree a task is active.
       handleTaskStarted(data);
       break;
 
@@ -242,12 +284,10 @@ function handleServerEvent(type, data) {
       handleTaskStopped(data);
       break;
 
-    // Phase 3e — plan approval card
     case 'task_plan':
       handleTaskPlan(data);
       break;
 
-    // Phase 3h — structured research mode
     case 'research_started':
       handleResearchStarted(data);
       break;
@@ -265,10 +305,7 @@ function sendMessage() {
   const text = userInput.value.trim();
   if (!text) return;
 
-  // ── Phase 3b: mid-task message injection ─────────────────────────────────
-  // If the Stop button is visible, a task is running.  Show a muted "queued"
-  // annotation instead of a normal user bubble and let the backend inject the
-  // message at the next safe checkpoint.
+  // Mid-task message injection
   if (isTaskRunning) {
     appendQueuedMessage(text);
     sendWS({ type: 'message', text });
@@ -276,7 +313,6 @@ function sendMessage() {
     autoResize(userInput);
     return;
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   if (isWaiting) return;
 
@@ -290,10 +326,13 @@ function sendMessage() {
   userInput.value = '';
   autoResize(userInput);
   setWaiting(true);
+  currentTaskGoal = text.slice(0, 60) + (text.length > 60 ? '…' : '');
+  taskRunStartMs  = Date.now();
+  taskRunStepCount = 0;
   startTaskRunning();
   showOptimizerIndicator();
-  showStatus('Sending…');
   showThinkingIndicator('Thinking…');
+  setStatusBar('Sending…', 'active');
 }
 
 // ============================================================
@@ -301,17 +340,19 @@ function sendMessage() {
 // ============================================================
 
 function appendUserMessage(text) {
+  const target = _currentChatTarget();
   const row = document.createElement('div');
   row.className = 'msg-row user-row';
   row.innerHTML = `
     <span class="msg-role">you</span>
     <div class="msg-bubble">${escapeHtml(text)}</div>
   `;
-  chatArea.appendChild(row);
+  target.appendChild(row);
   scrollToBottom();
 }
 
 function appendAgentMessage(text, source = 'claude') {
+  const target = _currentChatTarget();
   const row = document.createElement('div');
   row.className = 'msg-row agent-row';
   const localClass  = source === 'local' ? ' local-source' : '';
@@ -320,62 +361,172 @@ function appendAgentMessage(text, source = 'claude') {
     <span class="msg-role">${escapeHtml(sourceLabel)}</span>
     <div class="msg-bubble${localClass}">${renderMarkdownWithCode(text)}</div>
   `;
-  chatArea.appendChild(row);
-  // Attach copy buttons to code blocks
+  target.appendChild(row);
   row.querySelectorAll('.code-block').forEach(attachCopyBtn);
   scrollToBottom();
 }
 
 function appendErrorMessage(text) {
+  const target = _currentChatTarget();
   const row = document.createElement('div');
   row.className = 'msg-row agent-row';
   row.innerHTML = `
     <span class="msg-role" style="color:var(--red)">err</span>
     <div class="msg-bubble" style="border-color:var(--red);color:var(--red);">${escapeHtml(text)}</div>
   `;
-  chatArea.appendChild(row);
+  target.appendChild(row);
   scrollToBottom();
 }
 
-/**
- * Muted italic annotation shown when the user sends a message while a task
- * is already running.  The backend queues it; the agent reads it at the next
- * checkpoint.
- */
 function appendQueuedMessage(text) {
+  // Mid-task queued messages go inside the active task container if open
+  const target = activeTaskContainer
+    ? activeTaskContainer.querySelector('.task-run-body')
+    : chatArea;
   const row = document.createElement('div');
   row.className = 'msg-row queued-row';
   row.innerHTML = `
     <span class="msg-role" style="opacity:0.45">you</span>
-    <div class="msg-bubble queued-bubble">↪ Instruction queued for agent: <em>${escapeHtml(text)}</em></div>
+    <div class="msg-bubble queued-bubble">↪ Queued: <em>${escapeHtml(text)}</em></div>
   `;
-  chatArea.appendChild(row);
+  target.appendChild(row);
   scrollToBottom();
 }
 
+/**
+ * Return the DOM node where new chat content should be appended.
+ * During an active task, content goes inside the task container's body.
+ * Outside a task (simple Q&A), content goes directly into chatArea.
+ */
+function _currentChatTarget() {
+  if (activeTaskContainer) {
+    return activeTaskContainer.querySelector('.task-run-body');
+  }
+  return chatArea;
+}
+
 // ============================================================
-// Tool blocks — collapsible <details>
-// Tracked by tool_use_id (Phase 3) with fallback to tool name (Phase 2 compat)
+// Task-run containers
+// Phase 4.5: group tool blocks + final reply under a collapsible header.
 // ============================================================
 
 /**
- * Map tool name → display category for border color.
+ * Create a new task-run container and append it to chatArea.
+ * Called when task_started is received.
  */
+function createTaskContainer(goal) {
+  const el = document.createElement('div');
+  el.className = 'task-run-container open';
+
+  // Build header
+  const header = document.createElement('div');
+  header.className = 'task-run-header';
+  header.innerHTML = `
+    <span class="task-run-arrow">▶</span>
+    <span class="task-run-goal">${escapeHtml(goal)}</span>
+    <span class="task-run-badge running">running</span>
+    <span class="task-run-meta">
+      <span class="task-run-steps">0 steps</span>
+    </span>
+  `;
+  header.addEventListener('click', () => toggleTaskContainer(el));
+  el.appendChild(header);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'task-run-body';
+  el.appendChild(body);
+
+  chatArea.appendChild(el);
+  activeTaskContainer = el;
+  scrollToBottom();
+  return el;
+}
+
+function toggleTaskContainer(el) {
+  el.classList.toggle('open');
+}
+
+/**
+ * Update the container's step count and elapsed time display.
+ */
+function updateTaskContainerMeta() {
+  if (!activeTaskContainer) return;
+  const stepsEl = activeTaskContainer.querySelector('.task-run-steps');
+  if (stepsEl) {
+    stepsEl.textContent = `${taskRunStepCount} step${taskRunStepCount !== 1 ? 's' : ''}`;
+  }
+  // Also update elapsed (shown while running)
+  const elapsed = Date.now() - taskRunStartMs;
+  const elapsedStr = elapsed < 60000
+    ? `${(elapsed / 1000).toFixed(0)}s`
+    : `${Math.floor(elapsed / 60000)}m ${Math.floor((elapsed % 60000) / 1000)}s`;
+  let metaEl = activeTaskContainer.querySelector('.task-run-elapsed');
+  if (!metaEl) {
+    metaEl = document.createElement('span');
+    metaEl.className = 'task-run-elapsed';
+    const metaContainer = activeTaskContainer.querySelector('.task-run-meta');
+    if (metaContainer) metaContainer.appendChild(metaEl);
+  }
+  metaEl.textContent = elapsedStr;
+}
+
+/**
+ * Close the active task container with a final status.
+ * status: 'complete' | 'failed' | 'cancelled'
+ * Called when 'message', 'error', or 'task_stopped' arrives.
+ */
+function closeTaskContainer(status) {
+  if (!activeTaskContainer) return;
+
+  const badge = activeTaskContainer.querySelector('.task-run-badge');
+  if (badge) {
+    badge.className = 'task-run-badge ' + status;
+    badge.textContent = status;
+  }
+
+  // Freeze elapsed time
+  updateTaskContainerMeta();
+
+  // Collapse after completion (small delay so user can see the final state)
+  if (status === 'complete') {
+    setTimeout(() => {
+      if (activeTaskContainer) activeTaskContainer.classList.remove('open');
+    }, 1200);
+  }
+
+  stopTaskRunning();
+  activeTaskContainer = null;
+}
+
+// ============================================================
+// Tool blocks
+// ============================================================
+
 function toolCategory(name) {
   if (['search_web', 'fetch_page'].includes(name)) return 'web';
-  if (['read_file', 'write_file', 'list_directory', 'analyze_file'].includes(name)) return 'filesystem';
-  if (['execute_code'].includes(name)) return 'code';
+  if (['read_file', 'write_file', 'list_directory', 'analyze_file',
+       'list_outputs', 'patch_file'].includes(name)) return 'filesystem';
+  if (['execute_code', 'install_package'].includes(name)) return 'code';
   if (['get_system_info'].includes(name)) return 'system';
+  if (['log_research', 'recall_memory', 'log_fact', 'recall_projects',
+       'read_user_profile', 'update_user_profile'].includes(name)) return 'memory';
   if (['list_capabilities'].includes(name)) return 'other';
   return 'other';
 }
 
 function toolIcon(name) {
   const icons = {
-    read_file: '📄', write_file: '✏️', list_directory: '📁',
-    analyze_file: '📊', list_capabilities: '🤖',
+    read_file: '📄', write_file: '✏️', list_directory: '📁', patch_file: '🩹',
+    analyze_file: '📊', list_capabilities: '🤖', list_outputs: '📦',
     search_web: '🔍', fetch_page: '🌐',
-    execute_code: '⚡', get_system_info: '💻',
+    execute_code: '⚡', install_package: '📥', get_system_info: '💻',
+    log_research: '💾', recall_memory: '🧠', log_fact: '📌', recall_projects: '🗂',
+    read_user_profile: '👤', update_user_profile: '✏',
+    scaffold_project: '🏗', get_project_status: '📊', mark_file_complete: '✅',
+    run_project_test: '🧪', deep_research: '🔬',
+    browser_open: '🌏', browser_read: '📖', browser_screenshot: '📸',
+    write_tool: '🔨', reload_tool: '🔄', scan_system: '🖥',
   };
   return icons[name] || '🔧';
 }
@@ -385,27 +536,29 @@ function toolActionLabel(name) {
     search_web: 'Searching web…', fetch_page: 'Fetching page…',
     read_file: 'Reading file…', write_file: 'Writing file…',
     list_directory: 'Listing directory…', execute_code: 'Running code…',
+    install_package: 'Installing package…',
     get_system_info: 'Getting system info…', analyze_file: 'Analyzing file…',
+    patch_file: 'Patching file…', list_outputs: 'Listing outputs…',
+    log_research: 'Logging research…', recall_memory: 'Recalling memory…',
+    log_fact: 'Storing fact…', scaffold_project: 'Scaffolding project…',
+    get_project_status: 'Checking project status…',
+    mark_file_complete: 'Marking file complete…',
+    run_project_test: 'Running project test…',
+    browser_open: 'Opening browser…', browser_read: 'Reading page…',
+    deep_research: 'Planning research…',
   };
   return labels[name] || `Using ${name}…`;
 }
 
-/**
- * Render a compact parameters preview string (first 60 chars of first value).
- */
 function paramsPreview(input) {
   if (!input) return '';
   const vals = Object.values(input);
   if (!vals.length) return '';
   const first = String(vals[0]);
-  const preview = first.length > 60 ? first.slice(0, 57) + '…' : first;
+  const preview = first.length > 55 ? first.slice(0, 52) + '…' : first;
   return `(${preview})`;
 }
 
-/**
- * Render the input body of a tool block.
- * For execute_code: highlight the `code` field as a code block.
- */
 function renderToolInput(toolName, input) {
   if (toolName === 'execute_code' && input && input.code) {
     const lang = input.language || 'python';
@@ -423,16 +576,18 @@ function renderToolInput(toolName, input) {
 }
 
 /**
- * Append a new tool block. Called on tool_call event.
- * @param {string} toolName
- * @param {object} input
- * @param {string|null} toolUseId  — may be null for older backend versions
+ * Append a tool block.
+ * When inside a task run, append to the container body.
+ * When standalone (simple Q&A), append directly to chatArea.
  */
 function appendToolBlock(toolName, input, toolUseId) {
   const cat    = toolCategory(toolName);
   const icon   = toolIcon(toolName);
   const params = paramsPreview(input);
   const start  = Date.now();
+
+  taskRunStepCount++;
+  updateTaskContainerMeta();
 
   const el = document.createElement('details');
   el.className = 'tool-block';
@@ -444,7 +599,7 @@ function appendToolBlock(toolName, input, toolUseId) {
   el.innerHTML = `
     <summary>
       <span class="tb-arrow">▶</span>
-      <span class="tb-icon">${icon}</span>
+      <span class="tb-cat-dot"></span>
       <span class="tb-name">${escapeHtml(toolName)}</span>
       <span class="tb-params">${escapeHtml(params)}</span>
       <span class="tb-status">⟳</span>
@@ -453,34 +608,27 @@ function appendToolBlock(toolName, input, toolUseId) {
     <div class="tb-body">
       <div class="tb-section-label">INPUT</div>
       ${renderToolInput(toolName, input)}
-      <div class="tb-result-area" style="margin-top:8px"></div>
+      <div class="tb-result-area" style="margin-top:6px"></div>
     </div>
   `;
 
-  chatArea.appendChild(el);
+  const target = _currentChatTarget();
+  target.appendChild(el);
 
-  // Register by ID or by tool name as fallback
-  if (toolUseId) {
-    pendingToolBlocks[toolUseId] = el;
-  }
-  // Always keep a by-name ref for compat (last wins)
-  pendingToolBlocks[toolName] = el;
+  if (toolUseId) pendingToolBlocks[toolUseId] = el;
+  pendingToolBlocks[toolName] = el;  // by-name fallback
 
   scrollToBottom();
   return el;
 }
 
-/**
- * Update a tool block with its result. Called on tool_result event.
- * Looks up by tool_use_id first, then by tool name.
- */
 function updateToolBlock(idOrName, success, result) {
   const el = pendingToolBlocks[idOrName];
   if (!el) return;
 
-  const elapsed = Date.now() - parseInt(el.dataset.startMs || '0', 10);
-  const statusEl = el.querySelector('.tb-status');
-  const timeEl   = el.querySelector('.tb-time');
+  const elapsed   = Date.now() - parseInt(el.dataset.startMs || '0', 10);
+  const statusEl  = el.querySelector('.tb-status');
+  const timeEl    = el.querySelector('.tb-time');
   const resultArea = el.querySelector('.tb-result-area');
 
   if (statusEl) {
@@ -490,10 +638,9 @@ function updateToolBlock(idOrName, success, result) {
   if (timeEl) {
     timeEl.textContent = elapsed < 1000 ? `${elapsed}ms` : `${(elapsed/1000).toFixed(1)}s`;
   }
-
   if (resultArea) {
     const displayResult = { ...result };
-    delete displayResult.tree; // tree shown in Files tab
+    delete displayResult.tree;
     resultArea.innerHTML = `
       <div class="tb-section-label">RESULT</div>
       <div class="tb-result-row">
@@ -507,104 +654,68 @@ function updateToolBlock(idOrName, success, result) {
 }
 
 function appendToolDenied(toolName) {
+  const target = _currentChatTarget();
   const el = document.createElement('div');
   el.className = 'tool-denied-msg';
   el.textContent = `✗ ${toolName}: denied by user`;
-  chatArea.appendChild(el);
+  target.appendChild(el);
+  scrollToBottom();
+}
+
+// Phase 4.5 — execution output streaming
+function appendExecutionOutputLine(line, stream) {
+  const block = pendingToolBlocks['execute_code'];
+  if (!block) return;
+
+  const body = block.querySelector('.tb-body');
+  if (!body) return;
+
+  let streamArea = body.querySelector('.tb-stream-area');
+  if (!streamArea) {
+    const label = document.createElement('div');
+    label.className = 'tb-section-label';
+    label.textContent = 'LIVE OUTPUT';
+    body.appendChild(label);
+
+    streamArea = document.createElement('pre');
+    streamArea.className = 'tb-stream-area';
+    body.appendChild(streamArea);
+  }
+
+  streamArea.textContent += line + '\n';
+  streamArea.scrollTop = streamArea.scrollHeight;
+  block.open = true;
   scrollToBottom();
 }
 
 // ============================================================
-// Task progress — right panel Tasks tab
+// Task lifecycle
 // ============================================================
 
 function handleTaskStarted(data) {
-  // Belt-and-braces: ensure Stop button and badge reflect running state.
-  // sendMessage() already called startTaskRunning(), but the backend
-  // confirmation is the canonical signal that a task is truly active.
   isTaskRunning = true;
   btnStop.classList.remove('hidden');
   btnStop.disabled = false;
-  updateTaskBadge('thinking');
-}
 
-// ============================================================
-// Phase 3h: Research progress tracking
-// ============================================================
-
-// State for the active research run
-let _researchTotal   = 0;
-let _researchCurrent = 0;
-
-function handleResearchStarted(data) {
-  // Agent can send { total_questions: N } to initialise the bar early
-  const total = data && data.total_questions ? parseInt(data.total_questions) : 0;
-  if (total > 0) {
-    _researchTotal   = total;
-    _researchCurrent = 0;
-    _ensureResearchBar(total);
+  // Create the task-run container in the chat area
+  if (!activeTaskContainer) {
+    createTaskContainer(currentTaskGoal);
   }
-}
 
-/**
- * Create (or return) the research progress bar container inside the Tasks panel.
- * The bar sits above the step timeline so it is always visible during a run.
- */
-function _ensureResearchBar(total) {
-  const panel = document.getElementById('task-progress-panel');
-  if (!panel) return null;
-  let bar = document.getElementById('research-progress-bar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'research-progress-bar';
-    bar.className = 'research-progress-container';
-    bar.innerHTML = `
-      <div class="research-progress-label">
-        <span id="research-progress-text">Research: 0 / ${total}</span>
-      </div>
-      <div class="research-progress-track">
-        <div class="research-progress-fill" id="research-progress-fill" style="width:0%"></div>
-      </div>
-    `;
-    if (panel.firstChild) {
-      panel.insertBefore(bar, panel.firstChild);
-    } else {
-      panel.appendChild(bar);
-    }
-  }
-  return bar;
-}
-
-function _updateResearchBar(current, total) {
-  _ensureResearchBar(total);
-  const pct  = total > 0 ? Math.round((current / total) * 100) : 0;
-  const fill = document.getElementById('research-progress-fill');
-  const text = document.getElementById('research-progress-text');
-  if (fill) fill.style.width = pct + '%';
-  if (text) text.textContent = `Research: ${current} / ${total}`;
-}
-
-function _removeResearchBar() {
-  const bar = document.getElementById('research-progress-bar');
-  if (bar) bar.remove();
-  _researchTotal   = 0;
-  _researchCurrent = 0;
+  // Reset right-panel timeline
+  resetTaskPanel();
 }
 
 function handleTaskProgress(data) {
-  // data: { step: N, label: "...", status: "running|done|failed", elapsed_ms: N }
   const { step, label, status, elapsed_ms } = data;
   const panel = document.getElementById('task-progress-panel');
   const placeholder = document.getElementById('task-placeholder');
-
-  // Remove placeholder on first step
   if (placeholder) placeholder.remove();
 
   const stepKey = `step-${step}`;
   let stepEl = activeTaskSteps[stepKey];
 
   if (!stepEl) {
-    // Create new step row
     stepEl = document.createElement('div');
     stepEl.className = 'task-step pending';
     stepEl.id = stepKey;
@@ -619,10 +730,8 @@ function handleTaskProgress(data) {
     activeTaskSteps[stepKey] = stepEl;
   }
 
-  // Update status class
   stepEl.className = `task-step ${status}`;
 
-  // Update elapsed time
   const timeEl = stepEl.querySelector('.step-time');
   if (timeEl && elapsed_ms != null) {
     timeEl.textContent = elapsed_ms < 1000
@@ -630,7 +739,7 @@ function handleTaskProgress(data) {
       : `${(elapsed_ms / 1000).toFixed(1)}s`;
   }
 
-  // Phase 3h: detect research progress labels ("Researching: N/T")
+  // Phase 3h: research progress labels
   if (label && /^Researching:\s*\d+\/\d+/i.test(label)) {
     const match = label.match(/(\d+)\/(\d+)/);
     if (match) {
@@ -640,52 +749,57 @@ function handleTaskProgress(data) {
     }
   }
 
-  // Switch to tasks tab if not already visible
+  // Switch to tasks tab if hidden
   const tasksTab = document.getElementById('tab-tasks');
-  if (tasksTab && tasksTab.classList.contains('hidden')) {
-    switchTab('tasks');
-  }
+  if (tasksTab && tasksTab.classList.contains('hidden')) switchTab('tasks');
 }
 
 function handleTaskStopped(data) {
-  _removeResearchBar();  // Phase 3h
-  // Mark last running step as cancelled/failed
-  Object.values(activeTaskSteps).forEach(el => {
-    if (el.classList.contains('running')) {
-      el.className = 'task-step cancelled';
-    }
-  });
+  _removeResearchBar();
 
-  stopTaskRunning();
-  updateTaskBadge('idle');
-  hideThinkingIndicator();
-  setWaiting(false);
+  Object.values(activeTaskSteps).forEach(el => {
+    if (el.classList.contains('running')) el.className = 'task-step cancelled';
+  });
 
   const reason = data && data.reason;
 
   if (reason === 'user_cancelled') {
-    // Append a muted annotation in chat
+    // Append cancellation note inside the task container
+    const target = activeTaskContainer
+      ? activeTaskContainer.querySelector('.task-run-body')
+      : chatArea;
     const row = document.createElement('div');
     row.className = 'msg-row agent-row';
     row.innerHTML = `
       <span class="msg-role" style="opacity:0.45">sys</span>
       <div class="msg-bubble" style="opacity:0.6;font-style:italic;">↪ Task cancelled.</div>
     `;
-    chatArea.appendChild(row);
+    target.appendChild(row);
     scrollToBottom();
+    closeTaskContainer('cancelled');
 
   } else if (reason === 'error') {
     const errText = (data && data.error) ? data.error : 'Unknown error.';
+    const target = activeTaskContainer
+      ? activeTaskContainer.querySelector('.task-run-body')
+      : chatArea;
     const row = document.createElement('div');
     row.className = 'msg-row agent-row';
     row.innerHTML = `
       <span class="msg-role" style="color:var(--red)">sys</span>
       <div class="msg-bubble" style="border-color:var(--red);color:var(--red);">↪ Task failed: ${escapeHtml(errText)}</div>
     `;
-    chatArea.appendChild(row);
+    target.appendChild(row);
     scrollToBottom();
+    closeTaskContainer('failed');
+
+  } else {
+    // 'complete' — message event already handled by appendAgentMessage + closeTaskContainer
+    closeTaskContainer('complete');
   }
-  // reason === 'complete': agent already sent its final answer via 'message' event
+
+  hideThinkingIndicator();
+  setWaiting(false);
 }
 
 // ============================================================
@@ -700,7 +814,6 @@ function handleTaskPlan(data) {
   card.className = 'plan-card';
   card.dataset.planId = plan_id;
 
-  // Header
   const header = document.createElement('div');
   header.className = 'plan-card-header';
   header.innerHTML = `
@@ -710,10 +823,8 @@ function handleTaskPlan(data) {
   `;
   card.appendChild(header);
 
-  // Steps list
   const stepsList = document.createElement('div');
   stepsList.className = 'plan-steps';
-
   steps.forEach((s) => {
     const row = document.createElement('div');
     row.className = 'plan-step-row';
@@ -732,87 +843,51 @@ function handleTaskPlan(data) {
   });
   card.appendChild(stepsList);
 
-  // Actions row
   const actions = document.createElement('div');
   actions.className = 'plan-card-actions';
-
-  const btnRun = document.createElement('button');
-  btnRun.className = 'plan-btn plan-btn-run';
-  btnRun.innerHTML = '▶ Run Plan';
-
+  const btnRun    = document.createElement('button');
   const btnCancel = document.createElement('button');
+  btnRun.className    = 'plan-btn plan-btn-run';
+  btnRun.innerHTML    = '▶ Run Plan';
   btnCancel.className = 'plan-btn plan-btn-cancel';
   btnCancel.innerHTML = '✕ Cancel';
-
   actions.appendChild(btnCancel);
   actions.appendChild(btnRun);
   card.appendChild(actions);
 
-  // Run Plan click — collect (possibly edited) actions
   btnRun.addEventListener('click', () => {
-    btnRun.disabled = true;
-    btnCancel.disabled = true;
-
+    btnRun.disabled = true; btnCancel.disabled = true;
     const editedSteps = steps.map((s) => {
       const labelEl = card.querySelector(`[data-step="${s.step}"][data-field="action"]`);
-      const editedAction = labelEl ? labelEl.textContent.trim() : s.action;
-      // Only include if the user actually changed something
-      return { ...s, action: editedAction };
+      return { ...s, action: labelEl ? labelEl.textContent.trim() : s.action };
     });
-
-    // Check if any step was actually edited
     const wasEdited = editedSteps.some((s, i) => s.action !== steps[i].action);
-
-    sendWS({
-      type: 'plan_response',
-      plan_id,
-      approved: true,
-      edited_steps: wasEdited ? editedSteps : null,
-    });
-
-    // Collapse to a muted confirmation line
+    sendWS({ type: 'plan_response', plan_id, approved: true, edited_steps: wasEdited ? editedSteps : null });
     actions.innerHTML = '<span class="plan-submitted-note">Plan approved ✓ — running…</span>';
-    // Make steps non-editable
-    card.querySelectorAll('[contenteditable]').forEach(el => {
-      el.contentEditable = 'false';
-    });
+    card.querySelectorAll('[contenteditable]').forEach(el => { el.contentEditable = 'false'; });
   });
 
-  // Cancel click
   btnCancel.addEventListener('click', () => {
-    btnRun.disabled = true;
-    btnCancel.disabled = true;
-
+    btnRun.disabled = true; btnCancel.disabled = true;
     sendWS({ type: 'plan_response', plan_id, approved: false, edited_steps: null });
-
     actions.innerHTML = '<span class="plan-submitted-note plan-cancelled-note">Plan cancelled</span>';
-    card.querySelectorAll('[contenteditable]').forEach(el => {
-      el.contentEditable = 'false';
-    });
+    card.querySelectorAll('[contenteditable]').forEach(el => { el.contentEditable = 'false'; });
   });
 
-  chatArea.appendChild(card);
+  // Plan card goes into current chat target
+  const target = _currentChatTarget();
+  target.appendChild(card);
   scrollToBottom();
 }
 
-function resetTaskPanel() {
-  activeTaskSteps = {};
-  const panel = document.getElementById('task-progress-panel');
-  if (panel) {
-    panel.innerHTML = '<div id="task-placeholder" class="tab-placeholder">No active task.</div>';
-  }
-}
-
 // ============================================================
-// Task running state (controls Stop button + badge)
+// Task running state
 // ============================================================
 
 function startTaskRunning() {
   isTaskRunning = true;
   btnStop.classList.remove('hidden');
   btnStop.disabled = false;
-  updateTaskBadge('thinking');
-  // Reset task panel for new task
   resetTaskPanel();
   pendingToolBlocks = {};
 }
@@ -823,71 +898,229 @@ function stopTaskRunning() {
   btnStop.disabled = false;
 }
 
-// ============================================================
-// Stop button
-// ============================================================
+function resetTaskPanel() {
+  activeTaskSteps = {};
+  const panel = document.getElementById('task-progress-panel');
+  if (panel) {
+    panel.innerHTML = '<div id="task-placeholder" class="tab-placeholder">No active task.</div>';
+  }
+}
 
+// Stop button
 btnStop.addEventListener('click', () => {
-  btnStop.disabled = true; // prevent double-send
+  btnStop.disabled = true;
   sendWS({ type: 'stop_task' });
 });
 
 // ============================================================
-// Task status badge
+// Phase 3h — Research progress bar (Tasks tab)
 // ============================================================
 
-function updateTaskBadge(state) {
-  if (state === 'idle') {
-    taskStatusBadge.classList.add('hidden');
-    taskStatusBadge.dataset.state = 'idle';
+function handleResearchStarted(data) {
+  const total = data && data.total_questions ? parseInt(data.total_questions) : 0;
+  if (total > 0) {
+    _researchTotal = total;
+    _researchCurrent = 0;
+    _ensureResearchBar(total);
+  }
+}
+
+function _ensureResearchBar(total) {
+  const panel = document.getElementById('task-progress-panel');
+  if (!panel) return null;
+  let bar = document.getElementById('research-progress-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'research-progress-bar';
+    bar.className = 'research-progress-container';
+    bar.innerHTML = `
+      <div class="research-progress-label">
+        <span id="research-progress-text">Research: 0 / ${total}</span>
+      </div>
+      <div class="research-progress-track">
+        <div class="research-progress-fill" id="research-progress-fill" style="width:0%"></div>
+      </div>
+    `;
+    panel.insertBefore(bar, panel.firstChild);
+  }
+  return bar;
+}
+
+function _updateResearchBar(current, total) {
+  _ensureResearchBar(total);
+  const pct  = total > 0 ? Math.round((current / total) * 100) : 0;
+  const fill = document.getElementById('research-progress-fill');
+  const text = document.getElementById('research-progress-text');
+  if (fill) fill.style.width = pct + '%';
+  if (text) text.textContent = `Research: ${current} / ${total}`;
+}
+
+function _removeResearchBar() {
+  const bar = document.getElementById('research-progress-bar');
+  if (bar) bar.remove();
+  _researchTotal = 0;
+  _researchCurrent = 0;
+}
+
+// ============================================================
+// Task history — Tasks tab
+// Phase 4.5: load from GET /task?history=10 on connect
+// ============================================================
+
+async function loadTaskHistory() {
+  try {
+    const res  = await fetch('/task?history=10');
+    const data = await res.json();
+
+    // Check for interrupted (running) task
+    if (data && data.status === 'running') {
+      showInterruptedBanner(data);
+    } else if (data && (data.status === 'complete' || data.status === 'cancelled')) {
+      // Restore last task step timeline in right panel
+      restoreLastTaskTimeline(data);
+    }
+
+    // Render task history list
+    const history = (data && data.history) ? data.history : [];
+    renderTaskHistoryList(history);
+
+  } catch (e) {
+    console.warn('[task] Could not load task history:', e);
+    const phEl = document.getElementById('task-history-placeholder');
+    if (phEl) phEl.textContent = 'Could not load history.';
+  }
+}
+
+/**
+ * Restore the last task's step timeline in the right panel.
+ * Called on page load when the last task was completed or cancelled.
+ */
+function restoreLastTaskTimeline(task) {
+  const panel = document.getElementById('task-progress-panel');
+  const placeholder = document.getElementById('task-placeholder');
+  if (placeholder) placeholder.remove();
+
+  const steps = task.steps || [];
+  if (!steps.length) return;
+
+  steps.forEach((s) => {
+    const stepKey = `step-${s.step}`;
+    if (activeTaskSteps[stepKey]) return;
+
+    const stepEl = document.createElement('div');
+    stepEl.className = `task-step ${s.status || 'done'}`;
+    stepEl.id = stepKey;
+    const elapsed = s.elapsed_ms != null
+      ? (s.elapsed_ms < 1000 ? `${s.elapsed_ms}ms` : `${(s.elapsed_ms/1000).toFixed(1)}s`)
+      : '';
+    stepEl.innerHTML = `
+      <div class="step-dot"></div>
+      <div class="step-body">
+        <div><span class="step-num">${s.step}.</span><span class="step-label">${escapeHtml(s.tool || '')}</span></div>
+        ${elapsed ? `<div class="step-time">${elapsed}</div>` : ''}
+      </div>
+    `;
+    panel.appendChild(stepEl);
+    activeTaskSteps[stepKey] = stepEl;
+  });
+}
+
+/**
+ * Render the task history list in the Tasks tab.
+ * Each item: goal, outcome badge, duration, timestamp. Expandable to show steps.
+ */
+function renderTaskHistoryList(history) {
+  const list = document.getElementById('task-history-list');
+  if (!list) return;
+
+  const placeholder = document.getElementById('task-history-placeholder');
+  if (placeholder) placeholder.remove();
+
+  if (!history || !history.length) {
+    list.innerHTML = '<div class="tab-placeholder">No completed tasks yet.</div>';
     return;
   }
-  taskStatusBadge.classList.remove('hidden');
-  taskStatusBadge.dataset.state = state;
-  taskBadgeLabel.textContent = state;
+
+  // Show most recent first
+  const items = [...history].reverse();
+
+  items.forEach((task) => {
+    const item = document.createElement('div');
+    item.className = 'task-history-item';
+
+    const outcome  = task.outcome || 'unknown';
+    const goal     = (task.goal || '').slice(0, 50) + (task.goal && task.goal.length > 50 ? '…' : '');
+    const durSec   = task.duration_seconds;
+    const durStr   = durSec != null
+      ? (durSec < 60 ? `${durSec}s` : `${Math.floor(durSec/60)}m ${durSec%60}s`)
+      : '';
+    const ts       = task.timestamp
+      ? new Date(task.timestamp).toLocaleDateString(undefined, { month:'short', day:'numeric' })
+      : '';
+
+    const header = document.createElement('div');
+    header.className = 'task-history-header';
+    header.innerHTML = `
+      <span class="th-outcome ${outcome}">${outcome}</span>
+      <span class="th-goal">${escapeHtml(goal)}</span>
+      <span class="th-meta">
+        ${durStr ? `<span>${durStr}</span>` : ''}
+        ${ts     ? `<span>${ts}</span>`     : ''}
+      </span>
+    `;
+    item.appendChild(header);
+
+    // Steps section (hidden until expanded)
+    const stepsDiv = document.createElement('div');
+    stepsDiv.className = 'task-history-steps';
+
+    const toolsUsed = task.tools_used || [];
+    const summary   = task.summary   || '';
+    if (summary) {
+      const p = document.createElement('div');
+      p.style.cssText = 'font-size:10.5px;color:var(--text-dim);margin-bottom:5px;';
+      p.textContent = summary;
+      stepsDiv.appendChild(p);
+    }
+    toolsUsed.forEach((tool) => {
+      const row = document.createElement('div');
+      row.className = 'th-step-row';
+      row.innerHTML = `
+        <span class="th-step-dot"></span>
+        <span>${escapeHtml(tool)}</span>
+      `;
+      stepsDiv.appendChild(row);
+    });
+
+    item.appendChild(stepsDiv);
+
+    // Toggle on header click
+    header.addEventListener('click', () => {
+      item.classList.toggle('expanded');
+    });
+
+    list.appendChild(item);
+  });
 }
 
 // ============================================================
-// Thinking indicator
-// ============================================================
-
-function showThinkingIndicator(label) {
-  thinkingLabel.textContent = label || 'Thinking…';
-  thinkingIndicator.classList.remove('hidden');
-  scrollToBottom();
-}
-
-function hideThinkingIndicator() {
-  thinkingIndicator.classList.add('hidden');
-}
-
-function setThinkingLabel(label) {
-  thinkingLabel.textContent = label;
-  showThinkingIndicator(label);
-}
-
-// ============================================================
-// Right panel — collapse / expand + tab switching
+// Right panel — collapse / expand / tabs
 // ============================================================
 
 window.toggleRightPanel = function() {
-  const panel = document.getElementById('right-panel');
-  const btn   = document.getElementById('panel-toggle-btn');
+  const panel   = document.getElementById('right-panel');
+  const btn     = document.getElementById('panel-toggle-btn');
   const appBody = document.getElementById('app-body');
   const collapsed = panel.classList.toggle('collapsed');
   btn.textContent = collapsed ? '▶' : '◀';
-  // Adjust grid on the parent
   appBody.style.gridTemplateColumns = collapsed
     ? `1fr ${getComputedStyle(document.documentElement).getPropertyValue('--panel-toggle-w').trim()} 0px`
     : '';
 };
 
 window.switchTab = function(tabName) {
-  // Hide all tabs
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-
-  // Show selected
   const tab = document.getElementById(`tab-${tabName}`);
   if (tab) tab.classList.remove('hidden');
   const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
@@ -896,17 +1129,15 @@ window.switchTab = function(tabName) {
 
 window.expandAndTab = function(tabName) {
   const panel = document.getElementById('right-panel');
-  if (panel.classList.contains('collapsed')) {
-    toggleRightPanel();
-  }
+  if (panel.classList.contains('collapsed')) toggleRightPanel();
   switchTab(tabName);
 };
 
 // ============================================================
-// Memory tab — update recent history
+// Memory tab
 // ============================================================
 
-const recentHistory = []; // { role, text }[] last 5
+const recentHistory = [];
 
 function updateMemoryHistory(text, role) {
   recentHistory.push({ role, text });
@@ -941,25 +1172,22 @@ function updateTreePanel(treeText) {
   const ph = document.getElementById('tree-placeholder');
   if (ph) ph.remove();
   treeContent.textContent = treeText;
-  // Optionally switch to Files tab on first update
-  // switchTab('files');
 }
 
 // ============================================================
-// Optimizer indicator (footer spinner)
+// Optimizer indicator (chat area spinner)
 // ============================================================
 
 function showOptimizerIndicator() {
-  if (optimizerEnabled) optimizerIndicator.classList.remove('hidden');
+  if (optimizerEnabled && optimizerIndicator) optimizerIndicator.classList.remove('hidden');
 }
 function hideOptimizerIndicator() {
-  optimizerIndicator.classList.add('hidden');
+  if (optimizerIndicator) optimizerIndicator.classList.add('hidden');
 }
 
 function appendOptimizerPill(original, optimized) {
   const pill = document.createElement('div');
   pill.className = 'optimizer-pill';
-  pill.style.position = 'relative';
   pill.innerHTML = `
     ⚙ prompt optimized
     <div class="optimizer-detail">
@@ -978,17 +1206,17 @@ function appendOptimizerPill(original, optimized) {
 
 function setOptimizerState(enabled) {
   optimizerEnabled = enabled;
-  toggleOptimizer.classList.toggle('on', enabled);
-  toggleOptimizerLabel.textContent = enabled ? 'on' : 'off';
-  optimizerBadge.textContent = enabled ? '⚙ optimizer: on' : '⚙ optimizer: off';
-  optimizerBadge.classList.remove('hidden');
+  if (toggleOptimizer) toggleOptimizer.classList.toggle('on', enabled);
+  if (toggleOptimizerLabel) toggleOptimizerLabel.textContent = enabled ? 'on' : 'off';
 }
 
-toggleOptimizer.addEventListener('click', () => {
-  const next = !optimizerEnabled;
-  sendWS({ type: 'set_optimizer', data: { enabled: next } });
-  setOptimizerState(next);
-});
+if (toggleOptimizer) {
+  toggleOptimizer.addEventListener('click', () => {
+    const next = !optimizerEnabled;
+    sendWS({ type: 'set_optimizer', data: { enabled: next } });
+    setOptimizerState(next);
+  });
+}
 
 // ============================================================
 // Local mode state
@@ -996,40 +1224,39 @@ toggleOptimizer.addEventListener('click', () => {
 
 function applyLocalMode(enabled) {
   localModeEnabled = enabled;
-  btnModeOnline.classList.toggle('active-online', !enabled);
-  btnModeLocal.classList.toggle('active-local',   enabled);
-  selPrimaryModel.disabled = enabled;
+  if (btnModeOnline) btnModeOnline.classList.toggle('active-online', !enabled);
+  if (btnModeLocal)  btnModeLocal.classList.toggle('active-local',   enabled);
+  if (selPrimaryModel) selPrimaryModel.disabled = enabled;
   const primaryRow = document.getElementById('row-primary-model');
   if (primaryRow) primaryRow.style.opacity = enabled ? '0.4' : '1';
   updateModelDisplay();
-  const claudeLabel = statusClaude.querySelector('.status-label');
-  if (claudeLabel) claudeLabel.textContent = enabled ? 'local' : 'claude';
-  localModeBadge.textContent = enabled ? '🖥 local: on' : '🖥 local: off';
-  localModeBadge.classList.remove('hidden');
 }
 
 function updateModelDisplay() {
-  if (localModeEnabled) {
-    modelDisplay.textContent = `local: ${currentLocalModel}`;
-  } else {
-    modelDisplay.textContent = `claude: ${currentPrimaryModel}`;
-  }
-  modeModelLabel.textContent = localModeEnabled ? currentLocalModel : currentPrimaryModel;
+  const modelStr = localModeEnabled
+    ? `local: ${currentLocalModel}`
+    : `${currentPrimaryModel}`;
+
+  if (modeModelLabel) modeModelLabel.textContent = localModeEnabled ? currentLocalModel : currentPrimaryModel;
+  if (activeModelDisplay) activeModelDisplay.textContent = modelStr;
 }
 
-btnModeOnline.addEventListener('click', () => {
-  if (localModeEnabled) {
-    sendWS({ type: 'set_local_mode', data: { enabled: false } });
-    applyLocalMode(false);
-  }
-});
-
-btnModeLocal.addEventListener('click', () => {
-  if (!localModeEnabled) {
-    sendWS({ type: 'set_local_mode', data: { enabled: true } });
-    applyLocalMode(true);
-  }
-});
+if (btnModeOnline) {
+  btnModeOnline.addEventListener('click', () => {
+    if (localModeEnabled) {
+      sendWS({ type: 'set_local_mode', data: { enabled: false } });
+      applyLocalMode(false);
+    }
+  });
+}
+if (btnModeLocal) {
+  btnModeLocal.addEventListener('click', () => {
+    if (!localModeEnabled) {
+      sendWS({ type: 'set_local_mode', data: { enabled: true } });
+      applyLocalMode(true);
+    }
+  });
+}
 
 // ============================================================
 // Settings panel — open / close
@@ -1044,9 +1271,9 @@ function closeSettings() {
   settingsBackdrop.classList.remove('visible');
 }
 
-btnSettingsOpen.addEventListener('click',  openSettings);
-btnSettingsClose.addEventListener('click', closeSettings);
-settingsBackdrop.addEventListener('click', closeSettings);
+if (btnSettingsOpen)  btnSettingsOpen.addEventListener('click',  openSettings);
+if (btnSettingsClose) btnSettingsClose.addEventListener('click', closeSettings);
+if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettings);
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && settingsPanel.classList.contains('open')) closeSettings();
@@ -1058,37 +1285,43 @@ window.toggleAdvanced = function() {
 };
 
 // ============================================================
-// Settings panel — model dropdowns
+// Settings — model dropdowns
 // ============================================================
 
-selPrimaryModel.addEventListener('change', () => {
-  const model = selPrimaryModel.value;
-  currentPrimaryModel = model;
-  sendWS({ type: 'set_model', data: { model } });
-  if (!localModeEnabled) updateModelDisplay();
-});
+if (selPrimaryModel) {
+  selPrimaryModel.addEventListener('change', () => {
+    const model = selPrimaryModel.value;
+    currentPrimaryModel = model;
+    sendWS({ type: 'set_model', data: { model } });
+    if (!localModeEnabled) updateModelDisplay();
+  });
+}
 
-selLocalAgentModel.addEventListener('change', () => {
-  const model = selLocalAgentModel.value;
-  currentLocalModel = model;
-  sendWS({ type: 'set_local_agent_model', data: { model } });
-  if (localModeEnabled) updateModelDisplay();
-});
-
-// ============================================================
-// Settings panel — embeddings toggle
-// ============================================================
-
-toggleEmbeddings.addEventListener('click', () => {
-  const wasOn = toggleEmbeddings.classList.contains('on');
-  const next  = !wasOn;
-  toggleEmbeddings.classList.toggle('on', next);
-  toggleEmbeddingsLbl.textContent = next ? 'on' : 'off';
-  sendWS({ type: 'set_config', data: { key: 'embeddings.enabled', value: next } });
-});
+if (selLocalAgentModel) {
+  selLocalAgentModel.addEventListener('change', () => {
+    const model = selLocalAgentModel.value;
+    currentLocalModel = model;
+    sendWS({ type: 'set_local_agent_model', data: { model } });
+    if (localModeEnabled) updateModelDisplay();
+  });
+}
 
 // ============================================================
-// Settings panel — number inputs (debounced)
+// Settings — embeddings toggle
+// ============================================================
+
+if (toggleEmbeddings) {
+  toggleEmbeddings.addEventListener('click', () => {
+    const wasOn = toggleEmbeddings.classList.contains('on');
+    const next  = !wasOn;
+    toggleEmbeddings.classList.toggle('on', next);
+    if (toggleEmbeddingsLbl) toggleEmbeddingsLbl.textContent = next ? 'on' : 'off';
+    sendWS({ type: 'set_config', data: { key: 'embeddings.enabled', value: next } });
+  });
+}
+
+// ============================================================
+// Settings — number inputs (debounced)
 // ============================================================
 
 const numberInputMap = [
@@ -1114,21 +1347,26 @@ numberInputMap.forEach(({ id, key, parse }) => {
   });
 });
 
-inpSimilarity.addEventListener('input', () => {
-  const v = parseFloat(inpSimilarity.value);
-  valSimilarity.textContent = v.toFixed(2);
-  clearTimeout(_debounceTimers['similarity']);
-  _debounceTimers['similarity'] = setTimeout(() => {
-    sendWS({ type: 'set_config', data: { key: 'context.similarity_cutoff', value: v } });
-  }, 300);
-});
+if (inpSimilarity) {
+  inpSimilarity.addEventListener('input', () => {
+    const v = parseFloat(inpSimilarity.value);
+    if (valSimilarity) valSimilarity.textContent = v.toFixed(2);
+    clearTimeout(_debounceTimers['similarity']);
+    _debounceTimers['similarity'] = setTimeout(() => {
+      sendWS({ type: 'set_config', data: { key: 'context.similarity_cutoff', value: v } });
+    }, 300);
+  });
+}
 
 function sendTreeRoot() {
+  if (!inpTreeRoot) return;
   const v = inpTreeRoot.value.trim();
   if (v) sendWS({ type: 'set_config', data: { key: 'tree_root', value: v } });
 }
-inpTreeRoot.addEventListener('blur', sendTreeRoot);
-inpTreeRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendTreeRoot(); } });
+if (inpTreeRoot) {
+  inpTreeRoot.addEventListener('blur', sendTreeRoot);
+  inpTreeRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendTreeRoot(); } });
+}
 
 // ============================================================
 // ACK flash helpers
@@ -1154,32 +1392,31 @@ function flashAck(ackId) {
   setTimeout(() => el.classList.remove('show'), 1200);
 }
 
-function flashAckForKey(key) {
-  flashAck(keyToAckId[key] || null);
-}
+function flashAckForKey(key) { flashAck(keyToAckId[key] || null); }
 
 // ============================================================
-// Populate settings panel from /status data
+// Populate settings from /status
 // ============================================================
 
 function populateSettingsFromStatus(data) {
   if (data.primary_model) {
     currentPrimaryModel = data.primary_model;
     if (selPrimaryModel) {
-      const existing = [...selPrimaryModel.options].find(o => o.value === data.primary_model);
-      if (existing) existing.selected = true;
+      const opt = [...selPrimaryModel.options].find(o => o.value === data.primary_model);
+      if (opt) opt.selected = true;
     }
   }
   if (data.local_agent_model) {
     currentLocalModel = data.local_agent_model;
     if (selLocalAgentModel) {
-      const existing = [...selLocalAgentModel.options].find(o => o.value === data.local_agent_model);
-      if (existing) existing.selected = true;
+      const opt = [...selLocalAgentModel.options].find(o => o.value === data.local_agent_model);
+      if (opt) opt.selected = true;
     }
   }
 
   setOptimizerState(!!data.use_prompt_optimizer);
   applyLocalMode(!!data.local_mode);
+  updateModelDisplay();
 
   const ctx = data.context || {};
   if (inpRecentTurns      && ctx.recent_turns      != null) inpRecentTurns.value      = ctx.recent_turns;
@@ -1187,26 +1424,24 @@ function populateSettingsFromStatus(data) {
   if (inpRetrievalN       && ctx.retrieval_n        != null) inpRetrievalN.value       = ctx.retrieval_n;
   if (inpSimilarity       && ctx.similarity_cutoff  != null) {
     inpSimilarity.value = ctx.similarity_cutoff;
-    valSimilarity.textContent = Number(ctx.similarity_cutoff).toFixed(2);
+    if (valSimilarity) valSimilarity.textContent = Number(ctx.similarity_cutoff).toFixed(2);
   }
   if (inpMaxHistory    && ctx.max_history_turns          != null) inpMaxHistory.value    = ctx.max_history_turns;
   if (inpMaxIterations && ctx.max_iterations_per_turn    != null) inpMaxIterations.value = ctx.max_iterations_per_turn;
   if (inpLocalTimeout  && data.local_agent_timeout       != null) inpLocalTimeout.value  = data.local_agent_timeout;
 
   const emb = data.embeddings || {};
-  if (emb.enabled != null) {
+  if (emb.enabled != null && toggleEmbeddings) {
     toggleEmbeddings.classList.toggle('on', !!emb.enabled);
-    toggleEmbeddingsLbl.textContent = emb.enabled ? 'on' : 'off';
+    if (toggleEmbeddingsLbl) toggleEmbeddingsLbl.textContent = emb.enabled ? 'on' : 'off';
   }
   if (inpTreeRoot && data.tree_root != null) inpTreeRoot.value = data.tree_root;
 
-  // Phase 3: populate memory tab vector count
   if (data.embeddings_count != null) {
     const el = document.getElementById('memory-vector-status');
     if (el) el.textContent = `Semantic memory: ${data.embeddings_count} entries`;
   }
 
-  // Phase 3g: show user profile load status in memory tab
   const profileEl = document.getElementById('mem-profile-status');
   if (profileEl) {
     if (data.profile_loaded === true) {
@@ -1214,8 +1449,18 @@ function populateSettingsFromStatus(data) {
       profileEl.style.color = 'var(--green)';
     } else {
       profileEl.textContent = 'Profile: not found ⚠';
-      profileEl.style.color = 'var(--yellow)';
+      profileEl.style.color = 'var(--amber)';
     }
+  }
+
+  // Update legacy status-pill state (kept for /status polling logic)
+  if (statusClaude && statusClaude.classList) {
+    statusClaude.classList.toggle('online',  !!data.claude_api);
+    statusClaude.classList.toggle('offline', !data.claude_api);
+  }
+  if (statusOllama && statusOllama.classList) {
+    statusOllama.classList.toggle('online',  !!data.ollama);
+    statusOllama.classList.toggle('offline', !data.ollama);
   }
 }
 
@@ -1246,17 +1491,30 @@ btnDeny.addEventListener('click', () => {
 confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) btnDeny.click(); });
 
 // ============================================================
-// Status + waiting state
+// Waiting state
 // ============================================================
-
-function showStatus(text) { statusText.textContent = text; statusLine.classList.remove('hidden'); }
-function hideStatus()      { statusLine.classList.add('hidden'); statusText.textContent = ''; }
 
 function setWaiting(waiting) {
   isWaiting = waiting;
   btnSend.disabled   = waiting;
   userInput.disabled = waiting;
-  if (!waiting) hideStatus();
+}
+
+// ============================================================
+// Thinking indicator
+// ============================================================
+
+function showThinkingIndicator(label) {
+  if (thinkingLabel) thinkingLabel.textContent = label || 'Thinking…';
+  if (thinkingIndicator) thinkingIndicator.classList.remove('hidden');
+  scrollToBottom();
+}
+function hideThinkingIndicator() {
+  if (thinkingIndicator) thinkingIndicator.classList.add('hidden');
+}
+function setThinkingLabel(label) {
+  if (thinkingLabel) thinkingLabel.textContent = label;
+  showThinkingIndicator(label);
 }
 
 // ============================================================
@@ -1265,10 +1523,11 @@ function setWaiting(waiting) {
 
 function clearChat() {
   chatArea.querySelectorAll(
-    '.msg-row, .tool-block, .tool-denied-msg, .optimizer-pill'
+    '.msg-row, .tool-block, .tool-denied-msg, .optimizer-pill, .task-run-container, .plan-card'
   ).forEach(el => el.remove());
-  pendingToolBlocks = {};
-  activeTaskSteps   = {};
+  pendingToolBlocks  = {};
+  activeTaskSteps    = {};
+  activeTaskContainer = null;
   recentHistory.length = 0;
   renderMemoryHistory();
   resetTaskPanel();
@@ -1283,12 +1542,14 @@ function clearChat() {
   chatArea.appendChild(welcome);
 }
 
-btnClear.addEventListener('click', () => {
-  if (confirm('Clear the conversation history?')) sendWS({ type: 'clear' });
-});
+if (btnClear) {
+  btnClear.addEventListener('click', () => {
+    if (confirm('Clear the conversation history?')) sendWS({ type: 'clear' });
+  });
+}
 
 // ============================================================
-// Phase 3f: Long-term memory counts from /memory endpoint
+// Long-term memory counts
 // ============================================================
 
 async function fetchMemoryCounts() {
@@ -1307,22 +1568,44 @@ async function fetchMemoryCounts() {
 }
 
 // ============================================================
-// Status polling — /status endpoint
+// Status polling — /status
 // ============================================================
 
 async function pollStatus() {
   try {
     const res  = await fetch('/status');
     const data = await res.json();
-
-    statusClaude.classList.toggle('online',  !!data.claude_api);
-    statusClaude.classList.toggle('offline', !data.claude_api);
-    statusOllama.classList.toggle('online',  !!data.ollama);
-    statusOllama.classList.toggle('offline', !data.ollama);
-
     populateSettingsFromStatus(data);
   } catch (e) {
     console.warn('[status] Could not fetch /status:', e);
+  }
+}
+
+// ============================================================
+// Interrupted banner  (Phase 3b)
+// ============================================================
+
+function showInterruptedBanner(task) {
+  const existing = document.getElementById('interrupted-banner');
+  if (existing) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'interrupted-banner';
+  banner.className = 'interrupted-banner';
+
+  const preview = task.initial_message
+    ? ` ("${escapeHtml(task.initial_message.slice(0, 60))}${task.initial_message.length > 60 ? '…' : ''}")`
+    : '';
+
+  banner.innerHTML = `
+    <span>⚠ A previous task was interrupted${preview}. Ask the agent to continue or start fresh.</span>
+    <button class="banner-dismiss" onclick="document.getElementById('interrupted-banner').remove()">✕</button>
+  `;
+
+  if (chatArea.firstChild) {
+    chatArea.insertBefore(banner, chatArea.firstChild);
+  } else {
+    chatArea.appendChild(banner);
   }
 }
 
@@ -1339,7 +1622,7 @@ userInput.addEventListener('input', () => autoResize(userInput));
 
 function autoResize(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 130) + 'px';
 }
 
 // ============================================================
@@ -1373,21 +1656,14 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/**
- * Minimal markdown renderer that also handles fenced code blocks.
- * Code blocks become .code-block divs with copy button support.
- */
 function renderMarkdownWithCode(text) {
-  // Split on fenced code blocks first
   const parts = text.split(/(```[\s\S]*?```)/g);
   return parts.map(part => {
     if (part.startsWith('```')) {
-      const lines  = part.slice(3, -3).split('\n');
-      const lang   = lines[0].trim() || 'code';
-      const code   = lines.slice(1).join('\n');
+      const lines = part.slice(3, -3).split('\n');
+      const code  = lines.slice(1).join('\n');
       return `<div class="code-block"><pre>${escapeHtml(code)}</pre></div>`;
     }
-    // Inline markdown
     return escapeHtml(part)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -1404,53 +1680,11 @@ async function init() {
   pollStatus();
   setInterval(pollStatus, 30_000);
 
-  // Phase 3f: fetch long-term memory counts on load and every 60 seconds.
   fetchMemoryCounts();
   setInterval(fetchMemoryCounts, 60_000);
 
-  // Phase 3b: on page load, check whether the last task was interrupted.
-  // Show a dismissible warning banner so the user knows they can resume
-  // or start fresh — we never auto-resume because the agent might have
-  // been mid-destructive-operation.
-  try {
-    const res  = await fetch('/task');
-    const task = await res.json();
-    if (task && task.status === 'running') {
-      showInterruptedBanner(task);
-    }
-  } catch (e) {
-    // /task unavailable (server not yet ready on first load) — ignore
-  }
-}
-
-/**
- * Show a yellow dismissible banner at the top of the chat area when a
- * previously running task was interrupted (server was restarted while a
- * task was active, leaving status="running" on disk).
- */
-function showInterruptedBanner(task) {
-  const existing = document.getElementById('interrupted-banner');
-  if (existing) return;  // don't show twice
-
-  const banner = document.createElement('div');
-  banner.id = 'interrupted-banner';
-  banner.className = 'interrupted-banner';
-
-  const preview = task.initial_message
-    ? ` ("${escapeHtml(task.initial_message.slice(0, 60))}${task.initial_message.length > 60 ? '…' : ''}")`
-    : '';
-
-  banner.innerHTML = `
-    <span>⚠ A previous task was interrupted${preview}. Ask the agent to continue or start fresh.</span>
-    <button class="banner-dismiss" onclick="document.getElementById('interrupted-banner').remove()">✕</button>
-  `;
-
-  // Insert before the first child of chatArea, or append if empty
-  if (chatArea.firstChild) {
-    chatArea.insertBefore(banner, chatArea.firstChild);
-  } else {
-    chatArea.appendChild(banner);
-  }
+  // Load task history (and check for interrupted task)
+  loadTaskHistory();
 }
 
 init();
