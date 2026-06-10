@@ -75,6 +75,7 @@ from agent_tools.memory_tool import register_memory_tools                 # Phas
 from agent_tools.self_knowledge import register_self_knowledge_tools      # Phase 3g
 from agent_tools.profile_updater import register_profile_updater_tools    # Phase 3g
 from agent_tools.research_mode import register_research_tools              # Phase 3h
+from agent_tools.project_scaffold import register_scaffold_tools            # Phase 4a
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -124,6 +125,7 @@ register_memory_tools()                                                  # Phase
 register_self_knowledge_tools()                                          # Phase 3g
 register_profile_updater_tools()                                         # Phase 3g
 register_research_tools()                                                 # Phase 3h
+register_scaffold_tools()                                                   # Phase 4a
 
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
@@ -150,7 +152,8 @@ logger.info(
     "memory (log_research, recall_memory, log_fact), "
     "self_knowledge (read_user_profile, scan_system), "
     "profile_updater (update_user_profile), "
-    f"research (deep_research){_browser_log}"
+    "research (deep_research), "
+    f"project_scaffold (scaffold_project){_browser_log}"
 )
 
 # ---------------------------------------------------------------------------
@@ -187,8 +190,8 @@ task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 3h — structured research mode",
-    version="1.9.0",  # Phase 3h
+    description="Phase 4a — project scaffolding",
+    version="2.0.0",  # Phase 4a
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"

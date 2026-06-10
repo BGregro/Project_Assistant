@@ -27,8 +27,10 @@ Improvement 1 additions:
   - get_context_summary() now calls semantic_query_research() instead of
     query_research() for the research section, so "passive income" can match
     "make money online" and similar paraphrases.
-  - load() now contains a migration step: on first call, if the ChromaDB
-    collection is empty but JSON has research entries, all entries are re-indexed.
+  - load() previously ran the migration at startup; this has been removed.
+    Migration is now lazy: _maybe_migrate() is called at the start of
+    semantic_query_research() so Ollama has time to warm up.  A module-level
+    _migration_done flag ensures it runs at most once per process lifetime.
 """
 
 from __future__ import annotations
@@ -89,6 +91,11 @@ def _get_ollama_base_url() -> str:
 
 _chroma_client: chromadb.PersistentClient | None = None
 _research_collection: chromadb.Collection | None = None
+
+# Lazy migration flag — True once we have attempted (or confirmed) migration.
+# Set to True after a successful migration or after confirming no migration is needed.
+# This prevents re-checking on every semantic query after the first.
+_migration_done: bool = False
 
 
 def _get_research_collection() -> chromadb.Collection:
@@ -172,10 +179,9 @@ def load() -> dict:
     Returns the canonical empty structure if the file does not exist, is empty,
     or is corrupt so callers never need to handle missing keys.
 
-    Migration step (Improvement 1):
-    On first call, if the ChromaDB research collection is empty but the JSON
-    research array is non-empty, all existing entries are re-indexed into
-    ChromaDB so they become semantically searchable without manual action.
+    Note: ChromaDB migration is no longer performed here.  It is deferred to
+    the first semantic_query_research() call so that Ollama has time to warm up
+    before embeddings are requested (see _maybe_migrate()).
     """
     empty: dict = {"tasks": [], "facts": [], "research": []}
     if not _STORE_FILE.exists():
@@ -190,20 +196,41 @@ def load() -> dict:
         logger.warning(f"[long_term] Could not load {_STORE_FILE}: {e} — returning empty store.")
         return empty
 
-    # ── ChromaDB migration (runs at most once per cold start) ──────────
-    # We only attempt migration if the JSON has research data. Guarding with
-    # a try/except means a broken ChromaDB never prevents the agent from loading.
-    if data["research"]:
-        try:
-            col = _get_research_collection()
-            if col.count() == 0:
-                n = len(data["research"])
-                logger.info(f"[long_term] Migrating {n} research entries to semantic index…")
-                _bulk_upsert_research(data["research"], col)
-        except Exception as e:
-            logger.warning(f"[long_term] Migration skipped (ChromaDB unavailable): {e}")
-
     return data
+
+
+def _maybe_migrate() -> None:
+    """
+    Lazy migration: if _migration_done is False, the ChromaDB collection is
+    empty, AND the JSON store has research entries, index them all now.
+
+    Called at the start of semantic_query_research() — by that point the
+    server is fully up and Ollama is more likely to be warm.  A failure here
+    is non-fatal; the function falls back to substring search.
+    """
+    global _migration_done
+    if _migration_done:
+        return
+
+    try:
+        data = load()
+        if not data["research"]:
+            _migration_done = True
+            return
+
+        col = _get_research_collection()
+        if col.count() == 0:
+            n = len(data["research"])
+            logger.info(f"[long_term] Lazy migration: indexing {n} research entries into ChromaDB…")
+            _bulk_upsert_research(data["research"], col)
+            logger.info("[long_term] Lazy migration complete.")
+        else:
+            logger.debug("[long_term] Migration check: ChromaDB already populated, skipping.")
+
+        _migration_done = True
+    except Exception as e:
+        # Non-fatal — fall back to substring search; try again next query
+        logger.warning(f"[long_term] Lazy migration failed (will retry next query): {e}")
 
 
 def save(data: dict) -> None:
@@ -512,6 +539,11 @@ def semantic_query_research(query: str, n_results: int = 3) -> list[dict]:
     """
     try:
         col = _get_research_collection()
+
+        # Run lazy migration if this is the first semantic query of the session
+        # and the collection is empty but JSON has data.
+        _maybe_migrate()
+
         count = col.count()
         if count == 0:
             logger.debug("[long_term] semantic_query_research: collection empty, using fallback.")

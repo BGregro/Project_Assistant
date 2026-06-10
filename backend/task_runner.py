@@ -21,7 +21,13 @@ Phase 3d additions:
   - model_override parameter: passed down from AgentCore intent routing so
     the first Claude call uses claude-sonnet-4-6 for COMPLEX intents.
 
-Concurrency model (see main.py for the other half):
+Phase 4a additions:
+  - _project_manifest: dict | None = None tracks the active scaffold when a
+    scaffold_project tool call succeeds mid-task.  A compact summary is
+    appended to the live system prompt so Claude retains project structure
+    without re-reading the full scaffold JSON every iteration.
+  - _project_manifest is reset to None at the start of every new task so
+    stale project context never bleeds into unrelated runs.
   - The WebSocket handler launches run_task() via asyncio.create_task().
   - While run_task() is running, the WebSocket receive pump continues to
     dispatch incoming messages.
@@ -69,6 +75,11 @@ class TaskRunner:
         self._compression_threshold: int = (
             cfg.get("context", {}).get("compression_threshold", 6000)
         )
+
+        # Phase 4a: active project manifest — set when scaffold_project succeeds
+        # during a task run.  Keeps project context alive across iterations
+        # without re-sending the full scaffold every turn.
+        self._project_manifest: dict | None = None
 
     # ------------------------------------------------------------------
     # Public control API
@@ -143,6 +154,8 @@ class TaskRunner:
         self._cancel_event.clear()         # reset from any previous run
         # Reset Phase 3d token estimate for this task
         self._token_estimate = 0
+        # Reset Phase 4a project manifest for this task
+        self._project_manifest = None
         # Drain any leftover messages from a previous session
         while not self._message_queue.empty():
             try:
@@ -312,7 +325,34 @@ class TaskRunner:
                         )
                         tool_results.append(result_msg)
 
-                        # ── Phase 3d: update token estimate ───────────
+                        # ── Phase 4a: detect successful scaffold_project call ──
+                        # When scaffold_project succeeds, store the manifest and
+                        # inject a compact system-prompt addon so Claude knows
+                        # the active project without re-reading the full scaffold.
+                        if block.name == "scaffold_project":
+                            try:
+                                result_payload = json.loads(result_msg.get("content", "{}"))
+                                if result_payload.get("success") and result_payload.get("scaffold"):
+                                    scaffold = result_payload["scaffold"]
+                                    self._project_manifest = scaffold
+                                    proj_name   = scaffold.get("name", "unknown")
+                                    file_count  = result_payload.get("file_count", 0)
+                                    # Append a lightweight reminder to the running
+                                    # system prompt via the messages list so Claude
+                                    # never loses track of the project structure.
+                                    system += (
+                                        f"\n\nActive project: {proj_name} — "
+                                        f"{file_count} files to implement. "
+                                        f"Remaining: see outputs/{proj_name}/scaffold.json"
+                                    )
+                                    logger.info(
+                                        f"[task_runner] Project manifest set: '{proj_name}' "
+                                        f"({file_count} files)"
+                                    )
+                            except Exception as _pm_e:
+                                logger.debug(
+                                    f"[task_runner] Could not parse scaffold result (non-fatal): {_pm_e}"
+                                )
                         # result_msg["content"] is a JSON string of the (possibly
                         # compressed) result that Claude will see.
                         result_content = result_msg.get("content", "")

@@ -163,6 +163,17 @@ class AgentCore:
             "to check what already exists and avoid duplicating work. "
             "If a report was already generated in a previous session, read it with "
             "read_file before generating a new one."
+            "\n\nSOFTWARE DEVELOPMENT: When asked to build a multi-file project, app, "
+            "framework, or any software with more than 2 files: ALWAYS call "
+            "scaffold_project first to generate the architecture plan. Present the "
+            "scaffold to the user and wait for their approval before writing any "
+            "source files. Then implement files one by one in the order specified by "
+            "implementation_order, saving each to outputs/{project_name}/. After all "
+            "files are written, run the test_command (via execute_code) to verify the "
+            "project works. If it fails, read the error, fix the relevant file, and "
+            "run again. Never start writing code for a multi-file project without an "
+            "approved scaffold — the scaffold prevents wasted work and keeps the "
+            "implementation on track."
         )
 
     # ------------------------------------------------------------------
