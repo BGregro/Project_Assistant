@@ -27,6 +27,14 @@ Phase 3e additions:
   These are called from run_with_task_runner() before the prompt optimizer
   so the approved plan can be prepended to the system prompt.
 
+Vague message enrichment (improvement):
+  - VAGUE_PATTERNS: frozenset of short/ambiguous phrases ("continue", "yes", …).
+  - _enrich_vague_message(): if the incoming message matches a vague pattern or
+    is under 30 chars, prepend a 200-char snippet of the last assistant reply so
+    the local optimizer and Claude understand what it refers to.  Called in both
+    run() and run_with_task_runner() right after history is available and before
+    intent classification.
+
 Phase 3d additions:
   - Intent routing: classify_intent() decides which tier handles this turn before
     any Claude API call is made.
@@ -243,6 +251,59 @@ class AgentCore:
         return any(kw in lower for kw in self._SELF_DIRECTED_KEYWORDS)
 
     # ------------------------------------------------------------------
+    # Vague message enrichment
+    # ------------------------------------------------------------------
+
+    # Short phrases that are meaningless without knowing what came before.
+    # Matched case-insensitively against the stripped, punctuation-trimmed message.
+    VAGUE_PATTERNS: frozenset[str] = frozenset({
+        "continue", "proceed", "yes", "no", "ok", "okay", "sure",
+        "do it", "go ahead", "go on", "next", "keep going",
+        "finish it", "complete it", "finish", "done", "stop",
+    })
+
+    def _enrich_vague_message(self, message: str, history: list) -> str:
+        """
+        If the message is short and ambiguous, prepend recent context so the
+        local optimizer and Claude understand what it refers to.
+        Without this, 'continue' after a 35-minute build task produces
+        'Continue what?' from a cold local model.
+
+        Enrichment is added as a bracketed inline note — it does NOT replace
+        the original message so the user's exact wording is still visible.
+
+        Short-circuits immediately when:
+          - The message is neither vague by length (< 30 chars) nor in
+            VAGUE_PATTERNS, so normal messages are untouched.
+          - History is empty (nothing to reference).
+          - No previous assistant turn exists in history.
+        """
+        stripped = message.strip().lower().rstrip(".,!")
+        is_vague = len(message.strip()) < 30 or stripped in self.VAGUE_PATTERNS
+        if not is_vague or not history:
+            return message
+
+        # Find the most recent assistant message for context.
+        # Use str() to handle both plain-string content and list-of-block content.
+        last_assistant = next(
+            (h["content"] for h in reversed(history) if h.get("role") == "assistant"),
+            "",
+        )
+        if not last_assistant:
+            return message
+
+        # Keep the snippet short — just enough context, not a wall of text.
+        context_snippet = str(last_assistant)[:200].replace("\n", " ")
+        enriched = (
+            f"{message} "
+            f"[Context: the assistant last said: '{context_snippet}...']"
+        )
+        logger.debug(
+            f"[agent] Vague message enriched: {message!r} → {enriched[:80]!r}"
+        )
+        return enriched
+
+    # ------------------------------------------------------------------
     # Phase 3e: Task planning
     # ------------------------------------------------------------------
 
@@ -380,6 +441,12 @@ class AgentCore:
         """
         # Store the raw user message as the current goal for compression context.
         self._current_goal = user_message
+
+        # ── Vague message enrichment ───────────────────────────────────────────
+        # Prepend recent assistant context to short/ambiguous messages so the
+        # intent router and prompt optimizer have enough signal to work with.
+        # Must run before intent classification so "continue" routes correctly.
+        user_message = self._enrich_vague_message(user_message, history)
 
         # ----------------------------------------------------------------
         # Step 1: Intent routing (Phase 3d) — runs FIRST on the raw message.
@@ -521,6 +588,11 @@ class AgentCore:
 
         # Store goal for compression context
         self._current_goal = user_message
+
+        # ── Vague message enrichment ───────────────────────────────────────────
+        # Same as run(): enrich before intent routing so the classifier sees
+        # a meaningful message even when the user types only "continue" or "yes".
+        user_message = self._enrich_vague_message(user_message, history)
 
         # ── Intent routing (Phase 3d) — runs FIRST on the raw message ─
         # SIMPLE queries return immediately without ever running the optimizer.

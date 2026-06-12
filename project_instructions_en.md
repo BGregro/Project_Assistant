@@ -43,6 +43,8 @@ User message
      ├── History summarization: compress old turns to save context space
      ├── Mid-task step summarization: summarize completed steps during long runs
      ├── Code pre-validation: catch obvious bugs before execute_code is called
+     ├── Tool pre-filtering: select 10-12 relevant tools per request (~50% token saving)
+     ├── Vague message enrichment: expand short messages using conversation context
      └── Offline fallback: full local agentic loop when Claude API unavailable
           │
           ▼
@@ -61,6 +63,7 @@ pipeline, not just a fallback.
 - `use_intent_routing`: toggle local intent classification on/off
 - `use_tool_compression`: toggle local tool result compression on/off
 - `use_code_prevalidation`: toggle local code pre-validation on/off
+- `use_tool_prefilter`: toggle local tool pre-filtering on/off
 - `local_fallback`: fall back to local LLM if Claude API is unreachable
 - `local_mode`: run entire agent loop through Ollama, no Claude API
 - `primary`: default Claude model (claude-haiku-4-5)
@@ -69,7 +72,7 @@ pipeline, not just a fallback.
 - `local_agent`: Ollama model for local mode agentic loop (qwen2.5:14b)
 - `local_agent_timeout`: per-request timeout in seconds (default 300)
 
-## Current Tool Inventory (Phase 4 complete)
+## Current Tool Inventory (Phase 5a complete)
 All tools are registered at startup and visible to Claude via the tool registry.
 
 | Tool | File | Description |
@@ -103,6 +106,12 @@ All tools are registered at startup and visible to Claude via the tool registry.
 | `get_project_status` | project_manager.py | Check which files are done vs pending |
 | `mark_file_complete` | project_manager.py | Mark a project file as implemented |
 | `run_project_test` | project_tester.py | Run project entry point and capture output |
+| `github_list_repos` | github_tool.py | List GitHub repositories |
+| `github_create_repo` | github_tool.py | Create a new GitHub repository |
+| `github_push_file` | github_tool.py | Push a file to a GitHub repository |
+| `github_read_file` | github_tool.py | Read a file from a GitHub repository |
+| `github_list_files` | github_tool.py | List files in a GitHub repository |
+| `github_create_issue` | github_tool.py | Create a GitHub issue |
 
 Generated tools live in `agent_tools/generated/` and auto-load on startup.
 All generated files (reports, scripts, data) are saved to `outputs/`.
@@ -132,30 +141,53 @@ All generated files (reports, scripts, data) are saved to `outputs/`.
 - 4c Integration testing (run_project_test tool)
 - 4d Project memory (logged to long_term.json on success)
 
-### Phase 4.5 – Quality & Reliability (CURRENT TARGET)
-Targeted improvements that make existing capabilities work better:
+### Phase 4.5 – Quality & Reliability ✓ COMPLETE
+- patch_file tool for targeted line-range edits
+- install_package tool with pip + confirmation
+- Streaming execution output (line-by-line via WebSocket)
+- UI overhaul: dark theme, collapsible task containers, status bar,
+  task history panel, tool block collapsing
+- State persistence on WebSocket reconnect
+- Consecutive failure detection (stops infinite retry loops)
+- Message history sanitizer (repairs orphaned tool_use blocks after 429/errors)
+- Tool pre-filtering via local LLM (~50% input token reduction)
 
-**patch_file tool** — targeted line-range edits instead of full rewrites.
-Essential for editing large files without rewriting them entirely.
+### Phase 5 – External Service Integrations (IN PROGRESS)
 
-**install_package tool** — pip install with confirmation.
-Unblocks all projects that have dependencies.
+**5a – GitHub integration ✓ COMPLETE**
+- Personal access token (GITHUB_TOKEN in .env)
+- github_list_repos, github_create_repo, github_push_file,
+  github_read_file, github_list_files, github_create_issue
 
-**Streaming execution** — stdout streamed line-by-line to UI during execute_code.
-Makes long-running scripts visible in real time instead of a black box.
+**5b – Credential manager (CURRENT TARGET)**
+- Encrypted local storage for API keys and tokens (Fernet)
+- store_credential, get_credential, list_credentials tools
+- Keys stored in memory/credentials.json (gitignored)
 
-**UI overhaul** — cleaner header, collapsible task runs in chat, task history
-in right panel, status bar at bottom, better tool call blocks.
+**5c – YouTube Data API**
+- Search videos, get channel analytics, manage playlists
+- Upload support (requires 5b for credential storage)
+- Direct enabler for YouTube Shorts automation project
 
-**State persistence on reconnect** — UI reconstructs last task state from
-current_task.json when WebSocket reconnects after browser close/reopen.
+**5d – Write-mode browser automation**
+- browser_click and browser_fill tools
+- Enables form submission, logins, web automation workflows
+- All write actions require explicit user approval
 
-### Phase 5 – External Service Integrations (PLANNED)
-- 5a: GitHub integration (personal access token, repo/file operations)
-- 5b: Credential management (encrypted local storage)
-- 5c: Additional platform integrations (YouTube Data API, etc.)
-- 5d: Write-mode browser automation (form filling, clicking)
-- 5e: Scheduled/recurring tasks
+**5e – Scheduled/recurring tasks**
+- APScheduler-based task queue
+- Config-driven schedules (interval, cron, one-time)
+- Persisted across server restarts
+
+## Planned Improvements
+- **Vague message context injection:** short/ambiguous messages ("continue",
+  "yes", "proceed") are enriched with recent task context before routing
+- **Tiered system prompt:** base prompt always sent (~500 tokens), contextual
+  sections appended only when relevant — saves ~1,500 tokens per call
+- **Parallel tool execution:** asyncio.gather for concurrent tool dispatch
+  when Claude returns multiple tool_use blocks in one response
+- **File content caching:** in-memory cache keyed by (path, mtime) in
+  filesystem.py — avoids re-reading unchanged files during long projects
 
 ## Project Structure
 ```
@@ -184,6 +216,7 @@ agent/
 │   │   ├── project_scaffold.py  # scaffold_project
 │   │   ├── project_manager.py   # get_project_status, mark_file_complete
 │   │   ├── project_tester.py    # run_project_test
+│   │   ├── github_tool.py       # github_* tools (Phase 5a)
 │   │   ├── generated/           # agent-written tools (auto-loaded)
 │   │   └── SEARXNG_SETUP.md
 │   └── memory/

@@ -33,6 +33,21 @@ Phase 4a additions:
     dispatch incoming messages.
   - Inside run_task(), _cancel_event.is_set() is checked at the top of
     every iteration so cancellation is honoured at the earliest safe point.
+
+Parallel tool dispatch (improvement):
+  - When Claude returns multiple tool_use blocks in one response, all
+    approved tool calls now run concurrently via asyncio.gather instead
+    of sequentially.
+  - Per-block exceptions are caught and converted to synthetic error
+    results so one failing tool never cancels its siblings.
+  - tool_results list order matches the original tool_use_blocks order
+    (asyncio.gather preserves insertion order).
+  - step_counter increments are pre-assigned before gather so each block
+    gets a unique step number without races.
+  - Step records are appended to self._current_task["steps"] after all
+    tools complete (still in original order).
+  - Consecutive failure detection and scaffold detection run after gather,
+    once all results are known.
 """
 
 import asyncio
@@ -320,35 +335,116 @@ class TaskRunner:
                     tool_results = []
                     if not hasattr(self, '_consecutive_failures'):
                         self._consecutive_failures: dict[str, int] = {}
-                    for block in tool_use_blocks:
-                        # Mark thinking step done
-                        await send_event("task_progress", {
-                            "step":       step_counter,
-                            "label":      "Thinking…",
-                            "status":     "done",
-                            "elapsed_ms": _elapsed_ms(step_start_ms),
-                        })
 
-                        # New step for this tool
+                    # ── Pre-assign step numbers ───────────────────────────
+                    # Each block needs a unique step number.  We allocate them
+                    # all up-front so concurrent coroutines never race on
+                    # step_counter.  The "thinking…" step was already counted
+                    # above; we increment here for each tool block.
+                    block_step_numbers: list[int] = []
+                    for _ in tool_use_blocks:
                         step_counter += 1
+                        block_step_numbers.append(step_counter)
+
+                    # ── Mark thinking step done (once, before tools fire) ─
+                    await send_event("task_progress", {
+                        "step":       step_counter - len(tool_use_blocks),
+                        "label":      "Thinking…",
+                        "status":     "done",
+                        "elapsed_ms": _elapsed_ms(step_start_ms),
+                    })
+
+                    # ── Parallel dispatch ─────────────────────────────────
+                    # Each coroutine handles one tool_use block independently:
+                    # sends its own "running" / "done"/"failed" progress events
+                    # and returns (result_msg, step_record).
+                    # asyncio.gather preserves the order of return values so
+                    # tool_results always matches the original block order.
+
+                    async def _dispatch_one(
+                        block,
+                        assigned_step: int,
+                    ) -> tuple[dict, dict]:
+                        """
+                        Dispatch a single tool call and return
+                        (result_msg, step_record).
+
+                        Exceptions are caught here so that one failing tool
+                        never cancels its siblings via gather's default
+                        exception propagation.
+                        """
                         tool_step_start = _now_ms()
                         await send_event("task_progress", {
-                            "step":       step_counter,
+                            "step":       assigned_step,
                             "label":      block.name,
                             "status":     "running",
                             "elapsed_ms": 0,
                         })
 
-                        # Dispatch the tool (permission layer + compression live inside
-                        # _execute_tool in agent_core)
-                        result_msg = await agent._execute_tool(
-                            tool_name=block.name,
-                            tool_input=block.input,
-                            tool_use_id=block.id,
-                            send_event=send_event,
-                            pending_confirmations=pending_confirmations,
-                        )
+                        try:
+                            result_msg = await agent._execute_tool(
+                                tool_name=block.name,
+                                tool_input=block.input,
+                                tool_use_id=block.id,
+                                send_event=send_event,
+                                pending_confirmations=pending_confirmations,
+                            )
+                        except Exception as _tool_exc:
+                            # Unexpected exception from the tool itself — wrap it
+                            # in a synthetic error result so the sibling tools and
+                            # the agent loop continue normally.
+                            logger.exception(
+                                f"[task_runner] Unexpected exception from tool "
+                                f"'{block.name}' during parallel dispatch"
+                            )
+                            import json as _j
+                            result_msg = {
+                                "type":        "tool_result",
+                                "tool_use_id": block.id,
+                                "content":     _j.dumps({
+                                    "success": False,
+                                    "error":   (
+                                        f"Tool raised an unexpected exception: "
+                                        f"{_tool_exc}"
+                                    ),
+                                }),
+                            }
+
+                        elapsed = _elapsed_ms(tool_step_start)
+                        success = _result_success(result_msg)
+                        tool_status = "done" if success else "failed"
+
+                        await send_event("task_progress", {
+                            "step":       assigned_step,
+                            "label":      block.name,
+                            "status":     tool_status,
+                            "elapsed_ms": elapsed,
+                        })
+
+                        step_record = {
+                            "step":       assigned_step,
+                            "tool":       block.name,
+                            "status":     tool_status,
+                            "elapsed_ms": elapsed,
+                        }
+                        return result_msg, step_record
+
+                    # Fire all tool dispatches concurrently; results arrive in
+                    # the same order as tool_use_blocks (gather guarantees this).
+                    dispatch_results: list[tuple[dict, dict]] = await asyncio.gather(
+                        *[
+                            _dispatch_one(block, step_num)
+                            for block, step_num in zip(tool_use_blocks, block_step_numbers)
+                        ]
+                    )
+
+                    # ── Unpack gather results ─────────────────────────────
+                    step_records: list[dict] = []
+                    for (result_msg, step_record), block in zip(
+                        dispatch_results, tool_use_blocks
+                    ):
                         tool_results.append(result_msg)
+                        step_records.append(step_record)
 
                         # ── Phase 4a: detect successful scaffold_project call ──
                         # When scaffold_project succeeds, store the manifest and
@@ -360,11 +456,8 @@ class TaskRunner:
                                 if result_payload.get("success") and result_payload.get("scaffold"):
                                     scaffold = result_payload["scaffold"]
                                     self._project_manifest = scaffold
-                                    proj_name   = scaffold.get("name", "unknown")
-                                    file_count  = result_payload.get("file_count", 0)
-                                    # Append a lightweight reminder to the running
-                                    # system prompt via the messages list so Claude
-                                    # never loses track of the project structure.
+                                    proj_name  = scaffold.get("name", "unknown")
+                                    file_count = result_payload.get("file_count", 0)
                                     system += (
                                         f"\n\nActive project: {proj_name} — "
                                         f"{file_count} files to implement. "
@@ -378,18 +471,16 @@ class TaskRunner:
                                 logger.debug(
                                     f"[task_runner] Could not parse scaffold result (non-fatal): {_pm_e}"
                                 )
-                        # result_msg["content"] is a JSON string of the (possibly
-                        # compressed) result that Claude will see.
+
+                        # Token estimate update
                         result_content = result_msg.get("content", "")
                         self._token_estimate += len(result_content) // 4
 
-                        # Parse success flag from the serialised result
-                        success = _result_success(result_msg)
-                        tool_status = "done" if success else "failed"
-
                         # ── Consecutive failure guard ──────────────────────
-                        # If the same tool fails 3 times in a row, inject a
-                        # stop hint so Claude doesn't loop indefinitely.
+                        # Runs after gather so we see the definitive success/fail
+                        # status of every block before deciding whether to inject
+                        # a stop hint.
+                        success = _result_success(result_msg)
                         if not success:
                             self._consecutive_failures[block.name] = (
                                 self._consecutive_failures.get(block.name, 0) + 1
@@ -413,21 +504,9 @@ class TaskRunner:
                         else:
                             self._consecutive_failures[block.name] = 0
 
-                        await send_event("task_progress", {
-                            "step":       step_counter,
-                            "label":      block.name,
-                            "status":     tool_status,
-                            "elapsed_ms": _elapsed_ms(tool_step_start),
-                        })
-
-                        # Checkpoint: persist step record to disk
-                        self._current_task["steps"].append({
-                            "step":       step_counter,
-                            "tool":       block.name,
-                            "status":     tool_status,
-                            "elapsed_ms": _elapsed_ms(tool_step_start),
-                        })
-                        self._save_task()
+                    # ── Persist all step records (in order) ───────────────
+                    self._current_task["steps"].extend(step_records)
+                    self._save_task()
 
                     # Feed (compressed) tool results back into messages
                     messages.append({"role": "user", "content": tool_results})
