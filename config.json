@@ -11,6 +11,7 @@
   "use_intent_routing": true,
   "use_tool_compression": true,
   "use_code_prevalidation": true,
+  "use_tool_prefilter": false,
   "local_fallback": true,
   "local_mode": false,
   "local_agent_timeout": 300,
@@ -24,7 +25,7 @@
   },
   "context": {
     "max_history_turns": 20,
-    "max_iterations_per_turn": 10,
+    "max_iterations_per_turn": 100,
     "recent_turns": 4,
     "summary_threshold": 4,
     "retrieval_n": 3,

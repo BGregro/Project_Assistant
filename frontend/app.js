@@ -78,6 +78,8 @@ const inpMaxIterations    = document.getElementById('inp-max-iterations');
 const inpLocalTimeout     = document.getElementById('inp-local-timeout');
 const toggleEmbeddings    = document.getElementById('toggle-embeddings');
 const toggleEmbeddingsLbl = document.getElementById('toggle-embeddings-label');
+const toggleToolPrefilter    = document.getElementById('toggle-tool-prefilter');
+const toggleToolPrefilterLbl = document.getElementById('toggle-tool-prefilter-label');
 const inpTreeRoot         = document.getElementById('inp-tree-root');
 
 // Confirmation modal
@@ -1334,6 +1336,16 @@ if (toggleEmbeddings) {
   });
 }
 
+if (toggleToolPrefilter) {
+  toggleToolPrefilter.addEventListener('click', () => {
+    const wasOn = toggleToolPrefilter.classList.contains('on');
+    const next  = !wasOn;
+    toggleToolPrefilter.classList.toggle('on', next);
+    if (toggleToolPrefilterLbl) toggleToolPrefilterLbl.textContent = next ? 'on' : 'off';
+    sendWS({ type: 'set_config', data: { key: 'use_tool_prefilter', value: next } });
+  });
+}
+
 // ============================================================
 // Settings — number inputs (debounced)
 // ============================================================
@@ -1429,6 +1441,13 @@ function populateSettingsFromStatus(data) {
   }
 
   setOptimizerState(!!data.use_prompt_optimizer);
+
+  if (toggleToolPrefilter) {
+    const pf = !!data.use_tool_prefilter;
+    toggleToolPrefilter.classList.toggle('on', pf);
+    if (toggleToolPrefilterLbl) toggleToolPrefilterLbl.textContent = pf ? 'on' : 'off';
+  }
+
   applyLocalMode(!!data.local_mode);
   updateModelDisplay();
 

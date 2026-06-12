@@ -298,6 +298,7 @@ async def status():
         "use_intent_routing":      agent.use_intent_routing,
         "use_tool_compression":    agent.use_tool_compression,
         "use_code_prevalidation":  agent.use_code_prevalidation,
+        "use_tool_prefilter":      agent.use_tool_prefilter,
         "local_fallback":          config.get("local_fallback", True),
         "local_mode":              agent.local_mode,
         "primary_model":           agent.primary_model,
@@ -421,6 +422,8 @@ def _apply_config(key: str, value) -> None:
         agent.use_tool_compression = bool(value)
     elif key == "use_code_prevalidation":
         agent.use_code_prevalidation = bool(value)
+    elif key == "use_tool_prefilter":
+        agent.use_tool_prefilter = bool(value)
     elif key == "context.compression_threshold":
         task_runner._compression_threshold = int(value)
     # Phase 3h — per-model token caps

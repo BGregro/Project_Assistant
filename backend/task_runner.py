@@ -197,6 +197,13 @@ class TaskRunner:
                     await send_event("task_stopped", {"reason": "error", "error": msg})
                     return msg
 
+                # ── 0. Sanitize message history ────────────────────────
+                # Repair any orphaned tool_use blocks left by a rate-limit
+                # or network interruption on a previous iteration. Runs every
+                # iteration — including retries — so the history is always
+                # valid before the next API call.
+                messages = self._sanitize_messages(messages)
+
                 # ── 1. Check for cancellation ──────────────────────────
                 if self._cancel_event.is_set():
                     logger.info("[task_runner] Task cancelled by user.")
@@ -513,6 +520,65 @@ class TaskRunner:
             "error":  "Unexpected stop_reason from Claude.",
         })
         return "Task ended unexpectedly."
+
+    # ------------------------------------------------------------------
+    # Pre-flight history sanitizer
+    # ------------------------------------------------------------------
+
+    def _sanitize_messages(self, messages: list) -> list:
+        """
+        Pre-flight check: ensure no orphaned tool_use blocks exist in the message
+        history before sending to the Anthropic API.
+
+        When a rate-limit (429) or network error interrupts a task mid-response,
+        the last assistant message may contain tool_use blocks without a matching
+        user tool_result message. Every subsequent API call will fail with 400
+        until this is corrected.
+
+        Fix: if the last assistant message has tool_use blocks and is NOT followed
+        by a user tool_result message, inject synthetic tool_result messages so the
+        history is valid again.
+        """
+        if not messages:
+            return messages
+
+        last = messages[-1]
+        if last.get("role") != "assistant":
+            return messages
+
+        content = last.get("content", [])
+        if not isinstance(content, list):
+            return messages
+
+        tool_use_blocks = [
+            b for b in content
+            if (isinstance(b, dict) and b.get("type") == "tool_use")
+            or (hasattr(b, "type") and b.type == "tool_use")
+        ]
+
+        if not tool_use_blocks:
+            return messages
+
+        # Orphaned tool_use detected — inject synthetic error results
+        logger.warning(
+            f"[task_runner] Detected {len(tool_use_blocks)} orphaned tool_use block(s) "
+            "from interrupted request — injecting synthetic tool_results to repair history."
+        )
+        synthetic_results = []
+        for b in tool_use_blocks:
+            tool_id = b["id"] if isinstance(b, dict) else b.id
+            synthetic_results.append({
+                "type": "tool_result",
+                "tool_use_id": tool_id,
+                "content": "Tool call was interrupted by a network or rate-limit error. Please retry the operation.",
+            })
+
+        repaired = list(messages) + [{
+            "role": "user",
+            "content": synthetic_results,
+        }]
+        logger.info(f"[task_runner] History repaired — injected {len(synthetic_results)} synthetic tool_result(s).")
+        return repaired
 
     # ------------------------------------------------------------------
     # Phase 3d: context compression helper

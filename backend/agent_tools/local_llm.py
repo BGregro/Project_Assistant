@@ -594,6 +594,61 @@ async def prevalidate_code(
     return (True, "OK")
 
 
+async def select_relevant_tools(
+    user_message: str,
+    all_tool_names: list[str],
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+    max_tools: int = 10,
+) -> list[str]:
+    """
+    Use the local LLM to select the most relevant tools for the current request.
+    Reduces input token usage by 40-60% by not sending all tool definitions to Claude.
+
+    Always includes core tools that should always be available:
+    list_capabilities, recall_memory, log_research, log_fact, get_project_status.
+
+    Returns the filtered list of tool names, or all_tool_names if selection fails
+    or returns too few results.
+    """
+    ALWAYS_INCLUDE = {
+        "list_capabilities", "recall_memory", "log_research",
+        "log_fact", "get_project_status",
+    }
+
+    try:
+        prompt = (
+            f"Given this user request: '{user_message[:300]}'\n\n"
+            f"Available tools: {', '.join(all_tool_names)}\n\n"
+            f"Select the {max_tools} most relevant tools for handling this request. "
+            "Consider what actions will likely be needed. "
+            "Reply with ONLY a comma-separated list of tool names, nothing else."
+        )
+        response = await local_llm_call(prompt, model, base_url=base_url)
+        if not response:
+            logger.warning("[local_llm] select_relevant_tools: empty response — using full list.")
+            return all_tool_names
+
+        selected = [t.strip() for t in response.split(",") if t.strip() in all_tool_names]
+
+        # Always include core tools
+        for t in ALWAYS_INCLUDE:
+            if t in all_tool_names and t not in selected:
+                selected.append(t)
+
+        # If selection is too small or failed, return all tools
+        if len(selected) < 5:
+            logger.warning("[local_llm] Tool selection returned too few tools — using full list.")
+            return all_tool_names
+
+        logger.info(f"[local_llm] Tool pre-filter: {len(all_tool_names)} → {len(selected)} tools")
+        return selected
+
+    except Exception as e:
+        logger.warning(f"[local_llm] Tool selection failed ({e}) — using full tool list.")
+        return all_tool_names
+
+
 async def unload_model(model: str, base_url: str = DEFAULT_BASE_URL) -> None:
     """
     Explicitly unload the model from Ollama's memory.

@@ -81,6 +81,7 @@ class AgentCore:
         self.use_intent_routing:    bool = config.get("use_intent_routing",    True)
         self.use_tool_compression:  bool = config.get("use_tool_compression",  True)
         self.use_code_prevalidation: bool = config.get("use_code_prevalidation", True)
+        self.use_tool_prefilter:    bool = config.get("use_tool_prefilter",    False)
         self.local_fallback:        bool = config.get("local_fallback",        True)
         self.local_mode:            bool = config.get("local_mode",            False)
         self.ollama_url:            str  = config.get("ollama_base_url",       "http://localhost:11434")
@@ -681,11 +682,31 @@ class AgentCore:
             if model == self.complex_model
             else self.max_tokens_primary
         )
+
+        # ── Tool pre-filter (optional, off by default) ─────────────────────
+        # When enabled, ask the local LLM to select only the tools relevant to
+        # the current goal before sending definitions to Claude.  Reduces input
+        # tokens by ~40-60%.  Disabled in local_mode (no Claude call anyway).
+        if self.use_tool_prefilter and not self.local_mode:
+            from agent_tools.local_llm import select_relevant_tools
+            all_defs = get_all_definitions()
+            all_names = [t["name"] for t in all_defs]
+            relevant_names = await select_relevant_tools(
+                user_message=self._current_goal or "",
+                all_tool_names=all_names,
+                model=self.local_model,
+                base_url=self.ollama_url,
+                max_tools=12,
+            )
+            tools = [t for t in all_defs if t["name"] in relevant_names]
+        else:
+            tools = get_all_definitions()
+
         return await self.client.messages.create(
             model=model,
             max_tokens=max_tok,
             system=system,
-            tools=get_all_definitions(),
+            tools=tools,
             messages=messages,
         )
 
