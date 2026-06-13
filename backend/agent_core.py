@@ -74,6 +74,117 @@ logger = logging.getLogger(__name__)
 # Tools whose output is worth compressing (verbose by nature)
 _COMPRESSIBLE_TOOLS = {"search_web", "fetch_page", "get_system_info", "list_directory"}
 
+# ---------------------------------------------------------------------------
+# Improvement 1: Tiered system prompt
+#
+# Each entry maps a logical topic to (a) the regex keywords that trigger it
+# and (b) the prompt text to append.  Sections are matched against the
+# user's raw message (case-insensitive).  The base prompt is always sent;
+# only relevant sections are appended so the total stays under 2 000 tokens.
+#
+# Priority order = dict insertion order.  When the cap is about to be
+# exceeded, lower-priority (later) sections are skipped.
+# ---------------------------------------------------------------------------
+
+# ~4 chars per token is a conservative estimate good enough for budgeting.
+_TOKEN_ESTIMATE_CHARS = 4
+_SYSTEM_PROMPT_TOKEN_CAP = 2000
+
+SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
+    "software_dev": {
+        "keywords": [
+            r"build", r"scaffold", r"implement", r"project", r"develop",
+            r"write.*script", r"create.*app", r"make.*tool", r"patch.*file",
+        ],
+        "content": (
+            "\n\nSOFTWARE DEVELOPMENT WORKFLOW: For any multi-file project: "
+            "(1) Call scaffold_project first — never skip this. Wait for user approval. "
+            "(2) Call get_project_status to see what's pending. "
+            "(3) Implement the next_file shown in status, save it to outputs/{project_name}/{filename}. "
+            "(4) Call mark_file_complete after each file. "
+            "(5) Call get_project_status again to confirm progress and get the next file. "
+            "(6) Repeat steps 3-5 until ready_to_test is True. "
+            "(7) Call run_project_test — if it fails, read stderr carefully, fix the specific "
+            "file that caused the error, and run_project_test again. Iterate until passed is True. "
+            "When calling run_project_test, never pass a full path as the command — "
+            "use only the filename or short path relative to the project directory, "
+            "e.g. 'python main.py' not 'python outputs/calc_cli/main.py'. "
+            "The test runs inside the project directory already. "
+            "(8) Report completion with a summary of what was built. "
+            "Always use this exact sequence — it ensures nothing is missed and the project "
+            "works before you declare it done. "
+            "When editing an existing file, prefer patch_file over write_file — "
+            "it modifies only the specified lines and preserves the rest. "
+            "If a project requires packages not yet installed, call install_package for each "
+            "dependency before running the project."
+        ),
+    },
+    "github": {
+        "keywords": [r"github", r"repo", r"repository", r"push", r"commit", r"issue"],
+        "content": (
+            "\n\nGITHUB WORKFLOW: After completing and testing a project successfully, "
+            "offer to push it to GitHub. If the user agrees: "
+            "(1) Call github_create_repo using the project name as the repo name. "
+            "(2) Call github_push_file for each file in implementation_order, "
+            "reading each file from outputs/{project_name}/ with read_file first. "
+            "(3) After all files are pushed, update scaffold.json to set github_repo. "
+            "Before creating a repo, call github_list_repos to check for duplicates."
+        ),
+    },
+    "research": {
+        "keywords": [r"research", r"find", r"search", r"investigate", r"analyze", r"compare"],
+        "content": (
+            "\n\nRESEARCH: For high-level research goals, use deep_research first to get a "
+            "structured plan. Then follow the plan: search each sub-question, fetch relevant "
+            "pages, evaluate findings, log each angle with log_research, and produce a final "
+            "ranked report saved as a .md file. Always read the user profile before research "
+            "tasks that depend on personal fit. After any information gathering, call "
+            "log_research before sending your final answer."
+        ),
+    },
+    "memory": {
+        "keywords": [r"remember", r"recall", r"log", r"save.*finding", r"past.*task"],
+        "content": (
+            "\n\nMEMORY: After completing any research task you MUST call log_research. "
+            "After learning any specific fact about the user or their system, call log_fact. "
+            "Use recall_memory to retrieve past tasks and facts before starting a new task "
+            "that might overlap with prior work."
+        ),
+    },
+    "browser": {
+        "keywords": [r"browser", r"open.*url", r"visit", r"website", r"navigate", r"screenshot"],
+        "content": (
+            "\n\nBROWSER: browser_open(url) navigates to a page in headless Chromium, "
+            "browser_read(selector) extracts visible text, browser_screenshot(filename) saves "
+            "a PNG to outputs/. Use browser tools when fetch_page returns empty content — many "
+            "modern sites require JavaScript. Always call browser_open before browser_read. "
+            "Use 'body' as the default selector, or more specific CSS selectors for targeted "
+            "extraction (e.g. 'article', 'main', '#content')."
+        ),
+    },
+    "credentials": {
+        "keywords": [r"credential", r"api.?key", r"token", r"store_credential", r"secret"],
+        "content": (
+            "\n\nCREDENTIAL MANAGER: Use store_credential(service, value) to save API keys "
+            "securely — never ask the user to paste keys directly into chat. "
+            "Use get_credential(service) to retrieve a stored key. "
+            "Use list_credentials() to see what is already stored before asking the user."
+        ),
+    },
+    "youtube": {
+        "keywords": [r"youtube", r"video", r"shorts", r"channel", r"trending", r"upload"],
+        "content": (
+            "\n\nYOUTUBE: youtube_search finds videos/channels/playlists by keyword. "
+            "youtube_get_video_stats returns views, likes, duration. "
+            "youtube_get_trending shows popular videos by region — use for content strategy. "
+            "youtube_get_video_comments reads top comments for sentiment analysis. "
+            "youtube_get_channel_info returns subscriber count and total views. "
+            "All YouTube tools require an API key stored as 'youtube_api_key' via "
+            "store_credential — call list_credentials first to check."
+        ),
+    },
+}
+
 
 class AgentCore:
     def __init__(self, config: dict) -> None:
@@ -136,89 +247,20 @@ class AgentCore:
             "is restricted or the code failed. Acknowledge the denial and ask if they "
             "want to approve the execution or try a different approach.\n"
             "5. If a run fails (non-zero exit code or stderr), read the error, fix the "
-            "code, and call execute_code again. Do not give up after one failure."
+            "code, and call execute_code again. Do not give up after one failure.\n\n"
             "You can write and register new tools using write_tool and reload_tool. "
             "Tools must be written as Python async functions following this template: "
             "async def tool_name(param: str) -> dict — always return a dict with at least "
             "a 'success' key. Include a register_<toolname>_tools() function that calls "
-            "register_tool() from agent_tools (import: from agent_tools import register_tool). "
+            "register_tool() from agent_tools. "
             "After writing a tool with write_tool, always call reload_tool to activate it. "
             "New tools are saved to agent_tools/generated/ and persist across restarts. "
-            "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/."
-            "\n\nIMPORTANT: After completing any research task (web search, page fetching, "
-            "or information gathering), you MUST call log_research before sending your final "
-            "answer. After learning any specific fact about the user, their system, or their "
-            "preferences, you MUST call log_fact. Never end a research task without logging "
-            "findings — this is how you build persistent knowledge across sessions."
-            "\n\nFor high-level research goals (finding opportunities, comparing options, "
-            "investigating topics), use the deep_research tool first to get a structured "
-            "research plan. Then follow the plan: search each sub-question, fetch relevant "
-            "pages, evaluate findings against the criteria, log each angle with log_research, "
-            "and produce a final ranked report saved as a .md file. "
-            "Always read the user profile before research tasks that depend on personal fit."
-            "\n\nYou have browser tools for interacting with JavaScript-rendered web pages: "
-            "browser_open(url) navigates to a page in a real Chromium browser, "
-            "browser_read(selector) extracts visible text from it, and "
-            "browser_screenshot(filename) saves a PNG of the current page to outputs/. "
-            "Use browser tools when fetch_page returns empty or incomplete content — many "
-            "modern sites require JavaScript execution and will return nothing useful to a "
-            "plain HTTP fetch. Always call browser_open before browser_read. Use 'body' as "
-            "the default selector for full page text, or more specific CSS selectors for "
-            "targeted extraction (e.g. 'article', 'main', '#content')."
-            "\n\nSave all generated files (reports, scripts, data, screenshots) to the "
+            "agent_core.py and main.py are read-only to you — only modify files in agent_tools/generated/.\n\n"
+            "Save all generated files (reports, scripts, data, screenshots) to the "
             "outputs/ directory in the project root, not to backend/ or frontend/. "
             "Use write_file with a path like 'outputs/report.md' for text files. "
             "Use list_outputs() at the start of any task that might produce files, "
-            "to check what already exists and avoid duplicating work. "
-            "If a report was already generated in a previous session, read it with "
-            "read_file before generating a new one."
-            "\n\nSOFTWARE DEVELOPMENT WORKFLOW: For any multi-file project: "
-            "(1) Call scaffold_project first — never skip this. Wait for user approval. "
-            "(2) Call get_project_status to see what's pending. "
-            "(3) Implement the next_file shown in status, save it to outputs/{project_name}/{filename}. "
-            "(4) Call mark_file_complete after each file. "
-            "(5) Call get_project_status again to confirm progress and get the next file. "
-            "(6) Repeat steps 3-5 until ready_to_test is True. "
-            "(7) Call run_project_test — if it fails, read stderr carefully, fix the specific "
-            "file that caused the error, and run_project_test again. Iterate until passed is True. "
-            "When calling run_project_test, never pass a full path as the command — "
-            "use only the filename or short path relative to the project directory, "
-            "e.g. 'python main.py' not 'python outputs/calc_cli/main.py'. "
-            "The test runs inside the project directory already. "
-            "(8) Report completion with a summary of what was built. "
-            "Always use this exact sequence — it ensures nothing is missed and the project "
-            "works before you declare it done."
-            "\n\nWhen editing an existing file, prefer patch_file over write_file — "
-            "it modifies only the specified lines and preserves the rest. "
-            "Use analyze_file first to see line counts, then read_file to find the exact "
-            "lines to change, then patch_file to apply the edit. "
-            "If a project requires packages not yet installed, call install_package for each "
-            "dependency before running the project. Check scaffold dependencies first."
-            "\n\nGITHUB WORKFLOW: You have GitHub tools for managing code repositories. "
-            "After completing and testing a project successfully (run_project_test passes), "
-            "offer to push it to GitHub. If the user agrees: "
-            "(1) Call github_create_repo using the project name as the repo name "
-            "and the scaffold description as the repo description. "
-            "(2) Call github_push_file for each file in implementation_order from the scaffold, "
-            "reading each file from outputs/{project_name}/ with read_file first. "
-            "(3) After all files are pushed, update scaffold.json to set github_repo "
-            "to the repo's full_name (e.g. 'username/project-name'). "
-            "For research reports and other valuable outputs, you can also push them to a "
-            "dedicated notes or research repo if the user has one. "
-            "Before creating a repo, call github_list_repos to check if one already exists "
-            "for this project — avoid creating duplicates."
-            "\n\nCREDENTIAL MANAGER: Use store_credential(service, value) to save API keys "
-            "securely — never ask the user to paste keys directly into the chat. "
-            "Use get_credential(service) to retrieve a stored key when a tool needs it. "
-            "Use list_credentials() to see what is already stored before asking the user "
-            "to provide a key. "
-            "When storing a credential, the value comes from the user typing it into the "
-            "permission approval modal — you call store_credential with the service name "
-            "and the user supplies the value at approval time. "
-            "Example: to store a YouTube API key, call "
-            "store_credential('youtube_api_key', value) where value is whatever the user "
-            "provides. Service names must be alphanumeric with underscores/hyphens only "
-            "(e.g. youtube_api_key, openai_key, slack_token)."
+            "to check what already exists and avoid duplicating work."
         )
 
         # Phase 3g: Always inject user profile into the base system prompt at
@@ -240,6 +282,54 @@ class AgentCore:
             except Exception as _e:
                 import logging as _logging
                 _logging.getLogger(__name__).warning(f"[agent] Could not load user profile: {_e}")
+
+    # ------------------------------------------------------------------
+    # Improvement 1: Tiered system prompt builder
+    # ------------------------------------------------------------------
+
+    def _build_system_prompt(self, message: str) -> str:
+        """
+        Start with the always-sent base prompt and append only the contextual
+        sections whose keywords match the user's message.
+
+        Token budget: base + sections must stay under _SYSTEM_PROMPT_TOKEN_CAP.
+        If adding a section would bust the cap, it is skipped (lower-priority
+        sections, i.e. later entries in SYSTEM_PROMPT_SECTIONS, are skipped first
+        because the dict is iterated in insertion order).
+
+        Args:
+            message: The raw (or enriched) user message for this turn.
+
+        Returns:
+            The assembled system prompt string.
+        """
+        prompt = self._base_system_prompt
+        used_tokens = len(prompt) // _TOKEN_ESTIMATE_CHARS
+        selected: list[str] = []
+
+        for section_name, section in SYSTEM_PROMPT_SECTIONS.items():
+            # Check whether any keyword regex matches the message
+            matched = any(
+                re.search(kw, message, re.IGNORECASE)
+                for kw in section["keywords"]
+            )
+            if not matched:
+                continue
+
+            section_tokens = len(section["content"]) // _TOKEN_ESTIMATE_CHARS
+            if used_tokens + section_tokens > _SYSTEM_PROMPT_TOKEN_CAP:
+                logger.debug(
+                    f"[agent] System prompt cap reached — skipping section '{section_name}' "
+                    f"({section_tokens} tokens would exceed cap of {_SYSTEM_PROMPT_TOKEN_CAP})."
+                )
+                continue
+
+            prompt += section["content"]
+            used_tokens += section_tokens
+            selected.append(section_name)
+
+        logger.debug(f"[agent] System prompt sections: {selected} ({used_tokens} est. tokens)")
+        return prompt
 
     # ------------------------------------------------------------------
     # Phase 3g: Self-directed task detection
@@ -535,9 +625,9 @@ class AgentCore:
         # ----------------------------------------------------------------
         # Step 3: Build system prompt — append context summary if present
         # ----------------------------------------------------------------
-        system = self._base_system_prompt
+        system = self._build_system_prompt(user_message)
         if context_summary:
-            system = f"{self._base_system_prompt}\n\n{context_summary}"
+            system = f"{system}\n\n{context_summary}"
 
         # Phase 3g: Profile is already in _base_system_prompt (injected at init).
 
@@ -698,9 +788,9 @@ class AgentCore:
                 await send_event("prompt_optimized", None)
 
         # ── System prompt ──────────────────────────────────────────────
-        system = self._base_system_prompt
+        system = self._build_system_prompt(user_message)
         if context_summary:
-            system = f"{self._base_system_prompt}\n\n{context_summary}"
+            system = f"{system}\n\n{context_summary}"
         # Phase 3e: append the approved plan (empty string = no change)
         if plan_system_addon:
             system = system + plan_system_addon

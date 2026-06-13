@@ -36,6 +36,17 @@ from . import register_tool
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Improvement 2: File content cache
+# Keyed by absolute path string → (mtime: float, content: str).
+# Avoids re-reading unchanged files during long multi-file tasks — the most
+# common case being agent_core reading the same source file twice in a row
+# (once to understand it, once to verify the patch).
+# ---------------------------------------------------------------------------
+
+_file_cache: dict[str, tuple[float, str]] = {}  # path → (mtime, content)
+_FILE_CACHE_MAX = 20  # max entries; evict oldest (insertion-order) on overflow
+
+# ---------------------------------------------------------------------------
 # Config access — loaded lazily so registration order doesn't matter
 # ---------------------------------------------------------------------------
 
@@ -178,14 +189,39 @@ async def read_file(path: str) -> dict[str, Any]:
         return {"success": False, "error": f"Path exists but is not a file: {p}"}
 
     try:
+        mtime = p.stat().st_mtime
+
+        # ── Cache lookup ──────────────────────────────────────────────────
+        cached = _file_cache.get(str(p))
+        if cached and cached[0] == mtime:
+            logger.debug(f"[filesystem] Cache hit: {p.name}")
+            return {
+                "success":    True,
+                "path":       str(p),
+                "content":    cached[1],
+                "size_bytes": len(cached[1].encode("utf-8")),
+                "cached":     True,
+            }
+
+        # ── Cache miss: read from disk ────────────────────────────────────
         content = p.read_text(encoding="utf-8", errors="replace")
         size = p.stat().st_size
         logger.info(f"[filesystem] read_file OK: {size} bytes from {p}")
+
+        # Store in cache — evict oldest entry (dict preserves insertion order
+        # in Python 3.7+, so next(iter(...)) is the oldest key).
+        if len(_file_cache) >= _FILE_CACHE_MAX:
+            oldest_key = next(iter(_file_cache))
+            del _file_cache[oldest_key]
+            logger.debug(f"[filesystem] Cache evicted oldest entry: {oldest_key}")
+        _file_cache[str(p)] = (mtime, content)
+
         return {
-            "success": True,
-            "path": str(p),
-            "content": content,
+            "success":    True,
+            "path":       str(p),
+            "content":    content,
             "size_bytes": size,
+            "cached":     False,
         }
     except PermissionError:
         return {"success": False, "error": f"Permission denied: {p}"}
@@ -225,6 +261,9 @@ async def write_file(path: str, content: str, mode: str = "overwrite") -> dict[s
 
         bytes_written = len(content.encode("utf-8"))
         logger.info(f"[filesystem] write_file OK: {bytes_written} bytes to {p}")
+
+        # Invalidate cache entry — file content has changed.
+        _file_cache.pop(str(p), None)
 
         result: dict[str, Any] = {
             "success": True,
@@ -521,6 +560,9 @@ async def patch_file(path: str, start_line: int, end_line: int, new_content: str
         return {"success": False, "error": f"Permission denied writing: {p}"}
     except Exception as e:
         return {"success": False, "error": f"Could not write file: {e}"}
+
+    # Invalidate cache entry — file content has changed.
+    _file_cache.pop(str(p), None)
 
     lines_replaced = end_line - start_line + 1
     lines_written  = len(replacement_raw)

@@ -80,6 +80,7 @@ from agent_tools.project_manager import register_project_manager_tools      # Ph
 from agent_tools.project_tester import register_project_tester_tools        # Phase 4b/4c
 from agent_tools.github_tool import register_github_tools                   # Phase 5a
 from agent_tools.credentials import register_credential_tools               # Phase 5b
+from agent_tools.youtube_tool import register_youtube_tools                 # Phase 5c
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -148,6 +149,12 @@ try:
 except Exception as _cred_err:
     logger.warning(f"[startup] Credential tool registration failed (non-fatal): {_cred_err}")
 
+# Phase 5c — YouTube Data API integration
+try:
+    register_youtube_tools()
+except Exception as _yt_err:
+    logger.warning(f"[startup] YouTube tool registration failed (non-fatal): {_yt_err}")
+
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
     try:
@@ -177,7 +184,9 @@ logger.info(
     "project_scaffold (scaffold_project), "
     f"github (github_list_repos, github_create_repo, github_push_file, "
     f"github_read_file, github_list_files, github_create_issue), "
-    f"credentials (store_credential, get_credential, list_credentials)"
+    f"credentials (store_credential, get_credential, list_credentials), "
+    f"youtube (youtube_search, youtube_get_video_stats, youtube_get_trending, "
+    f"youtube_get_video_comments, youtube_get_channel_info, youtube_search_captions)"
     f"{_browser_log}"
 )
 
