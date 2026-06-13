@@ -1,11 +1,14 @@
 """
-browser.py  —  Phase 3i: Read-Only Browser Automation
+browser.py  —  Phase 3i + Phase 5d: Browser Automation (Read + Write)
 
-Registers three tools:
+Registers six tools:
 
-  browser_open(url)                 — navigate to a URL
-  browser_read(selector, max_chars) — extract visible text from the current page
-  browser_screenshot(filename)      — save a PNG of the current page
+  browser_open(url)                       — navigate to a URL
+  browser_read(selector, max_chars)       — extract visible text from the current page
+  browser_screenshot(filename)            — save a PNG of the current page
+  browser_click(selector, wait_after_ms)  — click an element (write action, requires approval)
+  browser_fill(selector, value, ...)      — fill an input field  (write action, requires approval)
+  browser_get_url()                       — return the current URL and page title
 
 Uses Playwright async API with a module-level singleton browser context so the
 browser persists (and stays warm) across multiple tool calls within a session.
@@ -237,6 +240,152 @@ async def _browser_screenshot(filename: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Phase 5d — Write-mode tool handlers
+# ---------------------------------------------------------------------------
+
+async def _browser_click(selector: str, wait_after_ms: int = 1000) -> dict:
+    """
+    Click the element matching *selector* and wait for page reactions.
+
+    This is a destructive (write) action — it modifies page state and may
+    trigger navigation, form submission, or other side effects.
+
+    Args:
+        selector:      CSS or text selector, e.g. 'button[type=submit]' or
+                       'button:has-text("Login")'.  Call browser_read first
+                       to inspect the page structure.
+        wait_after_ms: Milliseconds to pause after the click so the page can
+                       react (default: 1000).
+
+    Returns a dict:
+        success     — True on success
+        selector    — the selector that was used
+        url_after   — the URL after the click (may differ if navigation occurred)
+        title_after — the page title after the click
+        error       — present only on failure
+    """
+    try:
+        page = await _get_page()
+        # Wait for the element to be visible before attempting the click
+        await page.wait_for_selector(selector, timeout=5000)
+        await page.click(selector)
+        # Give the page time to react (animations, XHR, navigation, etc.)
+        await page.wait_for_timeout(wait_after_ms)
+        url_after   = page.url
+        title_after = await page.title()
+        logger.info(
+            f"[browser_click] Clicked {selector!r} → url={url_after!r}"
+        )
+        return {
+            "success":     True,
+            "selector":    selector,
+            "url_after":   url_after,
+            "title_after": title_after,
+        }
+    except Exception as exc:
+        # Distinguish Playwright TimeoutError from other failures for a more
+        # actionable error message.
+        exc_type = type(exc).__name__
+        if "TimeoutError" in exc_type or "Timeout" in exc_type:
+            msg = (
+                f"Element not found: '{selector}'. "
+                "Use browser_read first to inspect the page structure."
+            )
+        else:
+            msg = str(exc)
+        logger.warning(f"[browser_click] Failed on selector={selector!r}: {msg}")
+        return {"success": False, "error": msg}
+
+
+async def _browser_fill(
+    selector: str,
+    value: str,
+    press_enter: bool = False,
+) -> dict:
+    """
+    Clear and fill the input element matching *selector* with *value*.
+
+    Security note: *value* is intentionally never logged, returned verbatim,
+    or included in any WebSocket event — it may contain passwords or API keys.
+    Only the selector and character count are recorded.
+
+    This is a destructive (write) action.
+
+    Args:
+        selector:    CSS selector for the target <input> or <textarea>,
+                     e.g. 'input[name="username"]' or '#search'.
+        value:       The text to enter.  Kept out of all logs and return values.
+        press_enter: If True, dispatch an Enter keypress after filling the field
+                     (useful for search boxes or inline-submit forms).
+
+    Returns a dict:
+        success       — True on success
+        selector      — the selector that was used
+        chars_entered — number of characters written (length of value)
+        pressed_enter — whether Enter was pressed
+        error         — present only on failure
+    """
+    try:
+        page = await _get_page()
+        await page.wait_for_selector(selector, timeout=5000)
+        # page.fill() clears the field before typing — safer than page.type()
+        await page.fill(selector, value)
+        if press_enter:
+            await page.keyboard.press("Enter")
+        # Log selector + char count only; never log the value itself
+        logger.info(
+            f"[browser_fill] Filled {selector!r} "
+            f"({len(value)} chars, press_enter={press_enter})"
+        )
+        return {
+            "success":       True,
+            "selector":      selector,
+            "chars_entered": len(value),
+            "pressed_enter": press_enter,
+        }
+    except Exception as exc:
+        exc_type = type(exc).__name__
+        if "TimeoutError" in exc_type or "Timeout" in exc_type:
+            msg = f"Input element not found: '{selector}'."
+        else:
+            msg = str(exc)
+        # Ensure value never appears in the log even in error paths
+        logger.warning(f"[browser_fill] Failed on selector={selector!r}: {msg}")
+        return {"success": False, "error": msg}
+
+
+async def _browser_get_url() -> dict:
+    """
+    Return the current URL and page title without modifying page state.
+
+    Useful for confirming navigation outcomes after browser_click or
+    browser_fill, or for checking where the browser currently is before
+    deciding the next action.
+
+    Returns a dict:
+        success — True always
+        url     — current URL, or empty string if no page is open
+        title   — current page title, or empty string if no page is open
+        note    — present only when no page has been opened yet
+    """
+    global _page
+    if _page is None:
+        return {
+            "success": True,
+            "url":     "",
+            "title":   "",
+            "note":    "No page open yet. Call browser_open first.",
+        }
+    try:
+        url   = _page.url
+        title = await _page.title()
+        logger.info(f"[browser_get_url] url={url!r} title={title!r}")
+        return {"success": True, "url": url, "title": title}
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
 # Shutdown helper (not a tool)
 # ---------------------------------------------------------------------------
 
@@ -384,5 +533,96 @@ def register_browser_tools() -> None:
         is_destructive=True,   # Writes a file
     )
 
+    register_tool(
+        name="browser_click",
+        description=(
+            "Click an element on the current browser page. "
+            "Accepts CSS selectors (e.g. 'button[type=submit]', '#login-btn') "
+            "or Playwright text selectors (e.g. 'button:has-text(\"Submit\")'). "
+            "Always call browser_read first to understand the page structure "
+            "before deciding which selector to use. "
+            "This is a write action — the user must approve it."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": (
+                        "CSS or text selector for the element to click, "
+                        "e.g. 'button:has-text(\"Login\")' or 'a#submit'."
+                    ),
+                },
+                "wait_after_ms": {
+                    "type": "integer",
+                    "description": (
+                        "Milliseconds to wait after clicking for the page to react. "
+                        "Default: 1000. Increase for slow-loading pages or animations."
+                    ),
+                    "default": 1000,
+                },
+            },
+            "required": ["selector"],
+        },
+        handler=_browser_click,
+        is_destructive=True,   # Modifies page state; requires user approval
+    )
+
+    register_tool(
+        name="browser_fill",
+        description=(
+            "Clear and fill an input field or textarea on the current browser page. "
+            "Set press_enter=True to submit a form directly after filling. "
+            "The value is never logged or exposed — safe for passwords and API keys. "
+            "This is a write action — the user must approve it."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": (
+                        "CSS selector for the target input/textarea, "
+                        "e.g. 'input[name=\"username\"]' or '#search-box'."
+                    ),
+                },
+                "value": {
+                    "type": "string",
+                    "description": "The text to enter into the field.",
+                },
+                "press_enter": {
+                    "type": "boolean",
+                    "description": (
+                        "If true, press Enter after filling — useful for search boxes "
+                        "or forms that submit on Enter. Default: false."
+                    ),
+                    "default": False,
+                },
+            },
+            "required": ["selector", "value"],
+        },
+        handler=_browser_fill,
+        is_destructive=True,   # Modifies page state; requires user approval
+    )
+
+    register_tool(
+        name="browser_get_url",
+        description=(
+            "Return the current URL and page title of the open browser page. "
+            "Use this to confirm where the browser is after a navigation, click, "
+            "or form submission. Returns empty strings if no page has been opened yet."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        handler=_browser_get_url,
+        is_destructive=False,   # Read-only; no approval needed
+    )
+
     browser_tools_registered = True
-    logger.info("[browser] Registered: browser_open, browser_read, browser_screenshot")
+    logger.info(
+        "[browser] Registered: browser_open, browser_read, browser_screenshot, "
+        "browser_click, browser_fill, browser_get_url"
+    )

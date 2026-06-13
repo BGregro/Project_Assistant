@@ -152,14 +152,21 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
         ),
     },
     "browser": {
-        "keywords": [r"browser", r"open.*url", r"visit", r"website", r"navigate", r"screenshot"],
+        "keywords": [r"browser", r"open.*url", r"visit", r"website", r"navigate", r"screenshot",
+                     r"click", r"fill", r"form", r"login", r"submit"],
         "content": (
             "\n\nBROWSER: browser_open(url) navigates to a page in headless Chromium, "
             "browser_read(selector) extracts visible text, browser_screenshot(filename) saves "
             "a PNG to outputs/. Use browser tools when fetch_page returns empty content — many "
             "modern sites require JavaScript. Always call browser_open before browser_read. "
             "Use 'body' as the default selector, or more specific CSS selectors for targeted "
-            "extraction (e.g. 'article', 'main', '#content')."
+            "extraction (e.g. 'article', 'main', '#content'). "
+            "browser_click(selector) clicks an element — use CSS selectors or text selectors "
+            "like 'button:has-text(\"Submit\")'. browser_fill(selector, value) fills an input "
+            "field — set press_enter=True to submit forms directly. "
+            "browser_get_url() returns the current page URL and title. "
+            "Always call browser_read before clicking to understand the page structure. "
+            "Write actions (click, fill) require user approval."
         ),
     },
     "credentials": {
