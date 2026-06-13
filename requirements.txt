@@ -11,3 +11,5 @@ psutil>=5.9.0
 playwright>=1.40.0
 # Phase 5b — Fernet symmetric encryption for credential manager
 cryptography>=41.0.0
+# Phase 5e — APScheduler for recurring/scheduled tasks
+apscheduler>=3.10.0

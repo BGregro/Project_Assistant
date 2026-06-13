@@ -55,6 +55,28 @@ def get_all_definitions() -> list[dict]:
     return [entry["definition"] for entry in _registry.values()]
 
 
+def get_all_definitions_for_prefilter() -> list[dict]:
+    """
+    Return tool definitions in a compact format for the local LLM pre-filter.
+
+    Unlike get_all_definitions() which returns Anthropic-formatted dicts with
+    'input_schema', this returns dicts with a 'parameters' key so that
+    local_llm.select_relevant_tools() can describe each tool without sending
+    the full Anthropic schema to a local model.
+
+    Each entry has: name, description, parameters (the raw input_schema dict).
+    Called by local_llm.select_relevant_tools() and capabilities.py.
+    """
+    return [
+        {
+            "name":        entry["definition"]["name"],
+            "description": entry["definition"]["description"],
+            "parameters":  entry["definition"]["input_schema"],
+        }
+        for entry in _registry.values()
+    ]
+
+
 def get_handler(name: str) -> Callable | None:
     """Return the async handler for a named tool, or None if unrecognised."""
     entry = _registry.get(name)
@@ -68,5 +90,5 @@ def is_destructive(name: str) -> bool:
 
 
 def list_tools() -> list[str]:
-    """Return names of all registered tools (useful for logging/debug)."""
+    """Return names of all registered tools (useful for logging/debug and pre-filter)."""
     return list(_registry.keys())

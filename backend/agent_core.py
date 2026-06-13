@@ -190,6 +190,27 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "store_credential — call list_credentials first to check."
         ),
     },
+    "scheduler": {
+        "keywords": [
+            r"schedule", r"recurring", r"every day", r"every week", r"every hour",
+            r"every minute", r"automatically", r"remind", r"periodic", r"once at",
+            r"daily", r"weekly", r"hourly",
+        ],
+        "content": (
+            "\n\nSCHEDULER: Use schedule_task(task_id, message, schedule) to run tasks "
+            "automatically at a given time or interval. "
+            "task_id is a short unique name (e.g. 'weekly_research'). "
+            "message is what the agent will do when triggered (same as if you typed it). "
+            "schedule examples: 'every hour', 'every 30 minutes', 'every day at 09:00', "
+            "'every monday at 08:00', 'once at 2026-07-15 10:00'. "
+            "Use list_scheduled_tasks() to see what is currently scheduled. "
+            "Use cancel_scheduled_task(task_id) to remove a scheduled task. "
+            "Scheduled tasks run even when you are not chatting — they broadcast updates "
+            "to all active WebSocket connections. "
+            "Always confirm the schedule string with the user before calling schedule_task, "
+            "since recurring tasks consume API tokens autonomously."
+        ),
+    },
 }
 
 
@@ -855,6 +876,11 @@ class AgentCore:
                             Used by Phase 3d intent routing to invoke claude-sonnet-4-6
                             for COMPLEX intents without permanently changing the default.
         """
+        # Fix 1: Repair any orphaned tool_use blocks before every API call.
+        # This guards _run_claude() (the bounded fallback loop) in addition to
+        # TaskRunner, which calls this method directly.
+        messages = self._sanitize_messages(messages)
+
         model = model_override if model_override else self.primary_model
         # Use the larger cap when running the complex model (sonnet) — research and
         # planning tasks frequently generate more than 4096 tokens in a single turn.
@@ -1181,6 +1207,63 @@ class AgentCore:
         msg = "Could not reach Claude API and local fallback is unavailable."
         await send_event("error", {"text": msg})
         return msg
+
+    # ------------------------------------------------------------------
+    # Fix 1: Pre-flight history sanitizer (moved here from TaskRunner so
+    # _run_claude_once can use it too — runs before every API call).
+    # TaskRunner.run_task() now delegates to this method instead of its
+    # own copy, keeping the repair logic in one place.
+    # ------------------------------------------------------------------
+
+    def _sanitize_messages(self, messages: list) -> list:
+        """
+        Pre-flight check before every Anthropic API call.
+
+        If the last assistant message contains tool_use blocks with no following
+        tool_result message (orphaned — caused by 429/network errors mid-response),
+        inject synthetic tool_result messages so the API doesn't return 400.
+
+        Handles both live SDK objects (block.type attribute) and plain dict entries
+        so it works in both the bounded loop (_run_claude) and TaskRunner.run_task().
+        """
+        if not messages:
+            return messages
+
+        last = messages[-1]
+        if last.get("role") != "assistant":
+            return messages
+
+        content = last.get("content", [])
+        if not isinstance(content, list):
+            return messages
+
+        tool_use_blocks = [
+            b for b in content
+            if (isinstance(b, dict) and b.get("type") == "tool_use")
+            or (hasattr(b, "type") and b.type == "tool_use")
+        ]
+
+        if not tool_use_blocks:
+            return messages
+
+        logger.warning(
+            f"[agent] Detected {len(tool_use_blocks)} orphaned tool_use block(s) "
+            "— injecting synthetic tool_results to repair history."
+        )
+
+        synthetic = [
+            {
+                "type": "tool_result",
+                "tool_use_id": (b["id"] if isinstance(b, dict) else b.id),
+                "content": (
+                    "Tool call was interrupted by a rate-limit or network error. "
+                    "Please retry."
+                ),
+            }
+            for b in tool_use_blocks
+        ]
+
+        return list(messages) + [{"role": "user", "content": synthetic}]
 
 
 # ---------------------------------------------------------------------------

@@ -81,6 +81,8 @@ from agent_tools.project_tester import register_project_tester_tools        # Ph
 from agent_tools.github_tool import register_github_tools                   # Phase 5a
 from agent_tools.credentials import register_credential_tools               # Phase 5b
 from agent_tools.youtube_tool import register_youtube_tools                 # Phase 5c
+from task_scheduler import TaskScheduler                                    # Phase 5e
+from agent_tools.scheduler_tool import register_scheduler_tools, set_scheduler  # Phase 5e
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -154,6 +156,16 @@ try:
     register_youtube_tools()
 except Exception as _yt_err:
     logger.warning(f"[startup] YouTube tool registration failed (non-fatal): {_yt_err}")
+
+# Phase 5e — Scheduled tasks
+# set_scheduler must happen before register_scheduler_tools so the tool
+# handlers have a reference to the scheduler when first called.
+task_scheduler = TaskScheduler()
+set_scheduler(task_scheduler)
+try:
+    register_scheduler_tools()
+except Exception as _sched_err:
+    logger.warning(f"[startup] Scheduler tool registration failed (non-fatal): {_sched_err}")
 
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
@@ -257,6 +269,32 @@ set_send_event_callback(_execution_output_callback)
 logger.info("[startup] Execution streaming callback registered.")
 
 # ---------------------------------------------------------------------------
+# Phase 5e — Active WebSocket connection tracking + broadcast helper
+#
+# Scheduled tasks fire outside of any WebSocket handler, so they need a way
+# to push events to whoever is currently connected.  _active_connections holds
+# all open WebSocket objects; _broadcast iterates them and discards dead ones.
+# ---------------------------------------------------------------------------
+
+_active_connections: set = set()
+
+
+async def _broadcast(event_type: str, data: dict) -> None:
+    """
+    Send a typed event to ALL currently open WebSocket connections.
+
+    Used by the scheduler so jobs can push status updates even if the
+    user reconnected on a different socket after the schedule was registered.
+    Silently removes dead connections from the set.
+    """
+    for ws in list(_active_connections):
+        try:
+            await ws.send_json({"type": event_type, "data": data})
+        except Exception:
+            # Dead socket — remove it so we don't retry next time
+            _active_connections.discard(ws)
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -274,11 +312,24 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 @app.on_event("startup")
 async def _on_startup() -> None:
     await _autoload_generated_tools()
+    # Phase 5e — wire scheduler references and start the APScheduler.
+    # Must happen after agent + task_runner are constructed (they are module-
+    # level objects created above, so they exist by the time startup fires).
+    task_scheduler.set_refs(
+        agent=agent,
+        task_runner=task_runner,
+        send_event=_broadcast,
+        pending_confirmations=pending_confirmations,
+    )
+    task_scheduler.start()
+    logger.info("[startup] Task scheduler started.")
 
 
 @app.on_event("shutdown")
 async def _on_shutdown() -> None:
     """Unload the local model from RAM when the server process exits."""
+    # Phase 5e — stop the APScheduler before the event loop closes
+    task_scheduler.shutdown()
     await unload_model(agent.local_model, agent.ollama_url)
     logger.info("[shutdown] Local model unloaded.")
     # Phase 3i — close Playwright browser if it was used this session
@@ -566,6 +617,7 @@ pending_plans:         dict = {}   # Phase 3e — keyed by plan_id
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    _active_connections.add(websocket)     # Phase 5e — track for broadcast
     logger.info("[ws] New WebSocket connection.")
 
     history: list[dict] = load_history()
@@ -757,6 +809,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("[ws] Client disconnected.")
+        _active_connections.discard(websocket)  # Phase 5e
         _active_send_event[0] = None  # Phase 4.5 — stop streaming to dead socket
         # Unload model from RAM on disconnect — it will reload automatically
         # on the next local LLM call when a new session starts.

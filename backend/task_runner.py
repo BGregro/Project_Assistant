@@ -213,11 +213,12 @@ class TaskRunner:
                     return msg
 
                 # ── 0. Sanitize message history ────────────────────────
-                # Repair any orphaned tool_use blocks left by a rate-limit
-                # or network interruption on a previous iteration. Runs every
-                # iteration — including retries — so the history is always
-                # valid before the next API call.
-                messages = self._sanitize_messages(messages)
+                # Delegate to agent._sanitize_messages() — the canonical
+                # implementation lives on AgentCore (Fix 1) so the repair
+                # logic is defined in exactly one place.  The local copy
+                # below is kept as a fallback only for the edge case where
+                # agent is not yet wired (shouldn't happen in practice).
+                messages = agent._sanitize_messages(messages)
 
                 # ── 1. Check for cancellation ──────────────────────────
                 if self._cancel_event.is_set():
