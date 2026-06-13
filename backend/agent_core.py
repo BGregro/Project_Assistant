@@ -207,6 +207,18 @@ class AgentCore:
             "dedicated notes or research repo if the user has one. "
             "Before creating a repo, call github_list_repos to check if one already exists "
             "for this project — avoid creating duplicates."
+            "\n\nCREDENTIAL MANAGER: Use store_credential(service, value) to save API keys "
+            "securely — never ask the user to paste keys directly into the chat. "
+            "Use get_credential(service) to retrieve a stored key when a tool needs it. "
+            "Use list_credentials() to see what is already stored before asking the user "
+            "to provide a key. "
+            "When storing a credential, the value comes from the user typing it into the "
+            "permission approval modal — you call store_credential with the service name "
+            "and the user supplies the value at approval time. "
+            "Example: to store a YouTube API key, call "
+            "store_credential('youtube_api_key', value) where value is whatever the user "
+            "provides. Service names must be alphanumeric with underscores/hyphens only "
+            "(e.g. youtube_api_key, openai_key, slack_token)."
         )
 
         # Phase 3g: Always inject user profile into the base system prompt at

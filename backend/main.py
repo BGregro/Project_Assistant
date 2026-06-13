@@ -79,6 +79,7 @@ from agent_tools.project_scaffold import register_scaffold_tools            # Ph
 from agent_tools.project_manager import register_project_manager_tools      # Phase 4b
 from agent_tools.project_tester import register_project_tester_tools        # Phase 4b/4c
 from agent_tools.github_tool import register_github_tools                   # Phase 5a
+from agent_tools.credentials import register_credential_tools               # Phase 5b
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -141,6 +142,12 @@ except Exception as _gh_err:
 _github_token_status = "set" if os.getenv("GITHUB_TOKEN") else "NOT SET"
 logger.info(f"[startup] github (token: {_github_token_status})")
 
+# Phase 5b — Credential manager (Fernet-encrypted local storage)
+try:
+    register_credential_tools()
+except Exception as _cred_err:
+    logger.warning(f"[startup] Credential tool registration failed (non-fatal): {_cred_err}")
+
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
     try:
@@ -169,7 +176,9 @@ logger.info(
     "research (deep_research), "
     "project_scaffold (scaffold_project), "
     f"github (github_list_repos, github_create_repo, github_push_file, "
-    f"github_read_file, github_list_files, github_create_issue){_browser_log}"
+    f"github_read_file, github_list_files, github_create_issue), "
+    f"credentials (store_credential, get_credential, list_credentials)"
+    f"{_browser_log}"
 )
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyc
 
 # Virtual environments
 venv/
@@ -14,6 +15,7 @@ venv_*/
 # Runtime memory (don't commit conversation history or vectors)
 memory/history.json
 memory/current_task.json
+memory/credentials.json
 memory/vectors/
 
 # Outputs (agent-generated files, not source)
