@@ -116,7 +116,14 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "When editing an existing file, prefer patch_file over write_file — "
             "it modifies only the specified lines and preserves the rest. "
             "If a project requires packages not yet installed, call install_package for each "
-            "dependency before running the project."
+            "dependency before running the project. "
+            "RESUMING A PROJECT: Always call read_project_state(project_name) first — "
+            "it gives you completed files, pending files, last action, and the recommended "
+            "next step in one call. Only use get_project_status + manual file reads if "
+            "state.json does not yet exist. "
+            "MID-TASK QUESTIONS: If you are unsure about a key decision (which API to use, "
+            "which approach to take, whether to overwrite an existing file), call "
+            "ask_user(question) to pause and get the user's input. Much better than guessing."
         ),
     },
     "github": {

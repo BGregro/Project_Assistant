@@ -28,6 +28,9 @@ from pathlib import Path
 
 from agent_tools import register_tool
 
+# Phase 6b: import state snapshot helper from project_manager
+# (lazy import inside the function to avoid circular-import issues at load time)
+
 logger = logging.getLogger(__name__)
 
 # Project root — backend/agent_tools/ → backend/ → project root
@@ -269,6 +272,28 @@ async def run_project_test(
         f"[project_tester] Test result for '{project_name}': "
         f"exit={exit_code}, passed={passed}, attempt={progress['test_attempts']}"
     )
+
+    # ── Phase 6b: update state snapshot after every test run ─────────────────
+    try:
+        from agent_tools.project_manager import (
+            _update_state_snapshot,
+            _load_scaffold as _pm_load_scaffold,
+            _resolve_project_dir,
+        )
+        _scaffold_for_state = _pm_load_scaffold(_resolve_project_dir(project_name))
+        _update_state_snapshot(
+            project_name=project_name,
+            scaffold=_scaffold_for_state,
+            progress=progress,
+            last_action=f"Test run: {'passed' if passed else 'failed'} (exit {exit_code})",
+            next_step=(
+                "Project complete — consider pushing to GitHub."
+                if passed
+                else "Fix failing test: read stderr to identify which file to patch."
+            ),
+        )
+    except Exception as _ss_e:
+        logger.debug(f"[project_tester] State snapshot update failed (non-fatal): {_ss_e}")
 
     # ── Phase 4d: log to long-term memory on success ──────────────────────────
     if passed and scaffold:

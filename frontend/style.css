@@ -743,6 +743,22 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
   border-radius: var(--radius); padding: 9px 11px;
   white-space: pre-wrap; word-break: break-all; max-height: 170px; overflow-y: auto;
 }
+/* Phase 6a — question modal text + textarea */
+.question-text {
+  font-size: 12.5px; color: var(--text); line-height: 1.55;
+  margin: 0 0 10px 0;
+}
+.question-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg-tool); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-sans); font-size: 12px;
+  padding: 8px 10px; resize: vertical; min-height: 68px;
+  transition: border-color 0.15s;
+}
+.question-input:focus {
+  outline: none; border-color: var(--accent);
+}
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 11px 17px; border-top: 1px solid var(--border);

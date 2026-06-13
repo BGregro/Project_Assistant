@@ -1,18 +1,27 @@
 """
 project_manager.py  —  Phase 4b: Project Progress Tracker
+                     —  Phase 6b: Rich State Snapshots
 
-Registers two tools that maintain lightweight progress state for software
+Registers tools that maintain lightweight progress state for software
 projects scaffolded via scaffold_project:
 
   get_project_status   — read current completion state from progress.json
   mark_file_complete   — record that a file has been written
+  read_project_state   — read the rich state.json snapshot (Phase 6b)
 
 Progress state lives in outputs/{project_name}/progress.json alongside the
 scaffold.json produced by Phase 4a.  These tools are the agent's
 checkpoint mechanism: they replace "mental bookkeeping" with explicit,
 persistent state so long tasks survive interruptions and context reloads.
 
-Both tools are NON-DESTRUCTIVE (no approval required).
+Phase 6b adds a second state file — outputs/{project_name}/state.json —
+that is updated after every meaningful action.  It contains everything the
+agent needs to resume a project in a single call:
+  - completed_files, pending_files, last_action, next_step
+  - key_decisions (architectural choices logged during the run)
+  - test_status, entry_point, dependencies, notes
+
+All tools are NON-DESTRUCTIVE (no approval required).
 """
 
 from __future__ import annotations
@@ -37,6 +46,10 @@ _OUTPUTS_DIR  = _PROJECT_ROOT / "outputs"
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _resolve_project_dir(project_name: str) -> Path:
+    return _OUTPUTS_DIR / project_name.strip()
 
 
 def _load_scaffold(project_dir: Path) -> dict | None:
@@ -90,6 +103,99 @@ def _save_progress(project_dir: Path, progress: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Phase 6b: State snapshot helpers
+# ---------------------------------------------------------------------------
+
+def _compute_status(scaffold: dict | None, progress: dict) -> str:
+    """
+    Compute a high-level project status string from scaffold + progress.
+
+    Returns one of: "in_progress", "complete", "blocked", "unknown".
+    """
+    if scaffold is None:
+        return "unknown"
+
+    impl_order: list[str] = scaffold.get("implementation_order", [])
+    if not impl_order:
+        return "unknown"
+
+    completed_names = {e.get("file") for e in progress.get("completed_files", [])}
+    pending = [f for f in impl_order if f not in completed_names]
+
+    last_test = progress.get("last_test")
+    if last_test and not last_test.get("passed") and not pending:
+        # All files written but test failing — blocked
+        return "blocked"
+
+    if not pending:
+        # All files written
+        if last_test and last_test.get("passed"):
+            return "complete"
+        return "in_progress"  # files done but not yet tested
+
+    return "in_progress"
+
+
+def _pending_files(scaffold: dict | None, progress: dict) -> list[str]:
+    """Return the list of implementation_order files not yet completed."""
+    if scaffold is None:
+        return []
+    impl_order: list[str] = scaffold.get("implementation_order", [])
+    completed_names = {e.get("file") for e in progress.get("completed_files", [])}
+    return [f for f in impl_order if f not in completed_names]
+
+
+def _update_state_snapshot(
+    project_name: str,
+    scaffold: dict | None,
+    progress: dict,
+    last_action: str,
+    next_step: str,
+    key_decisions: list[str] | None = None,
+) -> None:
+    """
+    Write a rich state snapshot after every meaningful project action.
+
+    This is the single file the agent reads to resume a project —
+    it contains everything needed without re-reading all source files.
+
+    Called by:
+      - mark_file_complete()  after recording a file as done
+      - get_project_status()  so a status check always refreshes the snapshot
+      - project_tester.py     after every test run (imported there)
+
+    The snapshot is intentionally denormalised: the agent should never
+    need to open both progress.json and scaffold.json just to answer
+    "what do I do next?".
+    """
+    project_dir = _resolve_project_dir(project_name)
+    state = {
+        "project_name":   project_name,
+        "updated_at":     _now_iso(),
+        "status":         _compute_status(scaffold, progress),
+        "completed_files": [e["file"] for e in progress.get("completed_files", [])],
+        "pending_files":   _pending_files(scaffold, progress),
+        "last_action":     last_action,
+        "next_step":       next_step,
+        "key_decisions":   key_decisions or [],
+        "test_status":     progress.get("last_test", {}).get("passed") if progress.get("last_test") else None,
+        "entry_point":     scaffold.get("entry_point", "") if scaffold else "",
+        "dependencies":    scaffold.get("dependencies", []) if scaffold else [],
+        "notes":           progress.get("notes", []),
+    }
+    state_path = project_dir / "state.json"
+    try:
+        project_dir.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        logger.debug(
+            f"[project_manager] State snapshot updated for '{project_name}': "
+            f"status={state['status']}, pending={len(state['pending_files'])} files"
+        )
+    except Exception as e:
+        logger.warning(f"[project_manager] Could not write state.json: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Tool: get_project_status
 # ---------------------------------------------------------------------------
 
@@ -101,6 +207,9 @@ async def get_project_status(project_name: str) -> dict:
     progress.json to determine which files are done.  Also checks the
     filesystem directly — a file is considered 'completed' if it actually
     exists on disk, regardless of whether mark_file_complete was called.
+
+    Phase 6b: also refreshes the state.json snapshot on every call so
+    read_project_state always has current data.
 
     Args:
         project_name: The project identifier (matches outputs/{project_name}/).
@@ -116,7 +225,7 @@ async def get_project_status(project_name: str) -> dict:
             "ready_to_test":  bool,         # True when all files are present
         }
     """
-    project_dir = _OUTPUTS_DIR / project_name.strip()
+    project_dir = _resolve_project_dir(project_name)
 
     # ── Scaffold ──────────────────────────────────────────────────────────────
     scaffold = _load_scaffold(project_dir)
@@ -155,6 +264,19 @@ async def get_project_status(project_name: str) -> dict:
     next_file     = pending[0] if pending else None
     ready_to_test = len(pending) == 0 and len(impl_order) > 0
 
+    # Phase 6b: refresh state snapshot so read_project_state stays current
+    _update_state_snapshot(
+        project_name=project_name,
+        scaffold=scaffold,
+        progress=progress,
+        last_action="get_project_status called",
+        next_step=(
+            f"Implement {next_file}"
+            if next_file
+            else ("Run tests" if not last_test else "Project complete")
+        ),
+    )
+
     return {
         "success":          True,
         "project_name":     project_name,
@@ -183,6 +305,9 @@ async def mark_file_complete(
     Calling this multiple times for the same filename is safe — duplicate
     entries are ignored so the list stays clean.
 
+    Phase 6b: updates state.json after every call so the agent can resume
+    from a precise checkpoint.
+
     Args:
         project_name: Project identifier (matches outputs/{project_name}/).
         filename:     The file that was just written (e.g. "main.py", "utils.py").
@@ -195,7 +320,7 @@ async def mark_file_complete(
             "remaining":      [str], # files still pending in implementation_order
         }
     """
-    project_dir = _OUTPUTS_DIR / project_name.strip()
+    project_dir = _resolve_project_dir(project_name)
     scaffold    = _load_scaffold(project_dir)
     impl_order: list[str] = scaffold.get("implementation_order", []) if scaffold else []
 
@@ -220,6 +345,17 @@ async def mark_file_complete(
     recorded_names = {e.get("file") for e in completed_files}
     remaining = [f for f in impl_order if f not in recorded_names]
 
+    # Phase 6b: refresh the state snapshot
+    _update_state_snapshot(
+        project_name=project_name,
+        scaffold=scaffold,
+        progress=progress,
+        last_action=f"Implemented {filename}" + (f" — {notes}" if notes else ""),
+        next_step=(
+            f"Implement {remaining[0]}" if remaining else "All files done — run tests"
+        ),
+    )
+
     return {
         "success":         True,
         "completed_count": len(completed_files),
@@ -228,11 +364,76 @@ async def mark_file_complete(
 
 
 # ---------------------------------------------------------------------------
+# Phase 6b — Tool: read_project_state
+# ---------------------------------------------------------------------------
+
+async def read_project_state(project_name: str) -> dict:
+    """
+    Read the rich state snapshot for a project (outputs/{project_name}/state.json).
+
+    Use this at the start of any project resumption instead of calling
+    get_project_status + reading individual files.  The snapshot contains
+    everything needed to pick up exactly where the last session left off:
+    completed files, pending files, the last action taken, the recommended
+    next step, key architectural decisions, and test status.
+
+    If state.json does not yet exist (first session), falls back to
+    get_project_status to generate it.
+
+    Args:
+        project_name: Project identifier (matches outputs/{project_name}/).
+
+    Returns:
+        The full state dict, or {"success": False, "error": "..."} if the
+        project does not exist.
+    """
+    project_dir = _resolve_project_dir(project_name)
+    state_path  = project_dir / "state.json"
+
+    if state_path.exists():
+        try:
+            with open(state_path, encoding="utf-8") as f:
+                state = json.load(f)
+            state["success"] = True
+            logger.info(
+                f"[project_manager] read_project_state '{project_name}': "
+                f"status={state.get('status')}, "
+                f"pending={len(state.get('pending_files', []))} files"
+            )
+            return state
+        except Exception as e:
+            logger.warning(f"[project_manager] Could not read state.json: {e}")
+            # Fall through to rebuild from scratch
+
+    # state.json missing or unreadable — regenerate it via get_project_status
+    logger.info(
+        f"[project_manager] state.json not found for '{project_name}' — "
+        "falling back to get_project_status to rebuild."
+    )
+    status = await get_project_status(project_name)
+    if not status.get("success"):
+        return status
+
+    # get_project_status wrote state.json — read it back now
+    if state_path.exists():
+        try:
+            with open(state_path, encoding="utf-8") as f:
+                state = json.load(f)
+            state["success"] = True
+            return state
+        except Exception:
+            pass
+
+    # Absolute fallback — return the status dict directly
+    return status
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
 def register_project_manager_tools() -> None:
-    """Register get_project_status and mark_file_complete."""
+    """Register get_project_status, mark_file_complete, and read_project_state."""
 
     register_tool(
         name="get_project_status",
@@ -241,7 +442,8 @@ def register_project_manager_tools() -> None:
             "Shows which files are done (exist on disk), which are still pending, "
             "the last test result, and the next file to implement. "
             "Call this after scaffold approval and after each file is written to "
-            "stay oriented in a multi-file project."
+            "stay oriented in a multi-file project. "
+            "Also refreshes the state.json snapshot (Phase 6b)."
         ),
         input_schema={
             "type": "object",
@@ -263,7 +465,8 @@ def register_project_manager_tools() -> None:
             "Record that a project file has been successfully written. "
             "Call this immediately after writing each file during project implementation. "
             "Maintains a progress log in progress.json so the agent can resume "
-            "if interrupted. Calling this multiple times for the same file is safe."
+            "if interrupted. Calling this multiple times for the same file is safe. "
+            "Also updates the state.json snapshot (Phase 6b)."
         ),
         input_schema={
             "type": "object",
@@ -287,4 +490,30 @@ def register_project_manager_tools() -> None:
         is_destructive=False,
     )
 
-    logger.info("[startup] Registered tools: get_project_status, mark_file_complete")
+    register_tool(
+        name="read_project_state",
+        description=(
+            "Read the rich state snapshot for a project — use this at the start "
+            "of any resumption task instead of re-reading all project files. "
+            "Contains: completed files, pending files, last action, next step, "
+            "key decisions, test status, entry point, and dependencies. "
+            "Falls back to get_project_status automatically if state.json does "
+            "not yet exist. Always call this first when resuming a project."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "project_name": {
+                    "type":        "string",
+                    "description": "Project identifier matching the outputs/{project_name}/ directory.",
+                },
+            },
+            "required": ["project_name"],
+        },
+        handler=read_project_state,
+        is_destructive=False,
+    )
+
+    logger.info(
+        "[startup] Registered tools: get_project_status, mark_file_complete, read_project_state"
+    )

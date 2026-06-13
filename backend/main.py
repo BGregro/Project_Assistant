@@ -84,6 +84,11 @@ from agent_tools.youtube_tool import register_youtube_tools                 # Ph
 from agent_tools.process_manager import register_process_tools, cleanup_all_processes  # Phase 5d
 from task_scheduler import TaskScheduler                                    # Phase 5e
 from agent_tools.scheduler_tool import register_scheduler_tools, set_scheduler  # Phase 5e
+from agent_tools.interaction import (                                        # Phase 6a
+    register_interaction_tools,
+    set_task_runner as set_interaction_runner,
+    set_send_event as set_interaction_event,
+)
 
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
@@ -205,7 +210,9 @@ logger.info(
     f"github_read_file, github_list_files, github_create_issue), "
     f"credentials (store_credential, get_credential, list_credentials), "
     f"youtube (youtube_search, youtube_get_video_stats, youtube_get_trending, "
-    f"youtube_get_video_comments, youtube_get_channel_info, youtube_search_captions)"
+    f"youtube_get_video_comments, youtube_get_channel_info, youtube_search_captions), "
+    f"interaction (ask_user), "
+    f"project_manager (get_project_status, mark_file_complete, read_project_state)"
     f"{_browser_log}"
 )
 
@@ -236,6 +243,13 @@ async def _autoload_generated_tools() -> None:
 
 agent       = AgentCore(config)
 task_runner = TaskRunner(config=config)   # Phase 3b / 3d
+
+# Phase 6a — wire interaction module refs now that both objects exist.
+# set_task_runner gives ask_user access to the TaskRunner's ask_user method.
+# set_send_event is updated per-connection inside the WebSocket handler so
+# the tool always reaches the currently active socket.
+set_interaction_runner(task_runner)
+register_interaction_tools()            # Phase 6a
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output
@@ -648,6 +662,10 @@ async def websocket_endpoint(websocket: WebSocket):
     # execution streaming callback so execute_code can push live output.
     _active_send_event[0] = send_event
 
+    # Phase 6a — update the interaction module's send_event ref so ask_user
+    # can reach the currently active WebSocket connection.
+    set_interaction_event(send_event)
+
     async def dispatch(raw: dict):
         msg_type = raw.get("type")
 
@@ -697,6 +715,19 @@ async def websocket_endpoint(websocket: WebSocket):
         elif msg_type == "stop_task":
             logger.info("[ws] stop_task received.")
             task_runner.cancel()
+
+        elif msg_type == "question_answer":
+            # Phase 6a — user submitted an answer to a mid-task question
+            question_id = raw.get("data", {}).get("question_id", "")
+            answer      = raw.get("data", {}).get("answer", "")
+            if question_id:
+                task_runner.answer_question(question_id, answer)
+                logger.info(
+                    f"[ws] question_answer received for '{question_id[:8]}': "
+                    f"{answer[:60]!r}"
+                )
+            else:
+                logger.warning("[ws] question_answer received with no question_id")
 
         elif msg_type == "confirm":
             confirmation_id = raw.get("confirmation_id")
