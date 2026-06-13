@@ -81,6 +81,7 @@ from agent_tools.project_tester import register_project_tester_tools        # Ph
 from agent_tools.github_tool import register_github_tools                   # Phase 5a
 from agent_tools.credentials import register_credential_tools               # Phase 5b
 from agent_tools.youtube_tool import register_youtube_tools                 # Phase 5c
+from agent_tools.process_manager import register_process_tools, cleanup_all_processes  # Phase 5d
 from task_scheduler import TaskScheduler                                    # Phase 5e
 from agent_tools.scheduler_tool import register_scheduler_tools, set_scheduler  # Phase 5e
 
@@ -156,6 +157,12 @@ try:
     register_youtube_tools()
 except Exception as _yt_err:
     logger.warning(f"[startup] YouTube tool registration failed (non-fatal): {_yt_err}")
+
+# Phase 5d — Process manager (start/stop/monitor background processes)
+try:
+    register_process_tools()
+except Exception as _pm_err:
+    logger.warning(f"[startup] Process manager tool registration failed (non-fatal): {_pm_err}")
 
 # Phase 5e — Scheduled tasks
 # set_scheduler must happen before register_scheduler_tools so the tool
@@ -330,6 +337,8 @@ async def _on_shutdown() -> None:
     """Unload the local model from RAM when the server process exits."""
     # Phase 5e — stop the APScheduler before the event loop closes
     task_scheduler.shutdown()
+    # Phase 5d — kill all background processes started by the agent
+    cleanup_all_processes()
     await unload_model(agent.local_model, agent.ollama_url)
     logger.info("[shutdown] Local model unloaded.")
     # Phase 3i — close Playwright browser if it was used this session

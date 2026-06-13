@@ -28,6 +28,8 @@ Workflow the agent should follow:
 
 import logging
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +68,77 @@ def _check_filename(filename: str) -> tuple[bool, str]:
         )
 
     return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Runtime validation helper
+# ---------------------------------------------------------------------------
+
+def _test_tool_file(path: Path) -> tuple[bool, bool, str]:
+    """
+    Run two lightweight subprocess checks on the written tool file.
+
+    Check 1 (syntax):
+        Run 'python -c "import ast; ast.parse(open(path).read())"' — fast,
+        safe, catches all syntax errors without executing any user code.
+
+    Check 2 (import):
+        Attempt to load the file as a module via importlib in a subprocess
+        sandbox.  This catches NameError/ImportError at module level without
+        touching the live registry.
+
+    Returns:
+        (syntax_valid: bool, import_valid: bool, error_message: str)
+        error_message is empty when both checks pass.
+    """
+    # ── Check 1: Syntax ───────────────────────────────────────────────────────
+    syntax_cmd = [
+        sys.executable, "-c",
+        f"import ast; ast.parse(open({str(path)!r}).read())",
+    ]
+    try:
+        result = subprocess.run(
+            syntax_cmd,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        syntax_ok = result.returncode == 0
+        if not syntax_ok:
+            err = (result.stderr or result.stdout).strip()
+            return False, False, f"Syntax check failed: {err}"
+    except subprocess.TimeoutExpired:
+        return False, False, "Syntax check timed out."
+    except Exception as e:
+        return False, False, f"Syntax check error: {e}"
+
+    # ── Check 2: Import / module-level execution ──────────────────────────────
+    import_cmd = [
+        sys.executable, "-c",
+        (
+            "import importlib.util, sys; "
+            f"spec = importlib.util.spec_from_file_location('_test_tool', {str(path)!r}); "
+            "m = importlib.util.module_from_spec(spec); "
+            "spec.loader.exec_module(m)"
+        ),
+    ]
+    try:
+        result = subprocess.run(
+            import_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        import_ok = result.returncode == 0
+        if not import_ok:
+            err = (result.stderr or result.stdout).strip()
+            return True, False, f"Import check failed: {err}"
+    except subprocess.TimeoutExpired:
+        return True, False, "Import check timed out."
+    except Exception as e:
+        return True, False, f"Import check error: {e}"
+
+    return True, True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +195,33 @@ async def write_tool(filename: str, code: str) -> dict[str, Any]:
         return {"success": False, "path": str(dest), "validation": msg}
 
     logger.info(f"[tool_writer] {filename} passed validation — call reload_tool to activate.")
-    return {"success": True, "path": str(dest), "validation": "OK"}
+
+    # ── Runtime validation (syntax + import in subprocess sandbox) ────────────
+    syntax_valid, import_valid, test_error = _test_tool_file(dest)
+    ready_to_reload = syntax_valid and import_valid
+
+    if not ready_to_reload:
+        logger.warning(
+            f"[tool_writer] Runtime test failed for {filename}: {test_error}"
+        )
+        return {
+            "success":         False,
+            "path":            str(dest),
+            "validation":      "OK",           # static validation passed …
+            "syntax_valid":    syntax_valid,
+            "import_valid":    import_valid,
+            "ready_to_reload": False,
+            "error":           test_error,     # … but runtime test failed
+        }
+
+    return {
+        "success":         True,
+        "path":            str(dest),
+        "validation":      "OK",
+        "syntax_valid":    True,
+        "import_valid":    True,
+        "ready_to_reload": True,
+    }
 
 
 async def reload_tool(filename: str) -> dict[str, Any]:
@@ -184,7 +283,8 @@ def register_tool_writer_tools() -> None:
             "The code must define at least one async tool handler function and "
             "a register_<name>_tools() function that calls register_tool() from agent_tools. "
             "After writing, call reload_tool(filename) to activate the new tool. "
-            "Returns: {success, path, validation}. "
+            "Returns: {success, path, validation, syntax_valid, import_valid, ready_to_reload}. "
+            "If ready_to_reload is false, the error field explains what to fix before retrying. "
             "Example filename: 'calculator_tool.py'. "
             "Filename must be a plain name (letters, digits, underscores) ending in .py — "
             "no paths, no slashes."

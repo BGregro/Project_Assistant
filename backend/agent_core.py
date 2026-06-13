@@ -211,6 +211,39 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "since recurring tasks consume API tokens autonomously."
         ),
     },
+    "process": {
+        "keywords": [
+            r"start", r"run.*app", r"launch", r"process", r"server",
+            r"background", r"running",
+        ],
+        "content": (
+            "\n\nPROCESS MANAGEMENT: Use start_process(name, command, cwd) to launch apps "
+            "or scripts as persistent background processes. "
+            "Use read_process_output(name) to see stdout. "
+            "Use send_process_input(name, text) to send commands. "
+            "Use stop_process(name) to terminate. "
+            "Use list_processes() to see all running. "
+            "When you scaffold a project, a control tool is auto-generated in "
+            "agent_tools/generated/ — use it to start/stop/status that specific app. "
+            "Example: after building youtube_automation, call start_youtube_automation() directly."
+        ),
+    },
+    "self_extend": {
+        "keywords": [
+            r"write.*tool", r"new tool", r"create.*tool",
+            r"add.*capability", r"extend yourself",
+        ],
+        "content": (
+            "\n\nSELF-EXTENSION: Use write_tool(filename, code) to create new tools — "
+            "it validates syntax and imports before saving. "
+            "Then call reload_tool(filename) to register it live. "
+            "New tools go in agent_tools/generated/ and auto-load on restart. "
+            "After writing a tool, always test it with a simple call before relying on it "
+            "for important tasks. "
+            "The control tools auto-generated for your projects "
+            "(like start_youtube_automation) follow this same pattern."
+        ),
+    },
 }
 
 
