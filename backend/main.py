@@ -22,6 +22,9 @@ WebSocket message types (client → server):
     { "type": "set_model",             "data": {"model": "…"} }
     { "type": "set_local_agent_model", "data": {"model": "…"} }
     { "type": "set_config",            "data": {"key": "context.recent_turns", "value": N} }
+    { "type": "stop_process",          "data": {"name": "…"} }          ← Phase 7
+    { "type": "cancel_schedule",       "data": {"task_id": "…"} }       ← Phase 7
+    { "type": "schedule_task",         "data": {"task_id","message","schedule"} } ← Phase 7
 
 WebSocket event types (server → client):
     status | prompt_optimized | tool_call | tool_result | tool_denied
@@ -29,16 +32,7 @@ WebSocket event types (server → client):
     tree_update | local_mode_status | model_status | local_agent_model_status | config_ack
     task_started | task_progress | task_stopped                   ← Phase 3b
     task_plan                                                      ← Phase 3e
-
-Phase 3d changes:
-    - TaskRunner now receives the config dict so it can read compression_threshold.
-    - _apply_config() syncs the three new efficiency flags to agent attributes.
-    - /status endpoint includes use_intent_routing, use_tool_compression,
-      use_code_prevalidation so the settings panel can read them on page load.
-
-Phase 3e changes:
-    - pending_plans dict mirrors pending_confirmations; resolved by plan_response msgs.
-    - agent.run_with_task_runner() now accepts pending_plans kwarg.
+    process_stopped | schedule_updated                             ← Phase 7
 """
 
 import asyncio
@@ -245,37 +239,16 @@ agent       = AgentCore(config)
 task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 
 # Phase 6a — wire interaction module refs now that both objects exist.
-# set_task_runner gives ask_user access to the TaskRunner's ask_user method.
-# set_send_event is updated per-connection inside the WebSocket handler so
-# the tool always reaches the currently active socket.
 set_interaction_runner(task_runner)
 register_interaction_tools()            # Phase 6a
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output
-#
-# execute_code uses subprocess.Popen and emits each stdout line via this
-# callback so the frontend can update the tool block in real time.
-# The callback must be thread-safe: Popen reads stdout in the async event
-# loop thread (since execute_code is awaited), so asyncio.ensure_future is
-# sufficient here.  We store the callback now; the actual send_event coroutine
-# is only available per-WebSocket-connection, so we forward to whichever
-# send_event is active at call time via a closure-based indirection below.
 # ---------------------------------------------------------------------------
 
-# This list holds the most recent WebSocket send_event so the module-level
-# callback can reach it.  A list is used (instead of a plain variable) so the
-# closure captures the container, not a snapshot of the value.
 _active_send_event: list = [None]
 
 def _execution_output_callback(event_type: str, data: dict) -> None:
-    """
-    Thread-safe bridge: called from execute_code (sync context inside the
-    async loop) to push a streaming line event to the frontend.
-
-    Since execute_code is an async function awaited inside the WebSocket
-    handler, it runs in the event loop thread — asyncio.ensure_future is safe.
-    """
     fn = _active_send_event[0]
     if fn is None:
         return
@@ -291,28 +264,16 @@ logger.info("[startup] Execution streaming callback registered.")
 
 # ---------------------------------------------------------------------------
 # Phase 5e — Active WebSocket connection tracking + broadcast helper
-#
-# Scheduled tasks fire outside of any WebSocket handler, so they need a way
-# to push events to whoever is currently connected.  _active_connections holds
-# all open WebSocket objects; _broadcast iterates them and discards dead ones.
 # ---------------------------------------------------------------------------
 
 _active_connections: set = set()
 
 
 async def _broadcast(event_type: str, data: dict) -> None:
-    """
-    Send a typed event to ALL currently open WebSocket connections.
-
-    Used by the scheduler so jobs can push status updates even if the
-    user reconnected on a different socket after the schedule was registered.
-    Silently removes dead connections from the set.
-    """
     for ws in list(_active_connections):
         try:
             await ws.send_json({"type": event_type, "data": data})
         except Exception:
-            # Dead socket — remove it so we don't retry next time
             _active_connections.discard(ws)
 
 # ---------------------------------------------------------------------------
@@ -321,21 +282,17 @@ async def _broadcast(event_type: str, data: dict) -> None:
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 4b/4c — incremental implementation and integration testing",
-    version="2.1.0",  # Phase 4b/4c
+    description="Phase 7 — UI Overhaul",
+    version="3.0.0",
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
-# Phase 3c: auto-load agent-written tools once the event loop is running.
 @app.on_event("startup")
 async def _on_startup() -> None:
     await _autoload_generated_tools()
-    # Phase 5e — wire scheduler references and start the APScheduler.
-    # Must happen after agent + task_runner are constructed (they are module-
-    # level objects created above, so they exist by the time startup fires).
     task_scheduler.set_refs(
         agent=agent,
         task_runner=task_runner,
@@ -348,14 +305,10 @@ async def _on_startup() -> None:
 
 @app.on_event("shutdown")
 async def _on_shutdown() -> None:
-    """Unload the local model from RAM when the server process exits."""
-    # Phase 5e — stop the APScheduler before the event loop closes
     task_scheduler.shutdown()
-    # Phase 5d — kill all background processes started by the agent
     cleanup_all_processes()
     await unload_model(agent.local_model, agent.ollama_url)
     logger.info("[shutdown] Local model unloaded.")
-    # Phase 3i — close Playwright browser if it was used this session
     try:
         from agent_tools.browser import close_browser
         await close_browser()
@@ -369,7 +322,6 @@ async def serve_index():
 
 
 def _get_embeddings_count() -> int:
-    """Return number of stored embedding entries, or 0 if unavailable."""
     try:
         from memory.embeddings import _get_collection
         col = _get_collection()
@@ -386,7 +338,6 @@ async def status():
         "claude_api":              has_api_key,
         "ollama":                  ollama_ok,
         "use_prompt_optimizer":    agent.use_prompt_optimizer,
-        # Phase 3d — new flags readable by the settings panel
         "use_intent_routing":      agent.use_intent_routing,
         "use_tool_compression":    agent.use_tool_compression,
         "use_code_prevalidation":  agent.use_code_prevalidation,
@@ -401,38 +352,13 @@ async def status():
         "local_agent_timeout":     agent.local_agent_timeout,
         "tree_root":               config.get("tree_root", "."),
         "embeddings_count":        _get_embeddings_count(),
-        # Phase 3g — user profile presence indicator
         "profile_loaded":          (Path(__file__).resolve().parent.parent / "memory" / "user_profile.json").exists(),
-        # Phase 3i — browser tool availability
         "browser_available":       _browser_available,
     })
 
 
-# ---------------------------------------------------------------------------
-# Phase 3b / Phase 4.5: GET /task — return last persisted task state.
-# Phase 4.5 extension: optional ?history=N query parameter returns the last N
-# completed tasks from long_term.json under a "history" key.  The frontend
-# calls this on connect to populate the task history list in the Tasks tab.
-# ---------------------------------------------------------------------------
-
 @app.get("/task")
 async def get_task(history: int = 0):
-    """
-    Return the current/last task state.
-
-    Query parameters:
-        history  — if > 0, also include the last N tasks from long_term.json
-                   under a "history" key.  Default 0 (no history returned).
-
-    Response shape:
-        {
-            "id":              str | null,
-            "status":          "running" | "complete" | "cancelled" | null,
-            "initial_message": str | null,
-            "steps":           [...],
-            "history":         [...],   # only when history > 0
-        }
-    """
     data = task_runner.load_last_task()
     result = data if data is not None else {}
 
@@ -441,7 +367,6 @@ async def get_task(history: int = 0):
             from memory.long_term import load as load_long_term
             lt = load_long_term()
             tasks = lt.get("tasks", [])
-            # Return the last N tasks (most recent at end of list)
             result["history"] = tasks[-history:] if len(tasks) > history else tasks
         except Exception as e:
             logger.warning(f"[task] Could not load task history: {e}")
@@ -450,17 +375,8 @@ async def get_task(history: int = 0):
     return JSONResponse(result)
 
 
-
-# ---------------------------------------------------------------------------
-# Phase 3f: GET /memory — return long-term memory store as JSON
-# ---------------------------------------------------------------------------
-
 @app.get("/memory")
 async def get_memory():
-    """
-    Return the full long-term memory store (tasks, facts, research).
-    Useful for the Memory tab count display and debugging.
-    """
     from memory.long_term import load as load_long_term
     try:
         data = load_long_term()
@@ -475,21 +391,90 @@ async def get_memory():
 
 
 # ---------------------------------------------------------------------------
-# set_config helper — apply a dot-notation key to the live config dict
-# and mirror any change to agent / task_runner attributes.
+# Phase 7 — New REST endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/processes")
+async def get_processes():
+    """Return all tracked background processes and their current status."""
+    from agent_tools.process_manager import list_processes
+    try:
+        result = await list_processes()
+        return JSONResponse(result)
+    except Exception as e:
+        logger.warning(f"[processes] Could not list processes: {e}")
+        return JSONResponse({"processes": []})
+
+
+@app.get("/scheduled")
+async def get_scheduled():
+    """Return all scheduled tasks with next-run metadata."""
+    try:
+        return JSONResponse({"tasks": task_scheduler.list_scheduled()})
+    except Exception as e:
+        logger.warning(f"[scheduled] Could not list tasks: {e}")
+        return JSONResponse({"tasks": []})
+
+
+@app.get("/credentials")
+async def get_credentials():
+    """Return stored credential service names (never values)."""
+    from agent_tools.credentials import list_credentials
+    try:
+        result = await list_credentials()
+        return JSONResponse(result)
+    except Exception as e:
+        logger.warning(f"[credentials] Could not list credentials: {e}")
+        return JSONResponse({"credentials": [], "count": 0})
+
+
+@app.get("/analytics")
+async def get_analytics():
+    """
+    Compute agent analytics from long_term.json.
+
+    Returns:
+        total          — total task count
+        success        — number of successful tasks
+        rate           — success rate as a percentage (0–100)
+        avg_duration   — mean duration in seconds (rounded)
+        top_tools      — list of {name, count} for the 5 most-used tools
+    """
+    from memory.long_term import load as load_long_term
+    try:
+        data = load_long_term()
+    except Exception as e:
+        logger.warning(f"[analytics] Could not load long-term store: {e}")
+        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": []})
+
+    tasks = data.get("tasks", [])
+    if not tasks:
+        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": []})
+
+    success   = sum(1 for t in tasks if t.get("outcome") == "success")
+    durations = [t.get("duration_seconds", 0) for t in tasks]
+
+    tool_counts: dict[str, int] = {}
+    for t in tasks:
+        for tool in t.get("tools_used", []):
+            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+
+    top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:5]
+
+    return JSONResponse({
+        "total":        len(tasks),
+        "success":      success,
+        "rate":         round(success / len(tasks) * 100, 1),
+        "avg_duration": round(sum(durations) / len(durations)),
+        "top_tools":    [{"name": k, "count": v} for k, v in top_tools],
+    })
+
+
+# ---------------------------------------------------------------------------
+# set_config helper
 # ---------------------------------------------------------------------------
 
 def _apply_config(key: str, value) -> None:
-    """
-    Apply a dot-notation config key to the live `config` dict, then mirror
-    the change to any agent.* or task_runner.* attribute that caches it.
-
-    Phase 3d additions:
-        use_intent_routing       → agent.use_intent_routing
-        use_tool_compression     → agent.use_tool_compression
-        use_code_prevalidation   → agent.use_code_prevalidation
-        context.compression_threshold → task_runner._compression_threshold
-    """
     parts = key.split(".")
     node  = config
 
@@ -502,12 +487,10 @@ def _apply_config(key: str, value) -> None:
     node[leaf] = value
     logger.info(f"[config] Set {key} = {value!r}")
 
-    # Mirror to agent attributes
     if key == "context.max_iterations_per_turn":
         agent.max_iterations = int(value)
     elif key == "local_agent_timeout":
         agent.local_agent_timeout = float(value)
-    # Phase 3d — new efficiency flags
     elif key == "use_intent_routing":
         agent.use_intent_routing = bool(value)
     elif key == "use_tool_compression":
@@ -518,7 +501,6 @@ def _apply_config(key: str, value) -> None:
         agent.use_tool_prefilter = bool(value)
     elif key == "context.compression_threshold":
         task_runner._compression_threshold = int(value)
-    # Phase 3h — per-model token caps
     elif key == "llm.max_tokens_primary":
         agent.max_tokens_primary = int(value)
     elif key == "llm.max_tokens_complex":
@@ -533,13 +515,6 @@ async def build_context(
     history: list[dict],
     current_message: str,
 ) -> tuple[str, list[dict]]:
-    """
-    Assemble the minimal context Claude needs for the current turn.
-
-    Returns:
-        context_note   — string to append to the system prompt (may be empty)
-        agent_messages — [{role, content}] list for the messages[] parameter
-    """
     ctx_cfg  = config.get("context", {})
     emb_cfg  = config.get("embeddings", {})
 
@@ -591,10 +566,6 @@ async def build_context(
             notes.append(
                 "Relevant context retrieved from memory:\n" + "\n".join(lines)
             )
-            logger.debug(
-                f"[ctx] Retrieved {len(relevant)} relevant turn(s) "
-                f"(distances: {[round(r['distance'],2) for r in relevant]})"
-            )
 
     context_note   = "\n\n".join(notes)
     agent_messages = [{"role": e["role"], "content": e["content"]} for e in recent]
@@ -634,13 +605,13 @@ async def _embed_turn_bg(
 # ---------------------------------------------------------------------------
 
 pending_confirmations: dict = {}
-pending_plans:         dict = {}   # Phase 3e — keyed by plan_id
+pending_plans:         dict = {}   # Phase 3e
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    _active_connections.add(websocket)     # Phase 5e — track for broadcast
+    _active_connections.add(websocket)
     logger.info("[ws] New WebSocket connection.")
 
     history: list[dict] = load_history()
@@ -650,7 +621,6 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_event(event_type: str, data) -> None:
         await websocket.send_json({"type": event_type, "data": data})
 
-    # Emit initial file tree so the Files tab is populated on first load
     try:
         from agent_tools.filesystem import _build_tree, _get_tree_root
         tree_str = _build_tree(_get_tree_root())
@@ -658,12 +628,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as _te:
         logger.debug(f"[ws] Initial tree emit failed (non-fatal): {_te}")
 
-    # Phase 4.5 — make this connection's send_event available to the
-    # execution streaming callback so execute_code can push live output.
     _active_send_event[0] = send_event
-
-    # Phase 6a — update the interaction module's send_event ref so ask_user
-    # can reach the currently active WebSocket connection.
     set_interaction_event(send_event)
 
     async def dispatch(raw: dict):
@@ -675,9 +640,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 return None
 
             if task_runner.is_running():
-                logger.info(
-                    f"[ws] Task running — queuing mid-task message: {user_text[:60]!r}"
-                )
+                logger.info(f"[ws] Task running — queuing mid-task message: {user_text[:60]!r}")
                 await task_runner.inject_message(user_text)
                 await send_event("status", {
                     "text": "Message queued — agent will read it after the current step."
@@ -686,29 +649,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
             logger.info(f"[ws] User: {user_text[:80]!r}")
             context_note, agent_messages = await build_context(history, user_text)
-            if context_note:
-                logger.info(
-                    f"[ws] Context note: {len(context_note)} chars "
-                    f"from {len(history)} history entries."
-                )
             return (user_text, context_note, agent_messages)
 
         elif msg_type == "plan_response":
-            # Phase 3e — user approved or rejected the plan card
             plan_id      = raw.get("plan_id")
             approved     = bool(raw.get("approved", False))
-            edited_steps = raw.get("edited_steps", None)  # list[dict] or null
+            edited_steps = raw.get("edited_steps", None)
             if plan_id in pending_plans:
                 pending_plans[plan_id]["result"] = {
                     "approved":     approved,
                     "edited_steps": edited_steps,
                 }
                 pending_plans[plan_id]["event"].set()
-                logger.info(
-                    f"[ws] Plan '{plan_id}': "
-                    f"{'approved' if approved else 'rejected'}"
-                    f"{', edited' if edited_steps else ''}"
-                )
             else:
                 logger.warning(f"[ws] Unknown plan_id: {plan_id!r}")
 
@@ -717,17 +669,10 @@ async def websocket_endpoint(websocket: WebSocket):
             task_runner.cancel()
 
         elif msg_type == "question_answer":
-            # Phase 6a — user submitted an answer to a mid-task question
             question_id = raw.get("data", {}).get("question_id", "")
             answer      = raw.get("data", {}).get("answer", "")
             if question_id:
                 task_runner.answer_question(question_id, answer)
-                logger.info(
-                    f"[ws] question_answer received for '{question_id[:8]}': "
-                    f"{answer[:60]!r}"
-                )
-            else:
-                logger.warning("[ws] question_answer received with no question_id")
 
         elif msg_type == "confirm":
             confirmation_id = raw.get("confirmation_id")
@@ -735,30 +680,21 @@ async def websocket_endpoint(websocket: WebSocket):
             if confirmation_id in pending_confirmations:
                 pending_confirmations[confirmation_id]["result"] = approved
                 pending_confirmations[confirmation_id]["event"].set()
-                logger.info(
-                    f"[ws] Confirmation '{confirmation_id}': "
-                    f"{'approved' if approved else 'denied'}"
-                )
-            else:
-                logger.warning(f"[ws] Unknown confirmation_id: {confirmation_id!r}")
 
         elif msg_type == "clear":
             history.clear()
             save_history(history)
             clear_vectors()
             await send_event("cleared", {"text": "Conversation history cleared."})
-            logger.info("[ws] History and vector store cleared by user.")
 
         elif msg_type == "set_optimizer":
             enabled = bool(raw.get("data", {}).get("enabled", True))
             agent.use_prompt_optimizer = enabled
-            logger.info(f"[ws] Prompt optimizer set to: {enabled}")
             await send_event("optimizer_status", {"enabled": enabled})
 
         elif msg_type == "set_local_mode":
             enabled          = bool(raw.get("data", {}).get("enabled", False))
             agent.local_mode = enabled
-            logger.info(f"[ws] Local mode set to: {enabled}")
             await send_event("local_mode_status", {"enabled": enabled})
 
         elif msg_type == "set_model":
@@ -766,7 +702,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if model:
                 agent.primary_model = model
                 config.setdefault("llm", {})["primary"] = model
-                logger.info(f"[ws] Primary model set to: {model}")
                 await send_event("model_status", {"model": model})
 
         elif msg_type == "set_local_agent_model":
@@ -774,7 +709,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if model:
                 agent.local_agent_model = model
                 config.setdefault("llm", {})["local_agent"] = model
-                logger.info(f"[ws] Local agent model set to: {model}")
                 await send_event("local_agent_model_status", {"model": model})
 
         elif msg_type == "set_config":
@@ -786,8 +720,52 @@ async def websocket_endpoint(websocket: WebSocket):
                     _apply_config(key, value)
                     await send_event("config_ack", {"key": key, "value": value})
                 except Exception as e:
-                    logger.warning(f"[ws] set_config failed for {key!r}: {e}")
                     await send_event("error", {"text": f"Could not apply config {key}: {e}"})
+
+        # ----------------------------------------------------------------
+        # Phase 7 — Process + Schedule WebSocket handlers
+        # ----------------------------------------------------------------
+
+        elif msg_type == "stop_process":
+            # Stop a named background process
+            name = raw.get("data", {}).get("name", "")
+            if name:
+                from agent_tools.process_manager import stop_process
+                try:
+                    result = await stop_process(name)
+                    await send_event("process_stopped", {"name": name, "result": result})
+                    logger.info(f"[ws] Stopped process '{name}'")
+                except Exception as e:
+                    await send_event("process_stopped", {"name": name, "result": {"error": str(e)}})
+
+        elif msg_type == "cancel_schedule":
+            # Cancel a scheduled task by task_id
+            task_id = raw.get("data", {}).get("task_id", "")
+            if task_id:
+                try:
+                    task_scheduler.cancel_task(task_id)
+                    await send_event("schedule_updated", {"action": "cancelled", "task_id": task_id})
+                    logger.info(f"[ws] Cancelled scheduled task '{task_id}'")
+                except Exception as e:
+                    await send_event("error", {"text": f"Could not cancel task '{task_id}': {e}"})
+
+        elif msg_type == "schedule_task":
+            # Add a new scheduled task
+            d = raw.get("data", {})
+            task_id      = d.get("task_id", "")
+            message      = d.get("message", "")
+            schedule_str = d.get("schedule", "")
+            if task_id and message and schedule_str:
+                try:
+                    result = await task_scheduler.schedule_task(
+                        task_id=task_id,
+                        message=message,
+                        schedule_str=schedule_str,
+                    )
+                    await send_event("schedule_updated", {"action": "added", "result": result})
+                    logger.info(f"[ws] Scheduled task '{task_id}': {schedule_str!r}")
+                except Exception as e:
+                    await send_event("error", {"text": f"Could not schedule task: {e}"})
 
         else:
             logger.warning(f"[ws] Unknown message type: {msg_type!r}")
@@ -812,7 +790,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     send_event=send_event,
                     pending_confirmations=pending_confirmations,
                     context_summary=context_note,
-                    pending_plans=pending_plans,        # Phase 3e
+                    pending_plans=pending_plans,
                 )
             )
 
@@ -849,10 +827,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("[ws] Client disconnected.")
-        _active_connections.discard(websocket)  # Phase 5e
-        _active_send_event[0] = None  # Phase 4.5 — stop streaming to dead socket
-        # Unload model from RAM on disconnect — it will reload automatically
-        # on the next local LLM call when a new session starts.
+        _active_connections.discard(websocket)
+        _active_send_event[0] = None
         await unload_model(agent.local_model, agent.ollama_url)
     except Exception as e:
         logger.exception("[ws] Unhandled error in WebSocket handler")

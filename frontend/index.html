@@ -67,7 +67,6 @@
     .settings-slider { width: 100px; accent-color: var(--amber); cursor: pointer; }
     .settings-slider-val { font-size: 0.7rem; color: var(--amber); min-width: 32px; text-align: right; }
 
-    /* Active model display row */
     .settings-model-display {
       font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-bright);
       padding: 5px 8px; background: rgba(250,179,135,0.06);
@@ -135,7 +134,6 @@
     </div>
     <div id="settings-body">
 
-      <!-- Active model read-only display -->
       <div class="settings-section-label" style="margin-bottom:10px">Active Model</div>
       <div class="settings-row" style="margin-bottom:16px">
         <div class="settings-label">In use now</div>
@@ -251,7 +249,7 @@
   </div>
 
   <!-- ================================================================
-       HEADER TOOLBAR — agent name + connection dot + icon buttons
+       HEADER TOOLBAR
        ================================================================ -->
   <header id="header">
     <div class="header-left">
@@ -259,16 +257,13 @@
       <span class="agent-name">assistant</span>
     </div>
     <div class="header-right">
-      <!-- Stop: hidden when idle, shown during tasks -->
       <button id="btn-stop" class="hdr-btn hdr-btn-stop hidden" title="Stop task">⏹</button>
-      <!-- History / right panel toggle -->
       <button id="btn-history-toggle" class="hdr-btn" title="Toggle task panel" onclick="toggleRightPanel()">☰</button>
-      <!-- Settings -->
       <button id="btn-settings" class="hdr-btn" title="Settings">⚙</button>
     </div>
   </header>
 
-  <!-- MAIN BODY: chat + right panel -->
+  <!-- MAIN BODY -->
   <div id="app-body">
 
     <!-- LEFT: chat panel -->
@@ -285,13 +280,11 @@
         </div>
       </div>
 
-      <!-- Thinking indicator -->
       <div id="thinking-indicator" class="hidden">
         <span class="thinking-dots"><span></span><span></span><span></span></span>
         <span id="thinking-label" class="thinking-label">Thinking…</span>
       </div>
 
-      <!-- Optimizer indicator -->
       <div id="optimizer-indicator" class="optimizer-indicator hidden">
         <span class="oi-icon">⚙</span>
         <span class="oi-text">Optimizing prompt…</span>
@@ -303,22 +296,21 @@
       <button id="panel-toggle-btn" title="Collapse/expand panel" onclick="toggleRightPanel()">◀</button>
 
       <div id="right-panel-inner">
-        <!-- Tab bar -->
+        <!-- Tab bar — 5 tabs now -->
         <div id="tab-bar">
-          <button class="tab-btn active" data-tab="tasks"  onclick="switchTab('tasks')">Tasks</button>
-          <button class="tab-btn"        data-tab="files"  onclick="switchTab('files')">Files</button>
-          <button class="tab-btn"        data-tab="memory" onclick="switchTab('memory')">Memory</button>
+          <button class="tab-btn active" data-tab="tasks"     onclick="switchTab('tasks')">Tasks</button>
+          <button class="tab-btn"        data-tab="files"     onclick="switchTab('files')">Files</button>
+          <button class="tab-btn"        data-tab="memory"    onclick="switchTab('memory')">Memory</button>
+          <button class="tab-btn"        data-tab="processes" onclick="switchTab('processes')">Procs</button>
+          <button class="tab-btn"        data-tab="schedule"  onclick="switchTab('schedule')">Sched</button>
         </div>
 
         <!-- TASKS TAB -->
         <div id="tab-tasks" class="tab-content">
-          <!-- Current / last task section -->
           <div class="tab-section-label">Current Task</div>
           <div id="task-progress-panel">
             <div id="task-placeholder" class="tab-placeholder">No active task.</div>
           </div>
-
-          <!-- Task history section -->
           <div class="tab-section-label" style="margin-top:18px">Task History</div>
           <div id="task-history-list" class="task-history-list">
             <div class="tab-placeholder" id="task-history-placeholder">Loading…</div>
@@ -340,6 +332,25 @@
             <div id="mem-research-count">Research entries: —</div>
             <div id="mem-profile-status">Profile: —</div>
           </div>
+
+          <!-- Phase 7: Credential indicator -->
+          <div class="tab-section-label" style="margin-top:14px">Credentials</div>
+          <div id="mem-credentials" class="memory-vector-status">
+            <div id="mem-cred-count">🔑 Credentials stored: —</div>
+          </div>
+
+          <!-- Phase 7: Analytics section -->
+          <div class="tab-section-label" style="margin-top:14px">
+            <span style="cursor:pointer;user-select:none" onclick="toggleAnalytics()">
+              Analytics <span id="analytics-chevron" style="font-size:0.65rem">▶</span>
+            </span>
+          </div>
+          <div id="analytics-body" style="display:none">
+            <div id="analytics-content" class="analytics-panel">
+              <div class="tab-placeholder" id="analytics-placeholder">Loading…</div>
+            </div>
+          </div>
+
           <div class="tab-section-label" style="margin-top:14px">Recent History</div>
           <div id="memory-history-list" class="memory-history-list">
             <div class="tab-placeholder">No history yet.</div>
@@ -349,13 +360,47 @@
             Semantic memory: — entries
           </div>
         </div>
+
+        <!-- PROCESSES TAB (Phase 7) -->
+        <div id="tab-processes" class="tab-content hidden">
+          <div class="proc-header">
+            <span class="tab-section-label" style="margin:0">Running Processes</span>
+            <button class="icon-btn" id="btn-refresh-procs" title="Refresh processes" onclick="loadProcesses()">↻</button>
+          </div>
+          <div id="processes-list">
+            <div class="tab-placeholder">Loading…</div>
+          </div>
+        </div>
+
+        <!-- SCHEDULE TAB (Phase 7) -->
+        <div id="tab-schedule" class="tab-content hidden">
+          <div class="proc-header">
+            <span class="tab-section-label" style="margin:0">Scheduled Tasks</span>
+            <button class="icon-btn" id="btn-add-schedule" title="Add scheduled task" onclick="toggleAddScheduleForm()">＋ Add</button>
+          </div>
+
+          <!-- Inline add-schedule form (hidden by default) -->
+          <div id="add-schedule-form" class="add-schedule-form hidden">
+            <input class="sched-input" type="text" id="sched-task-id"  placeholder="task_id (unique name)" />
+            <input class="sched-input" type="text" id="sched-message"  placeholder="Message for the agent" />
+            <input class="sched-input" type="text" id="sched-schedule" placeholder="e.g. every day at 09:00" />
+            <button class="sched-submit-btn" onclick="submitScheduleTask()">Schedule</button>
+          </div>
+
+          <div id="schedule-list">
+            <div class="tab-placeholder">Loading…</div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Rail for collapsed state -->
+      <!-- Rail for collapsed state — now 5 icons -->
       <div id="right-panel-rail">
-        <button class="rail-icon" title="Tasks"  onclick="expandAndTab('tasks')">◈</button>
-        <button class="rail-icon" title="Files"  onclick="expandAndTab('files')">⊞</button>
-        <button class="rail-icon" title="Memory" onclick="expandAndTab('memory')">◎</button>
+        <button class="rail-icon" title="Tasks"     onclick="expandAndTab('tasks')">◈</button>
+        <button class="rail-icon" title="Files"     onclick="expandAndTab('files')">⊞</button>
+        <button class="rail-icon" title="Memory"    onclick="expandAndTab('memory')">◎</button>
+        <button class="rail-icon" title="Processes" onclick="expandAndTab('processes')">⚡</button>
+        <button class="rail-icon" title="Schedule"  onclick="expandAndTab('schedule')">⏱</button>
       </div>
     </div>
 
@@ -379,7 +424,7 @@
     </div>
   </div>
 
-  <!-- QUESTION MODAL (Phase 6a) — agent pauses mid-task to ask the user -->
+  <!-- QUESTION MODAL (Phase 6a) -->
   <div id="question-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="question-modal-title">
     <div class="modal-box">
       <div class="modal-header">
@@ -419,7 +464,6 @@
         </svg>
       </button>
     </div>
-    <!-- Status bar: last status event, auto-clears, never shows as chat bubble -->
     <div id="status-bar">
       <span id="status-bar-dot" class="status-bar-dot"></span>
       <span id="status-bar-text" class="status-bar-text">Idle</span>

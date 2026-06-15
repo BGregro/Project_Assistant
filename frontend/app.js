@@ -301,6 +301,26 @@ function handleServerEvent(type, data) {
       handleResearchStarted(data);
       break;
 
+    // Phase 7 — process and schedule feedback events
+    case 'process_stopped':
+      if (!document.getElementById('tab-processes').classList.contains('hidden')) {
+        loadProcesses();
+      }
+      setStatusBar(`Process stopped: ${data.name || ''}`, 'done');
+      break;
+
+    case 'schedule_updated':
+      if (!document.getElementById('tab-schedule').classList.contains('hidden')) {
+        loadSchedule();
+      }
+      setStatusBar(
+        data.action === 'cancelled'
+          ? `Schedule cancelled: ${data.task_id || ''}`
+          : 'Task scheduled successfully',
+        'done'
+      );
+      break;
+
     default:
       console.warn('[ws] Unknown event type:', type);
   }
@@ -1147,6 +1167,10 @@ window.switchTab = function(tabName) {
   if (tab) tab.classList.remove('hidden');
   const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
   if (btn) btn.classList.add('active');
+  // Phase 7 — lazy-load panel data on first show
+  if (tabName === 'processes') loadProcesses();
+  if (tabName === 'schedule')  loadSchedule();
+  if (tabName === 'memory')    loadCredentials();
 };
 
 window.expandAndTab = function(tabName) {
@@ -1780,6 +1804,363 @@ async function init() {
       updateProfileStatus(d.profile_loaded);
     } catch(e) {}
   }, 500);
+
+  // Phase 7 — load credentials count once on startup
+  setTimeout(loadCredentials, 800);
 }
 
 init();
+
+// ============================================================
+// PHASE 7 — Processes Tab
+// ============================================================
+
+let _processesRefreshTimer = null;
+
+/**
+ * Load processes from GET /processes and render cards.
+ * Auto-refreshes every 10s while the Processes tab is visible.
+ */
+async function loadProcesses() {
+  const list = document.getElementById('processes-list');
+  if (!list) return;
+
+  try {
+    const res  = await fetch('/processes');
+    const data = await res.json();
+    const procs = data.processes || data || [];
+    renderProcessCards(Array.isArray(procs) ? procs : []);
+  } catch (e) {
+    if (list) list.innerHTML = '<div class="tab-placeholder">Could not load processes.</div>';
+    console.warn('[processes] Fetch failed:', e);
+  }
+}
+
+function renderProcessCards(procs) {
+  const list = document.getElementById('processes-list');
+  if (!list) return;
+
+  if (!procs.length) {
+    list.innerHTML = '<div class="tab-placeholder">No active processes.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  procs.forEach(p => {
+    const isRunning  = p.status === 'running' || p.running === true;
+    const card = document.createElement('div');
+    card.className = `process-card ${isRunning ? 'running' : 'stopped'}`;
+    card.dataset.procName = p.name || '';
+
+    const startStr = p.start_time
+      ? new Date(p.start_time * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const pidStr   = p.pid ? `PID ${p.pid}` : '';
+
+    card.innerHTML = `
+      <div class="process-card-header">
+        <span class="proc-status-dot"></span>
+        <span class="proc-name">${escapeHtml(p.name || 'unnamed')}</span>
+        ${pidStr ? `<span class="proc-pid">${escapeHtml(pidStr)}</span>` : ''}
+        ${startStr ? `<span class="proc-start-time">${escapeHtml(startStr)}</span>` : ''}
+      </div>
+      <div class="process-card-actions">
+        <button class="proc-btn" onclick="readProcessOutput('${escapeHtml(p.name || '')}', this)">📋 Read Output</button>
+        <button class="proc-btn danger" onclick="stopProcess('${escapeHtml(p.name || '')}')">⏹ Stop</button>
+      </div>
+      <div class="proc-output" id="proc-output-${escapeHtml(p.name || '')}">
+        <pre></pre>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+/**
+ * Read output from a named process via WebSocket tool_call.
+ * Shows/hides the inline output panel below the card.
+ */
+async function readProcessOutput(procName, btnEl) {
+  const outputEl = document.getElementById(`proc-output-${procName}`);
+  if (!outputEl) return;
+
+  const isOpen = outputEl.classList.contains('open');
+  if (isOpen) {
+    outputEl.classList.remove('open');
+    return;
+  }
+
+  // Fetch output via REST (we send a tool_call through the chat WS)
+  // For simplicity, we fire a WS tool_call for read_process_output
+  sendWS({ type: 'tool_call', tool: 'read_process_output', input: { name: procName } });
+  outputEl.classList.add('open');
+  outputEl.querySelector('pre').textContent = 'Loading output…';
+
+  // Attempt direct fetch approach as well
+  try {
+    const res  = await fetch(`/processes`);
+    const data = await res.json();
+    const procs = data.processes || data || [];
+    const proc  = (Array.isArray(procs) ? procs : []).find(p => p.name === procName);
+    if (proc && proc.output) {
+      outputEl.querySelector('pre').textContent = proc.output.join('\n');
+    }
+  } catch (e) {
+    // Output will be pushed via WS if the tool_call path works
+  }
+}
+
+function stopProcess(procName) {
+  if (!procName) return;
+  sendWS({ type: 'stop_process', data: { name: procName } });
+  setStatusBar(`Stopping process "${procName}"…`, 'active');
+}
+
+// Auto-refresh when Processes tab is active
+function _startProcessAutoRefresh() {
+  _stopProcessAutoRefresh();
+  _processesRefreshTimer = setInterval(() => {
+    const tab = document.getElementById('tab-processes');
+    if (tab && !tab.classList.contains('hidden')) loadProcesses();
+  }, 10_000);
+}
+function _stopProcessAutoRefresh() {
+  if (_processesRefreshTimer) { clearInterval(_processesRefreshTimer); _processesRefreshTimer = null; }
+}
+
+// Start the auto-refresh loop once on page load
+_startProcessAutoRefresh();
+
+// ============================================================
+// PHASE 7 — Schedule Tab
+// ============================================================
+
+let _scheduleFormOpen = false;
+
+window.toggleAddScheduleForm = function() {
+  _scheduleFormOpen = !_scheduleFormOpen;
+  const form = document.getElementById('add-schedule-form');
+  if (form) form.classList.toggle('hidden', !_scheduleFormOpen);
+  if (_scheduleFormOpen) {
+    setTimeout(() => {
+      const el = document.getElementById('sched-task-id');
+      if (el) el.focus();
+    }, 80);
+  }
+};
+
+window.submitScheduleTask = function() {
+  const taskId   = (document.getElementById('sched-task-id')?.value  || '').trim();
+  const message  = (document.getElementById('sched-message')?.value  || '').trim();
+  const schedule = (document.getElementById('sched-schedule')?.value || '').trim();
+
+  if (!taskId || !message || !schedule) {
+    setStatusBar('Fill in all three schedule fields.', 'error');
+    return;
+  }
+
+  sendWS({ type: 'schedule_task', data: { task_id: taskId, message, schedule } });
+  setStatusBar('Scheduling task…', 'active');
+
+  // Clear + hide form
+  ['sched-task-id', 'sched-message', 'sched-schedule'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  toggleAddScheduleForm();
+};
+
+/**
+ * Load scheduled tasks from GET /scheduled and render cards.
+ */
+async function loadSchedule() {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+
+  try {
+    const res  = await fetch('/scheduled');
+    const data = await res.json();
+    renderScheduleCards(data.tasks || []);
+  } catch (e) {
+    if (list) list.innerHTML = '<div class="tab-placeholder">Could not load scheduled tasks.</div>';
+    console.warn('[schedule] Fetch failed:', e);
+  }
+}
+
+function renderScheduleCards(tasks) {
+  const list = document.getElementById('schedule-list');
+  if (!list) return;
+
+  if (!tasks.length) {
+    list.innerHTML = '<div class="tab-placeholder">No scheduled tasks.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  tasks.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'schedule-card';
+
+    // Human-readable next-run time
+    const nextRunStr = t.next_run ? _humanizeNextRun(t.next_run) : '—';
+
+    const msgPreview = (t.message || '').length > 60
+      ? (t.message || '').slice(0, 57) + '…'
+      : (t.message || '');
+
+    card.innerHTML = `
+      <div class="sched-card-top">
+        <span class="sched-task-id">${escapeHtml(t.task_id || t.id || 'unknown')}</span>
+        <button class="sched-cancel-btn"
+          onclick="cancelSchedule('${escapeHtml(t.task_id || t.id || '')}')">✕ Cancel</button>
+      </div>
+      ${msgPreview ? `<div class="sched-message">${escapeHtml(msgPreview)}</div>` : ''}
+      <div class="sched-meta">
+        <span>${escapeHtml(t.schedule || t.trigger || '')}</span>
+        ${nextRunStr ? `<span class="sched-next">next: ${escapeHtml(nextRunStr)}</span>` : ''}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function cancelSchedule(taskId) {
+  if (!taskId) return;
+  sendWS({ type: 'cancel_schedule', data: { task_id: taskId } });
+  setStatusBar(`Cancelling "${taskId}"…`, 'active');
+}
+
+/**
+ * Convert an ISO or epoch next_run value to a human-readable relative string.
+ * Examples: "in 3 hours", "tomorrow at 09:00", "in 45 minutes"
+ */
+function _humanizeNextRun(nextRun) {
+  try {
+    const dt   = typeof nextRun === 'number'
+      ? new Date(nextRun * 1000)
+      : new Date(nextRun);
+
+    const now  = Date.now();
+    const diff = dt.getTime() - now;   // ms
+
+    if (isNaN(diff)) return String(nextRun);
+
+    const secs  = Math.round(diff / 1000);
+    const mins  = Math.round(secs / 60);
+    const hours = Math.round(mins / 60);
+    const days  = Math.round(hours / 24);
+
+    if (secs < 60)       return `in ${secs}s`;
+    if (mins < 60)       return `in ${mins} min`;
+    if (hours < 24)      return `in ${hours} h`;
+    if (days === 1)      return `tomorrow at ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `in ${days} days`;
+  } catch (e) {
+    return String(nextRun);
+  }
+}
+
+// ============================================================
+// PHASE 7 — Memory tab: Credentials count
+// ============================================================
+
+async function loadCredentials() {
+  const el = document.getElementById('mem-cred-count');
+  if (!el) return;
+
+  try {
+    const res  = await fetch('/credentials');
+    const data = await res.json();
+    // Backend returns {credentials: [...], count: N} or {names: [...]}
+    const count = data.count ?? (data.credentials || data.names || []).length;
+    el.textContent = `🔑 Credentials stored: ${count}`;
+  } catch (e) {
+    el.textContent = '🔑 Credentials stored: —';
+    console.warn('[credentials] Fetch failed:', e);
+  }
+}
+
+// ============================================================
+// PHASE 7 — Memory tab: Analytics section
+// ============================================================
+
+let _analyticsLoaded = false;
+
+window.toggleAnalytics = function() {
+  const body    = document.getElementById('analytics-body');
+  const chevron = document.getElementById('analytics-chevron');
+  if (!body) return;
+
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (chevron) chevron.textContent = isOpen ? '▶' : '▼';
+
+  if (!isOpen && !_analyticsLoaded) {
+    _analyticsLoaded = true;
+    loadAnalytics();
+  }
+};
+
+async function loadAnalytics() {
+  const content = document.getElementById('analytics-content');
+  if (!content) return;
+
+  try {
+    const res  = await fetch('/analytics');
+    const data = await res.json();
+    renderAnalytics(content, data);
+  } catch (e) {
+    content.innerHTML = '<div class="tab-placeholder">Could not load analytics.</div>';
+    console.warn('[analytics] Fetch failed:', e);
+  }
+}
+
+function renderAnalytics(container, data) {
+  if (!data || data.total === 0) {
+    container.innerHTML = '<div class="tab-placeholder">No task data yet.</div>';
+    return;
+  }
+
+  // Format average duration
+  const avgDur = data.avg_duration || 0;
+  const durStr = avgDur < 60
+    ? `${avgDur}s`
+    : `${Math.floor(avgDur / 60)}m ${avgDur % 60}s`;
+
+  // Top tools bar chart
+  const tools  = data.top_tools || [];
+  const maxCount = tools.length ? Math.max(...tools.map(t => t.count)) : 1;
+
+  const barsHtml = tools.length
+    ? `
+      <div class="analytics-bar-label">Top Tools by Usage</div>
+      ${tools.map(t => `
+        <div class="analytics-bar-row">
+          <span class="analytics-bar-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" style="width:${Math.round((t.count / maxCount) * 100)}%"></div>
+          </div>
+          <span class="analytics-bar-count">${t.count}</span>
+        </div>
+      `).join('')}
+    `
+    : '';
+
+  container.innerHTML = `
+    <div class="analytics-panel">
+      <div class="analytics-stat-row">
+        <span>Tasks run</span>
+        <span class="analytics-stat-value">${data.total}</span>
+      </div>
+      <div class="analytics-stat-row">
+        <span>Success rate</span>
+        <span class="analytics-stat-value">${data.success} / ${data.total} (${data.rate}%)</span>
+      </div>
+      <div class="analytics-stat-row">
+        <span>Avg duration</span>
+        <span class="analytics-stat-value">${durStr}</span>
+      </div>
+      ${barsHtml ? `<div class="analytics-bars">${barsHtml}</div>` : ''}
+    </div>
+  `;
+}

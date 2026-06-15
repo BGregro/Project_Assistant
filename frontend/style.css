@@ -863,3 +863,209 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
 /* badge/model-bar elements from old layout — hidden, kept so JS refs don't crash */
 #model-bar, .badge, #optimizer-badge, #local-mode-badge { display: none !important; }
 .status-line { display: none !important; }
+
+/* ============================================================
+   PHASE 7 — Processes tab, Schedule tab, Analytics, Credentials
+   ============================================================ */
+
+/* ---- Shared: tab sub-header row (label + icon button) ---- */
+.proc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.icon-btn {
+  background: transparent; border: 1px solid var(--border-soft);
+  border-radius: var(--radius); color: var(--text-dim);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  padding: 2px 8px; cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.icon-btn:hover { color: var(--amber); border-color: var(--amber-dim); background: var(--amber-glow); }
+
+/* ---- Process cards ---- */
+.process-card {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  overflow: hidden;
+  animation: fadeSlideIn 0.15s ease-out;
+}
+.process-card.running { border-left-color: var(--accent-green); }
+.process-card.stopped { border-left-color: var(--text-muted); }
+
+.process-card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+}
+
+.proc-status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-muted); flex-shrink: 0;
+}
+.process-card.running .proc-status-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 5px rgba(166,227,161,0.5);
+  animation: pulse 1.4s ease infinite;
+}
+.process-card.stopped .proc-status-dot { background: var(--text-muted); }
+
+.proc-name {
+  font-weight: 600; font-size: 11.5px; color: var(--text-bright);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.proc-pid {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.proc-start-time {
+  font-size: 9.5px; color: var(--text-muted); flex-shrink: 0;
+}
+
+.process-card-actions {
+  display: flex; gap: 5px; padding: 0 10px 7px; justify-content: flex-end;
+}
+
+.proc-btn {
+  background: transparent; border: 1px solid var(--border-soft);
+  border-radius: var(--radius); color: var(--text-dim);
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 7px;
+  cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.proc-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.proc-btn.danger:hover { color: var(--red); border-color: var(--accent-red); }
+
+/* Process output expander */
+.proc-output {
+  border-top: 1px solid var(--border-soft);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+.proc-output.open { max-height: 180px; }
+.proc-output pre {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-code); white-space: pre-wrap; word-break: break-all;
+  padding: 7px 10px; margin: 0;
+  max-height: 150px; overflow-y: auto;
+  background: var(--bg-secondary);
+}
+
+/* ---- Schedule cards ---- */
+.schedule-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent-purple);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  animation: fadeSlideIn 0.15s ease-out;
+}
+
+.sched-card-top {
+  display: flex; align-items: flex-start; gap: 7px;
+}
+
+.sched-task-id {
+  font-weight: 600; font-size: 11.5px; color: var(--text-bright);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.sched-cancel-btn {
+  background: transparent; border: 1px solid var(--border-soft);
+  border-radius: var(--radius); color: var(--text-muted);
+  font-size: 10px; padding: 1px 6px; cursor: pointer; flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.sched-cancel-btn:hover { color: var(--red); border-color: var(--accent-red); }
+
+.sched-message {
+  font-size: 10.5px; color: var(--text-dim); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.sched-meta {
+  display: flex; gap: 10px; margin-top: 4px;
+  font-size: 9.5px; color: var(--text-muted);
+}
+
+.sched-next {
+  color: var(--accent-blue); font-size: 9.5px;
+}
+
+/* Add-schedule inline form */
+.add-schedule-form {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 10px;
+  margin-bottom: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+  animation: fadeSlideIn 0.18s ease-out;
+}
+.add-schedule-form.hidden { display: none; }
+
+.sched-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--bg-secondary); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 5px 8px; outline: none;
+  transition: border-color 0.15s;
+}
+.sched-input:focus { border-color: var(--accent-purple); }
+.sched-input::placeholder { color: var(--text-muted); }
+
+.sched-submit-btn {
+  align-self: flex-end;
+  background: rgba(203,166,247,0.12); border: 1px solid var(--accent-purple);
+  color: var(--accent-purple); border-radius: var(--radius);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  padding: 4px 12px; cursor: pointer;
+  transition: background 0.15s;
+}
+.sched-submit-btn:hover { background: rgba(203,166,247,0.22); }
+
+/* ---- Analytics panel (Memory tab) ---- */
+.analytics-panel {
+  padding: 6px 0;
+}
+
+.analytics-stat-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10.5px; color: var(--text-dim); padding: 2px 0;
+}
+.analytics-stat-value { color: var(--text-bright); font-family: var(--font-mono); }
+
+.analytics-bars { margin-top: 8px; }
+.analytics-bar-label {
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 5px;
+}
+
+.analytics-bar-row {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 4px;
+}
+.analytics-bar-name {
+  font-size: 10px; color: var(--text-dim);
+  width: 120px; flex-shrink: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.analytics-bar-track {
+  flex: 1; height: 6px; background: var(--bg-tertiary);
+  border-radius: 999px; overflow: hidden;
+}
+.analytics-bar-fill {
+  height: 100%; background: var(--accent-blue);
+  border-radius: 999px; transition: width 0.4s ease;
+}
+.analytics-bar-count {
+  font-size: 10px; color: var(--text-muted);
+  font-family: var(--font-mono); flex-shrink: 0;
+  min-width: 20px; text-align: right;
+}
