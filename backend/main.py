@@ -84,6 +84,31 @@ from agent_tools.interaction import (                                        # P
     set_send_event as set_interaction_event,
 )
 
+# Phase 9 — Media, notifications, file watching, email inbox tools
+try:
+    from agent_tools.media_tool import register_media_tools                  # Phase 9a
+except ImportError:
+    register_media_tools = None  # type: ignore
+
+try:
+    from agent_tools.notification_tool import register_notification_tools    # Phase 9b
+except ImportError:
+    register_notification_tools = None  # type: ignore
+
+try:
+    from agent_tools.file_watcher import (                                   # Phase 9c
+        register_file_watcher_tools,
+        _manager as file_watcher_manager,
+    )
+except ImportError:
+    register_file_watcher_tools = None  # type: ignore
+    file_watcher_manager        = None  # type: ignore
+
+try:
+    from agent_tools.email_tool import register_email_tools                  # Phase 9d
+except ImportError:
+    register_email_tools = None  # type: ignore
+
 # Phase 3i — browser tools (optional; silently skipped if Playwright not installed)
 _browser_available = False
 try:
@@ -172,6 +197,42 @@ try:
     register_scheduler_tools()
 except Exception as _sched_err:
     logger.warning(f"[startup] Scheduler tool registration failed (non-fatal): {_sched_err}")
+
+# Phase 9a — ffmpeg media tools
+if register_media_tools is not None:
+    try:
+        register_media_tools()
+    except Exception as _media_err:
+        logger.warning(f"[startup] Media tool registration failed (non-fatal): {_media_err}")
+else:
+    logger.info("[startup] media_tool.py not found — skipping media tools.")
+
+# Phase 9b — email notification tools
+if register_notification_tools is not None:
+    try:
+        register_notification_tools()
+    except Exception as _notif_err:
+        logger.warning(f"[startup] Notification tool registration failed (non-fatal): {_notif_err}")
+else:
+    logger.info("[startup] notification_tool.py not found — skipping notification tools.")
+
+# Phase 9c — file watcher tools
+if register_file_watcher_tools is not None:
+    try:
+        register_file_watcher_tools()
+    except Exception as _fw_err:
+        logger.warning(f"[startup] File watcher tool registration failed (non-fatal): {_fw_err}")
+else:
+    logger.info("[startup] file_watcher.py not found — skipping file watcher tools.")
+
+# Phase 9d — IMAP email inbox management tools
+if register_email_tools is not None:
+    try:
+        register_email_tools()
+    except Exception as _email_err:
+        logger.warning(f"[startup] Email tool registration failed (non-fatal): {_email_err}")
+else:
+    logger.info("[startup] email_tool.py not found — skipping email tools.")
 
 # Phase 3i — register browser tools if Playwright is installed
 if register_browser_tools is not None:
@@ -301,12 +362,23 @@ async def _on_startup() -> None:
     )
     task_scheduler.start()
     logger.info("[startup] Task scheduler started.")
+    # Phase 9c: wire file watcher refs
+    if file_watcher_manager is not None:
+        file_watcher_manager.set_refs(
+            task_runner=task_runner,
+            agent=agent,
+            send_event=_broadcast,
+        )
+        logger.info("[startup] File watcher refs set.")
 
 
 @app.on_event("shutdown")
 async def _on_shutdown() -> None:
     task_scheduler.shutdown()
     cleanup_all_processes()
+    # Phase 9c: stop all file watchers
+    if file_watcher_manager is not None:
+        file_watcher_manager.shutdown()
     await unload_model(agent.local_model, agent.ollama_url)
     logger.info("[shutdown] Local model unloaded.")
     try:
@@ -354,6 +426,7 @@ async def status():
         "embeddings_count":        _get_embeddings_count(),
         "profile_loaded":          (Path(__file__).resolve().parent.parent / "memory" / "user_profile.json").exists(),
         "browser_available":       _browser_available,
+        "local_sufficient_default": agent.local_sufficient_default,   # Phase 9
     })
 
 
@@ -505,6 +578,11 @@ def _apply_config(key: str, value) -> None:
         agent.max_tokens_primary = int(value)
     elif key == "llm.max_tokens_complex":
         agent.max_tokens_complex = int(value)
+    elif key == "local_sufficient_default":
+        if value in ("ask", "local", "claude"):
+            agent.local_sufficient_default = value
+        else:
+            raise ValueError(f"Invalid local_sufficient_default value: {value!r}. Must be 'ask', 'local', or 'claude'.")
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +751,15 @@ async def websocket_endpoint(websocket: WebSocket):
             answer      = raw.get("data", {}).get("answer", "")
             if question_id:
                 task_runner.answer_question(question_id, answer)
+
+        # Phase 9 — tier choice response from the frontend banner
+        elif msg_type == "tier_response":
+            message_id = raw.get("data", {}).get("message_id", "")
+            use_local  = bool(raw.get("data", {}).get("use_local", False))
+            if message_id:
+                agent.resolve_tier_choice(message_id, use_local)
+            else:
+                logger.warning("[ws] tier_response received with no message_id")
 
         elif msg_type == "confirm":
             confirmation_id = raw.get("confirmation_id")

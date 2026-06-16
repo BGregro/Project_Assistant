@@ -81,6 +81,7 @@ const toggleEmbeddingsLbl = document.getElementById('toggle-embeddings-label');
 const toggleToolPrefilter    = document.getElementById('toggle-tool-prefilter');
 const toggleToolPrefilterLbl = document.getElementById('toggle-tool-prefilter-label');
 const inpTreeRoot         = document.getElementById('inp-tree-root');
+const selLocalSufficient  = document.getElementById('sel-local-sufficient'); // Phase 9
 
 // Confirmation modal
 const confirmModal  = document.getElementById('confirm-modal');
@@ -319,6 +320,11 @@ function handleServerEvent(type, data) {
           : 'Task scheduled successfully',
         'done'
       );
+      break;
+
+    // Phase 9 — LOCAL_SUFFICIENT tier choice banner
+    case 'tier_choice':
+      showTierBanner(data.message_id, data.message_preview, data.timeout_seconds);
       break;
 
     default:
@@ -1376,6 +1382,16 @@ if (toggleToolPrefilter) {
   });
 }
 
+// Phase 9 — local_sufficient_default dropdown
+if (selLocalSufficient) {
+  selLocalSufficient.addEventListener('change', () => {
+    const value = selLocalSufficient.value;
+    sendWS({ type: 'set_config', data: { key: 'local_sufficient_default', value } });
+    const ack = document.getElementById('ack-local-sufficient');
+    if (ack) { ack.textContent = '✓'; setTimeout(() => { ack.textContent = ''; }, 1500); }
+  });
+}
+
 // ============================================================
 // Settings — number inputs (debounced)
 // ============================================================
@@ -1499,6 +1515,12 @@ function populateSettingsFromStatus(data) {
     if (toggleEmbeddingsLbl) toggleEmbeddingsLbl.textContent = emb.enabled ? 'on' : 'off';
   }
   if (inpTreeRoot && data.tree_root != null) inpTreeRoot.value = data.tree_root;
+
+  // Phase 9 — populate local_sufficient_default dropdown
+  if (selLocalSufficient && data.local_sufficient_default != null) {
+    const opt = [...selLocalSufficient.options].find(o => o.value === data.local_sufficient_default);
+    if (opt) opt.selected = true;
+  }
 
   if (data.embeddings_count != null) {
     const el = document.getElementById('memory-vector-status');
@@ -2163,4 +2185,69 @@ function renderAnalytics(container, data) {
       ${barsHtml ? `<div class="analytics-bars">${barsHtml}</div>` : ''}
     </div>
   `;
+}
+
+// ============================================================
+// Phase 9 — LOCAL_SUFFICIENT tier choice banner
+// ============================================================
+
+let _tierCountdownInterval = null;
+
+function showTierBanner(messageId, preview, timeoutSeconds) {
+  const banner    = document.getElementById('tier-banner');
+  const countdown = document.getElementById('tier-countdown');
+  const text      = document.getElementById('tier-banner-text');
+  if (!banner) return;
+
+  if (text && preview) {
+    text.textContent = `⚡ Local model may be sufficient: "${preview.slice(0, 60)}"`;
+  }
+
+  banner.classList.remove('hidden');
+
+  let remaining = timeoutSeconds || 15;
+  if (countdown) countdown.textContent = `${remaining}s`;
+
+  // Clear any existing countdown first
+  if (_tierCountdownInterval) {
+    clearInterval(_tierCountdownInterval);
+    _tierCountdownInterval = null;
+  }
+
+  _tierCountdownInterval = setInterval(() => {
+    remaining--;
+    if (countdown) countdown.textContent = `${remaining}s`;
+    if (remaining <= 0) hideTierBanner();
+  }, 1000);
+
+  const btnLocal  = document.getElementById('btn-use-local');
+  const btnClaude = document.getElementById('btn-use-claude');
+
+  if (btnLocal) {
+    // Clone to remove old event listeners
+    const fresh = btnLocal.cloneNode(true);
+    btnLocal.parentNode.replaceChild(fresh, btnLocal);
+    fresh.onclick = () => {
+      sendWS({ type: 'tier_response', data: { message_id: messageId, use_local: true } });
+      hideTierBanner();
+    };
+  }
+
+  if (btnClaude) {
+    const fresh = btnClaude.cloneNode(true);
+    btnClaude.parentNode.replaceChild(fresh, btnClaude);
+    fresh.onclick = () => {
+      sendWS({ type: 'tier_response', data: { message_id: messageId, use_local: false } });
+      hideTierBanner();
+    };
+  }
+}
+
+function hideTierBanner() {
+  const banner = document.getElementById('tier-banner');
+  if (banner) banner.classList.add('hidden');
+  if (_tierCountdownInterval) {
+    clearInterval(_tierCountdownInterval);
+    _tierCountdownInterval = null;
+  }
 }

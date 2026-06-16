@@ -393,6 +393,27 @@ class TaskRunner:
                         )
                     except Exception as _lt_e:
                         logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
+
+                    # Phase 9b: fire-and-forget email notification on completion
+                    try:
+                        import json as _json
+                        import pathlib as _pathlib
+                        _cfg_path = _pathlib.Path(__file__).parent.parent / "config.json"
+                        _cfg = _json.loads(_cfg_path.read_text()) if _cfg_path.exists() else {}
+                        if _cfg.get("email", {}).get("enabled", False):
+                            from agent_tools.notification_tool import send_email as _send_email
+                            _subject = f"Task complete: {initial_message[:50]}"
+                            _body = (
+                                f"Your agent finished a task.\n\n"
+                                f"Goal: {initial_message}\n"
+                                f"Steps: {len(self._current_task['steps'])}\n"
+                                f"Duration: {int(time.time() - _start_time)}s\n\n"
+                                f"Summary: {final_text[:300]}"
+                            )
+                            asyncio.ensure_future(_send_email(_subject, _body))
+                    except Exception as _notif_e:
+                        logger.debug(f"[task_runner] Email notification skipped (non-fatal): {_notif_e}")
+
                     return final_text
 
                 # ── 4b. tool_use — dispatch tools then loop ────────────

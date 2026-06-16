@@ -15,6 +15,7 @@
   "local_fallback": true,
   "local_mode": false,
   "local_agent_timeout": 300,
+  "local_sufficient_default": "ask",
   "ollama_base_url": "http://localhost:11434",
   "outputs_dir": "outputs",
   "tree_root": ".",
@@ -35,6 +36,13 @@
   "embeddings": {
     "enabled": true,
     "model": "nomic-embed-text"
+  },
+  "email": {
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "from_address": "",
+    "to_address": "",
+    "enabled": false
   },
   "tools": {
     "web": {

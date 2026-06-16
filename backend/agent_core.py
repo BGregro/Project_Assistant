@@ -263,6 +263,39 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "— it runs entirely through the local LLM."
         ),
     },
+    "email_management": {
+        "keywords": [
+            r"email", r"inbox", r"gmail", r"imap",
+            r"delete.*email", r"clean.*inbox", r"unsubscribe",
+        ],
+        "content": (
+            "\n\nEMAIL MANAGEMENT: "
+            "Use email_connect(host, username) first — for Gmail use host='imap.gmail.com' "
+            "and store an App Password via store_credential('gmail_password'). "
+            "Then email_scan_inbox() to find old emails (headers only, never body). "
+            "Then email_classify_and_plan(email_ids) to get a DELETE/KEEP plan via the local model. "
+            "ALWAYS show the user the full plan and get explicit approval before deleting. "
+            "Call email_delete_batch(ids, dry_run=True) first so the user sees the preview, "
+            "then email_delete_batch(ids, dry_run=False) ONLY after explicit user approval. "
+            "Never delete emails without the user reviewing and approving the specific batch. "
+            "Call email_disconnect() when finished."
+        ),
+    },
+    "media": {
+        "keywords": [
+            r"video", r"audio", r"mp4", r"mp3", r"ffmpeg", r"convert.*video",
+            r"extract.*audio", r"trim.*clip", r"merge.*clip", r"media",
+        ],
+        "content": (
+            "\n\nMEDIA PROCESSING: Use get_media_info(path) to inspect a file first. "
+            "convert_video(path, format, quality) re-encodes to mp4/mkv/webm with quality "
+            "low/medium/high. extract_audio(path, format, bitrate) strips the audio track. "
+            "trim_clip(path, start_seconds, end_seconds) cuts a segment using stream copy. "
+            "merge_clips(paths_csv, output_filename) concatenates clips (same codec/resolution). "
+            "All output goes to outputs/media/. Requires ffmpeg in PATH — call get_media_info "
+            "first to verify ffmpeg is available."
+        ),
+    },
 }
 
 
@@ -284,6 +317,14 @@ class AgentCore:
         self.local_fallback:        bool = config.get("local_fallback",        True)
         self.local_mode:            bool = config.get("local_mode",            False)
         self.ollama_url:            str  = config.get("ollama_base_url",       "http://localhost:11434")
+
+        # Phase 9 — LOCAL_SUFFICIENT tier
+        # Tracks pending tier-choice banners waiting for a user response.
+        self._pending_tier_choices: dict[str, dict] = {}
+        # "ask"   — always show the banner (default)
+        # "local" — always use the local model silently
+        # "claude"— always route to Claude (effectively disables the tier)
+        self.local_sufficient_default: str = config.get("local_sufficient_default", "ask")
 
         # Per-request timeout for the local agentic loop (large models need time on CPU)
         self.local_agent_timeout: float = float(config.get("local_agent_timeout", 300))
@@ -596,6 +637,68 @@ class AgentCore:
             pending_plans.pop(plan_id, None)
 
     # ------------------------------------------------------------------
+    # Phase 9: LOCAL_SUFFICIENT tier choice
+    # ------------------------------------------------------------------
+
+    async def _request_tier_choice(
+        self,
+        message_id: str,
+        message_preview: str,
+        send_event: Callable[[str, dict], Awaitable[None]],
+    ) -> str:
+        """
+        When the local model determines the local tier is sufficient,
+        ask the user whether to use local (slower, free) or Claude (faster, costs tokens).
+
+        Behaviour is controlled by self.local_sufficient_default:
+            "ask"   — send a tier_choice event and wait up to 15 s for the user's pick
+            "local" — silently always use the local model
+            "claude"— silently always route to Claude (feature is disabled)
+
+        Returns "local" or "claude".
+        """
+        if self.local_sufficient_default != "ask":
+            return self.local_sufficient_default
+
+        event = asyncio.Event()
+        self._pending_tier_choices[message_id] = {
+            "event":  event,
+            "choice": self.local_sufficient_default,  # fallback if timeout
+        }
+
+        await send_event("tier_choice", {
+            "message_id":      message_id,
+            "message_preview": message_preview[:60],
+            "default":         self.local_sufficient_default,
+            "timeout_seconds": 15,
+        })
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=15.0)
+        except asyncio.TimeoutError:
+            logger.info(
+                f"[agent] Tier choice timed out for {message_id!r} "
+                f"— using default: {self.local_sufficient_default}"
+            )
+
+        choice = self._pending_tier_choices.pop(message_id, {}).get(
+            "choice", self.local_sufficient_default
+        )
+        logger.info(f"[agent] Tier choice resolved → {choice!r}")
+        return choice
+
+    def resolve_tier_choice(self, message_id: str, use_local: bool) -> None:
+        """
+        Called by the WebSocket handler when the frontend sends a tier_response message.
+        Sets the choice and unblocks _request_tier_choice().
+        """
+        if message_id in self._pending_tier_choices:
+            self._pending_tier_choices[message_id]["choice"] = "local" if use_local else "claude"
+            self._pending_tier_choices[message_id]["event"].set()
+        else:
+            logger.warning(f"[agent] resolve_tier_choice: unknown message_id {message_id!r}")
+
+    # ------------------------------------------------------------------
     # Public entry point — called from main.py WebSocket handler
     # (original; kept intact for backward compatibility)
     # ------------------------------------------------------------------
@@ -670,6 +773,18 @@ class AgentCore:
                     # Ollama offline or empty — fall through to Claude
                     logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through to Claude.")
                     await send_event("status", {"text": "Local unavailable — using Claude…"})
+
+            elif intent == "LOCAL_SUFFICIENT":
+                message_id = str(uuid4())
+                tier = await self._request_tier_choice(message_id, user_message, send_event)
+                if tier == "local":
+                    await send_event("status", {"text": "Running locally (no Claude API)…"})
+                    # Build minimal messages list and run the local agentic loop
+                    _local_messages = history + [{"role": "user", "content": user_message}]
+                    return await self._run_local(_local_messages, send_event, pending_confirmations)
+                # else: user chose Claude — fall through treating as TOOL
+                intent = "TOOL"
+                await send_event("status", {"text": f"Using Claude for this task…"})
 
             if intent == "COMPLEX":
                 model_override = self.complex_model
@@ -806,6 +921,17 @@ class AgentCore:
                         return local_answer
                     logger.warning("[agent] SIMPLE intent but local LLM unavailable, falling through.")
                     await send_event("status", {"text": "Local unavailable — using Claude…"})
+
+            elif intent == "LOCAL_SUFFICIENT":
+                message_id = str(uuid4())
+                tier = await self._request_tier_choice(message_id, user_message, send_event)
+                if tier == "local":
+                    await send_event("status", {"text": "Running locally (no Claude API)…"})
+                    _local_messages = history + [{"role": "user", "content": user_message}]
+                    return await self._run_local(_local_messages, send_event, pending_confirmations)
+                # else: user chose Claude — fall through treating as TOOL
+                intent = "TOOL"
+                await send_event("status", {"text": f"Using Claude for this task…"})
 
             if intent == "COMPLEX":
                 model_override = self.complex_model

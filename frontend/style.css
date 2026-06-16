@@ -1069,3 +1069,40 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
   font-family: var(--font-mono); flex-shrink: 0;
   min-width: 20px; text-align: right;
 }
+
+/* ─── Phase 9: Tier choice banner ──────────────────────────────────────── */
+.tier-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent-amber) 12%, var(--bg-secondary));
+  border-top: 1px solid var(--accent-amber);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85em;
+  flex-wrap: wrap;
+}
+.tier-banner-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.tier-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 0.85em;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+.tier-btn:hover {
+  background: var(--accent-amber);
+  color: var(--bg-primary);
+}
+.tier-countdown {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  min-width: 24px;
+}

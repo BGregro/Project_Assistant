@@ -236,6 +236,15 @@
               <span class="toggle-label" id="toggle-tool-prefilter-label">off</span>
             </label>
           </div>
+          <div class="settings-row">
+            <div class="settings-label">When local is sufficient:<small>Tier routing behaviour</small></div>
+            <select class="settings-select" id="sel-local-sufficient">
+              <option value="ask">Ask me (banner)</option>
+              <option value="local">Always local</option>
+              <option value="claude">Always Claude</option>
+            </select>
+            <span class="ack-flash" id="ack-local-sufficient"></span>
+          </div>
           <div class="settings-row" style="align-items:flex-start;flex-direction:column;gap:6px;">
             <div class="settings-label">Tree root path<small>Base path for folder tree</small></div>
             <div style="display:flex;gap:8px;width:100%;position:relative">
@@ -446,6 +455,16 @@
         <button id="btn-question-submit" class="btn btn-approve">Submit Answer</button>
       </div>
     </div>
+  </div>
+
+  <!-- TIER CHOICE BANNER (Phase 9 — LOCAL_SUFFICIENT) -->
+  <div id="tier-banner" class="tier-banner hidden">
+    <span id="tier-banner-text">⚡ Local model is sufficient for this task.</span>
+    <div class="tier-banner-actions">
+      <button id="btn-use-local" class="tier-btn tier-btn-local">🖥 Use local (slower, free)</button>
+      <button id="btn-use-claude" class="tier-btn tier-btn-claude">⚡ Use Claude (faster)</button>
+    </div>
+    <span id="tier-countdown" class="tier-countdown">15s</span>
   </div>
 
   <!-- INPUT BAR + STATUS BAR -->

@@ -355,32 +355,43 @@ async def classify_intent(
     """
     Classify a user message into exactly one routing category using the local LLM.
 
-    Categories:
-        SIMPLE  — greetings, trivial questions answerable in one sentence, no tools needed
-        TOOL    — needs a tool call but is straightforward (file ops, web search, system info)
-        COMPLEX — multi-step reasoning, planning, code architecture, research synthesis,
-                  self-modification, app development
+    Categories (Phase 9 — four tiers):
+        SIMPLE          — greetings, trivial questions answerable in one sentence, no tools needed
+        LOCAL_SUFFICIENT — needs real work but the local model can do it correctly:
+                           reading/summarising files, simple scripts, email classification,
+                           memory queries, single web searches, anything where speed doesn't matter
+        TOOL            — needs tool calls and benefits from Claude's quality: multi-step tasks,
+                          code that needs to be correct, structured data, github operations
+        COMPLEX         — needs deep reasoning: architecture design, multi-file projects,
+                          research synthesis, self-modification, long autonomous tasks
 
-    Returns one of the three uppercase category strings.
+    Returns one of the four uppercase category strings.
     Falls back to "TOOL" (safe default) if the call fails or returns an unexpected value.
     """
-    system = (
+    prompt = (
         "Classify the user message into exactly one category. "
-        "Reply with only the category word, nothing else. "
-        "Categories: "
-        "SIMPLE (greetings, trivial questions answerable in one sentence, no tools needed), "
-        "TOOL (needs a tool call but straightforward — file ops, web search, system info, single-step tasks), "
-        "COMPLEX (multi-step reasoning, planning, code architecture, research synthesis, "
-        "self-modification, app development)."
+        "Reply with only the category word, nothing else.\n\n"
+        "Categories:\n"
+        "SIMPLE — trivial question answerable in one sentence, greeting, no tools needed "
+        "(e.g. 'what is 2+2', 'hi', 'thanks')\n"
+        "LOCAL_SUFFICIENT — task that needs real work but the local model can do it correctly: "
+        "reading/summarizing files, simple scripts, email classification, memory queries, "
+        "single web searches, anything where speed does not matter\n"
+        "TOOL — needs tool calls and benefits from Claude's quality: multi-step tasks, "
+        "code that needs to be correct, structured data, github operations\n"
+        "COMPLEX — needs deep reasoning: architecture design, multi-file projects, "
+        "research synthesis, self-modification, long autonomous tasks\n\n"
+        f"Message: {message}"
     )
 
     payload: dict = {
         "model":      model,
-        "prompt":     message,
-        "system":     system,
+        "prompt":     prompt,
         "stream":     False,
         "keep_alive": -1,
     }
+
+    _VALID_INTENTS = ("SIMPLE", "LOCAL_SUFFICIENT", "TOOL", "COMPLEX")
 
     try:
         async with httpx.AsyncClient(timeout=GENERATE_TIMEOUT) as client:
@@ -388,7 +399,7 @@ async def classify_intent(
             response.raise_for_status()
             data = response.json()
             raw = data.get("response", "").strip().upper()
-            if raw in ("SIMPLE", "TOOL", "COMPLEX"):
+            if raw in _VALID_INTENTS:
                 logger.info(f"[local_llm] classify_intent → {raw}")
                 return raw
             # If the model returned something unexpected, log and default

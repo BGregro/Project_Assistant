@@ -13,3 +13,5 @@ playwright>=1.40.0
 cryptography>=41.0.0
 # Phase 5e — APScheduler for recurring/scheduled tasks
 apscheduler>=3.10.0
+# Phase 9c — watchdog for file system event monitoring
+watchdog>=4.0.0
