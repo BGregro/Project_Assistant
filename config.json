@@ -38,7 +38,7 @@
     "model": "nomic-embed-text"
   },
   "email": {
-    "classify_batch_size": 35,
+    "classify_batch_size": 20,
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "from_address": "",

@@ -811,6 +811,59 @@
       "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
       "tools_used": [],
       "duration_seconds": 0
+    },
+    {
+      "id": "7655c5f6-58bf-45d4-99f6-ba2793db8b47",
+      "timestamp": "2026-06-16T14:28:09.063586+00:00",
+      "goal": "\"Can you help me delete not needed emails from my account?",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "recall_memory",
+        "list_capabilities"
+      ],
+      "duration_seconds": 73
+    },
+    {
+      "id": "2c1c6e57-abae-4c5a-bb11-bf49b29eedf0",
+      "timestamp": "2026-06-16T14:34:44.784206+00:00",
+      "goal": "I use gmail. mostly old marketing or notification emails and emails that you decide that they are 100% not needed. Emails sent by individuals directly to me are needed and don't delete them. I have 2FA set up. I want only the local model to work on this, so make a tool or a memory that it will be able to use to make the categorization fast and accurate.",
+      "outcome": "success",
+      "summary": "Completed in 10 steps.",
+      "tools_used": [
+        "list_directory",
+        "read_file",
+        "reload_tool",
+        "write_file",
+        "patch_file",
+        "write_tool"
+      ],
+      "duration_seconds": 218
+    },
+    {
+      "id": "39f96705-35d2-4578-aee1-c7a9756216e9",
+      "timestamp": "2026-06-16T14:44:43.984033+00:00",
+      "goal": "tell me the last email I got to check that you have access to my gmail account",
+      "outcome": "failure",
+      "summary": "Failed after 7 steps: Object of type function is not JSON serializable",
+      "tools_used": [
+        "gmail_scan_inbox",
+        "gmail_connect",
+        "gmail_classify_with_llm",
+        "reload_tool",
+        "write_tool",
+        "get_system_info"
+      ],
+      "duration_seconds": 242
+    },
+    {
+      "id": "ebb5d672-1618-4be1-9d3e-104a801971f6",
+      "timestamp": "2026-06-16T18:42:34.235579+00:00",
+      "goal": "I want you to be able to access my emails. What do you need for that?",
+      "outcome": "failure",
+      "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
+      "tools_used": [],
+      "duration_seconds": 0
     }
   ],
   "facts": [

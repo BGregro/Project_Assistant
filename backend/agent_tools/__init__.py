@@ -17,13 +17,25 @@ _registry: dict[str, dict] = {}
 
 def register_tool(
     name: str,
-    description: str,
-    input_schema: dict,
-    handler: Callable,
+    description: str = "",
+    input_schema: dict | None = None,
+    handler: Callable | None = None,
     is_destructive: bool = False,
+    # Accept alternate keyword names used by some agent-written and Phase 9 tools:
+    parameters: dict | None = None,
+    destructive: bool | None = None,
 ) -> None:
     """
     Register a callable tool with the agent.
+
+    Accepts both naming conventions:
+      input_schema / parameters    — both refer to the JSON schema
+      is_destructive / destructive — both control the permission layer
+
+    Safety guards:
+      - If description is callable, the caller swapped description and handler.
+        Log an error and skip registration — never store a function in the definition.
+      - If input_schema is a list instead of a dict, convert to an empty object schema.
 
     Args:
         name:           Tool identifier (must match what Claude calls it).
@@ -31,17 +43,44 @@ def register_tool(
         input_schema:   JSON Schema dict describing the tool's parameters.
         handler:        Async callable that executes the tool. Receives **input_schema props.
         is_destructive: Marks the tool for permission-layer interception before execution.
+        parameters:     Alias for input_schema (accepted for compatibility).
+        destructive:    Alias for is_destructive (accepted for compatibility).
     """
+    # Guard: detect swapped positional args (agent wrote handler as 2nd arg)
+    if callable(description):
+        logger.error(
+            f"[registry] register_tool('{name}') received a callable as 'description'. "
+            "The handler was passed in the wrong position. "
+            "Skipping registration to prevent JSON serialization crash. "
+            "Correct call: register_tool(name, description_str, input_schema, handler)"
+        )
+        return
+
+    # Resolve alternate keyword names
+    if input_schema is None and parameters is not None:
+        input_schema = parameters
+    if destructive is not None:
+        is_destructive = destructive
+
+    # Ensure input_schema is a dict (agent sometimes writes a list)
+    if not isinstance(input_schema, dict):
+        input_schema = {"type": "object", "properties": {}}
+    if "type" not in input_schema:
+        input_schema["type"] = "object"
+    if "properties" not in input_schema:
+        input_schema["properties"] = {}
+
     if name in _registry:
-        logger.warning(f"[registry] Tool '{name}' is being re-registered (overwriting).")
+        logger.debug(f"[registry] Tool '{name}' already registered — skipping.")
+        return
 
     _registry[name] = {
         "definition": {
-            "name": name,
-            "description": description,
+            "name":         name,
+            "description":  description,
             "input_schema": input_schema,
         },
-        "handler": handler,
+        "handler":        handler,
         "is_destructive": is_destructive,
     }
     logger.info(f"[registry] Registered tool: '{name}' (destructive={is_destructive})")
