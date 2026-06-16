@@ -239,6 +239,8 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
         "keywords": [
             r"write.*tool", r"new tool", r"create.*tool",
             r"add.*capability", r"extend yourself",
+            r"context.*usage", r"context.*window", r"analyze.*performance",
+            r"improvement.*suggestion", r"how.*performing", r"performance.*analysis",
         ],
         "content": (
             "\n\nSELF-EXTENSION: Use write_tool(filename, code) to create new tools — "
@@ -248,7 +250,17 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "After writing a tool, always test it with a simple call before relying on it "
             "for important tasks. "
             "The control tools auto-generated for your projects "
-            "(like start_youtube_automation) follow this same pattern."
+            "(like start_youtube_automation) follow this same pattern.\n\n"
+            "CONTEXT AWARENESS: Use get_context_usage() periodically during very long "
+            "tasks to check how much of the context window is in use. "
+            "If warning_level is 'high' or 'critical', summarize completed steps and "
+            "clear old conversation turns before continuing — otherwise the next API "
+            "call may fail with a context length error.\n\n"
+            "SELF-IMPROVEMENT: Use analyze_performance() to get AI-generated improvement "
+            "suggestions based on your task history (stored in long_term.json). "
+            "Run this periodically to identify patterns in what fails or takes too long. "
+            "Requires at least 5 completed tasks. The analysis costs no Claude API tokens "
+            "— it runs entirely through the local LLM."
         ),
     },
 }

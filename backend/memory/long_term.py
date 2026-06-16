@@ -315,6 +315,96 @@ def _bulk_upsert_research(entries: list[dict], col: chromadb.Collection) -> None
 
 
 # ---------------------------------------------------------------------------
+# Auto-profile updating  (Phase 8)
+# ---------------------------------------------------------------------------
+
+async def _auto_update_profile(task_goal: str, tools_used: list, outcome: str) -> None:
+    """
+    After a completed task, use the local LLM to check whether the task
+    revealed anything new about the user worth adding to their profile.
+    Runs as a background fire-and-forget — never blocks task completion.
+
+    Examples of what it detects:
+      - User asked to build a Flask API → add "Flask" to skills if not present
+      - User researched YouTube monetization → add "content creation" to interests
+      - User used a specific tool repeatedly → note it in current_projects
+
+    Only the three safe list fields (skills, interests, current_projects) can
+    be modified — no other profile keys are touched.
+    """
+    import sys as _sys
+    # Resolve backend/ on path so local_llm is importable from this context
+    _backend_dir = str(Path(__file__).resolve().parent.parent)
+    if _backend_dir not in _sys.path:
+        _sys.path.insert(0, _backend_dir)
+
+    from agent_tools.local_llm import local_llm_call
+
+    profile_path = Path(__file__).resolve().parent.parent.parent / "memory" / "user_profile.json"
+    if not profile_path.exists():
+        return
+
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.debug(f"[long_term] Auto-profile: could not read profile: {e}")
+        return
+
+    prompt = (
+        f"A user just completed this task: '{task_goal}'\n"
+        f"Tools used: {', '.join(tools_used[:10])}\n"
+        f"Outcome: {outcome}\n\n"
+        f"Current profile skills: {profile.get('skills', [])}\n"
+        f"Current interests: {profile.get('interests', [])}\n\n"
+        "Should any field in this profile be updated based on this task? "
+        "Reply with a JSON object of fields to update, or {} if nothing should change. "
+        "Only add NEW information not already in the profile. "
+        "Possible fields: skills (list), interests (list), current_projects (list). "
+        "Reply with ONLY the JSON object, nothing else."
+    )
+
+    try:
+        response = await local_llm_call(prompt, "qwen2.5:14b", base_url="http://localhost:11434")
+        if not response:
+            return
+
+        # Strip optional markdown fences before parsing
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = "\n".join(clean.splitlines()[1:])
+        if clean.endswith("```"):
+            clean = "\n".join(clean.splitlines()[:-1])
+
+        updates = json.loads(clean.strip())
+        if not isinstance(updates, dict) or not updates:
+            return
+
+        changed = False
+        for field, value in updates.items():
+            # Safety gate — only allow these three list fields
+            if field not in ("skills", "interests", "current_projects"):
+                logger.debug(f"[long_term] Auto-profile: ignoring disallowed field '{field}'")
+                continue
+            current = profile.get(field, [])
+            if isinstance(value, list):
+                for item in value:
+                    if item not in current:
+                        current.append(item)
+                        changed = True
+            profile[field] = current
+
+        if changed:
+            profile_path.write_text(json.dumps(profile, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.info(
+                f"[long_term] Auto-updated profile after task: fields={list(updates.keys())}"
+            )
+    except json.JSONDecodeError:
+        logger.debug("[long_term] Auto-profile: local LLM returned non-JSON — skipping.")
+    except Exception as e:
+        logger.debug(f"[long_term] Auto-profile update skipped: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Task logging
 # ---------------------------------------------------------------------------
 
@@ -351,6 +441,16 @@ def log_task(
         data["tasks"] = data["tasks"][-_MAX_TASKS:]
     save(data)
     logger.info(f"[long_term] Task logged: outcome={outcome!r}, goal={goal[:60]!r}")
+
+    # Phase 8: fire-and-forget background profile update — never blocks the caller
+    import asyncio as _asyncio
+    try:
+        loop = _asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(_auto_update_profile(goal, list(tools_used), outcome))
+        # If no running loop (sync test context), skip silently
+    except RuntimeError:
+        pass
 
 
 # ---------------------------------------------------------------------------

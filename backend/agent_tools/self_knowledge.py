@@ -250,7 +250,53 @@ async def scan_system() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def register_self_knowledge_tools() -> None:
-    """Register read_user_profile and scan_system into the global tool registry."""
+    """Register self-knowledge tools into the global tool registry.
+
+    Phase 3g: read_user_profile, scan_system
+    Phase 8:  get_context_usage, analyze_performance
+    """
+
+    register_tool(
+        name="get_context_usage",
+        description=(
+            "Estimate how much of the Claude API context window is currently in use. "
+            "Returns: model name, estimated tokens used, context limit, percent used, "
+            "a warning level ('low' / 'medium' / 'high' / 'critical'), the current "
+            "history turn count, and a recommendation for what to do. "
+            "Use this periodically during very long tasks to check context pressure. "
+            "If warning_level is 'high' or 'critical', summarize completed steps and "
+            "ask the user if they want to clear old turns before continuing."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        handler=get_context_usage,
+        is_destructive=False,
+    )
+
+    register_tool(
+        name="analyze_performance",
+        description=(
+            "Analyze the agent's task history from long_term.json to identify failure "
+            "patterns, most-used tools, slowest tasks, and generate improvement "
+            "suggestions using the local LLM (no Claude API cost). "
+            "Returns: total task count, success rate, failed task count, "
+            "average duration, top tools by usage, and a numbered list of "
+            "AI-generated improvement suggestions. "
+            "Requires at least 5 completed tasks in history. "
+            "Use this periodically to identify what's failing or taking too long, "
+            "and to get actionable suggestions for improving reliability."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        handler=analyze_performance,
+        is_destructive=False,
+    )
 
     register_tool(
         name="read_user_profile",
@@ -291,3 +337,143 @@ def register_self_knowledge_tools() -> None:
         handler=scan_system,
         is_destructive=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Tool: get_context_usage  (Phase 8)
+# ---------------------------------------------------------------------------
+
+async def get_context_usage() -> dict:
+    """
+    Estimate how much of the Claude API context window is currently in use.
+    Uses a simple character-count heuristic (1 token ≈ 4 chars) against
+    the known limits for each model.
+
+    Returns a warning level so the agent can act before hitting hard limits:
+      'low'      < 40% used  — plenty of room
+      'medium'   40–70%      — consider summarizing older turns
+      'high'     70–90%      — summarize soon
+      'critical' > 90%       — summarize or the next call will fail
+    """
+    import json as _json
+    from memory.context import load_history
+
+    MODEL_LIMITS: dict[str, int] = {
+        "claude-haiku-4-5":  200_000,
+        "claude-sonnet-4-6": 200_000,
+    }
+
+    history = load_history()
+    history_chars = sum(len(str(h.get("content", ""))) for h in history)
+
+    # Read config for current model
+    cfg_path = Path(__file__).resolve().parent.parent.parent / "config.json"
+    try:
+        config = _json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+    except Exception:
+        config = {}
+
+    model = config.get("llm", {}).get("primary", "claude-haiku-4-5")
+    limit_tokens = MODEL_LIMITS.get(model, 200_000)
+    limit_chars  = limit_tokens * 4
+
+    estimated_tokens = history_chars // 4
+    pct = round(estimated_tokens / limit_tokens * 100, 1)
+
+    if pct < 40:
+        level = "low"
+    elif pct < 70:
+        level = "medium"
+    elif pct < 90:
+        level = "high"
+    else:
+        level = "critical"
+
+    recommendations = {
+        "low":      "Context is fine — no action needed.",
+        "medium":   "Consider summarizing older conversation turns if this is a long session.",
+        "high":     "Summarize old turns soon to avoid context limit errors.",
+        "critical": "Summarize immediately — next API call may fail due to context overflow.",
+    }
+
+    logger.info(
+        f"[self_knowledge] Context usage: {pct}% ({estimated_tokens} tokens), level={level}"
+    )
+
+    return {
+        "success": True,
+        "model": model,
+        "estimated_tokens_used": estimated_tokens,
+        "limit_tokens": limit_tokens,
+        "percent_used": pct,
+        "warning_level": level,
+        "history_turns": len(history),
+        "recommendation": recommendations[level],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool: analyze_performance  (Phase 8)
+# ---------------------------------------------------------------------------
+
+async def analyze_performance() -> dict:
+    """
+    Analyze the agent's task history to identify failure patterns,
+    most-used tools, slowest tasks, and generate improvement suggestions.
+
+    Uses only long_term.json data — no Claude API call needed.
+    The suggestions are generated by the local LLM so this costs nothing.
+    """
+    from memory.long_term import load as load_lt
+    from .local_llm import local_llm_call
+
+    data = load_lt()
+    tasks = data.get("tasks", [])
+    if len(tasks) < 5:
+        return {
+            "success": False,
+            "error": "Not enough task history yet (need at least 5 tasks).",
+            "current_task_count": len(tasks),
+        }
+
+    failed  = [t for t in tasks if t.get("outcome") != "success"]
+    slow    = sorted(tasks, key=lambda t: -t.get("duration_seconds", 0))[:3]
+    tool_counts: dict[str, int] = {}
+    for t in tasks:
+        for tool in t.get("tools_used", []):
+            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+    top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:8]
+
+    summary = (
+        f"Total tasks: {len(tasks)}\n"
+        f"Failed tasks ({len(failed)}): {[t['goal'][:60] for t in failed[-5:]]}\n"
+        f"Slowest tasks: {[(t['goal'][:40], t.get('duration_seconds', 0)) for t in slow]}\n"
+        f"Most used tools: {top_tools}\n"
+    )
+
+    prompt = (
+        f"An AI agent has this performance history:\n{summary}\n\n"
+        "Based on this data, write 3-5 specific, actionable improvement suggestions "
+        "for making this agent more reliable and efficient. "
+        "Focus on patterns in failures and slow tasks. Be specific and practical. "
+        "Format as a numbered list."
+    )
+
+    logger.info("[self_knowledge] Requesting improvement suggestions from local LLM…")
+    suggestions = await local_llm_call(prompt, "qwen2.5:14b", base_url="http://localhost:11434")
+    if not suggestions:
+        suggestions = "Could not generate suggestions — local LLM unavailable."
+
+    avg_duration = round(
+        sum(t.get("duration_seconds", 0) for t in tasks) / len(tasks)
+    )
+
+    return {
+        "success": True,
+        "total_tasks": len(tasks),
+        "success_rate": round((len(tasks) - len(failed)) / len(tasks) * 100, 1),
+        "failed_count": len(failed),
+        "avg_duration_seconds": avg_duration,
+        "top_tools": [{"tool": k, "uses": v} for k, v in top_tools],
+        "improvement_suggestions": suggestions,
+    }
