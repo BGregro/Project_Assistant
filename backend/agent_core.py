@@ -327,7 +327,7 @@ class AgentCore:
         self.local_sufficient_default: str = config.get("local_sufficient_default", "ask")
 
         # Per-request timeout for the local agentic loop (large models need time on CPU)
-        self.local_agent_timeout: float = float(config.get("local_agent_timeout", 300))
+        self.local_agent_timeout: float = float(config.get("local_agent_timeout", 1200))
 
         # Per-model max_tokens caps — read from config so they can be tuned without
         # touching code.  Research/planning tasks need significantly more tokens than

@@ -22,6 +22,64 @@ from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
+
+def _strip_tool_for_api(tool: dict) -> dict:
+    """
+    Convert a tool registry entry to the Ollama/OpenAI function-calling format,
+    stripping any non-serializable fields (handler, destructive, etc.) in the process.
+
+    Handles both registry format  → {"name", "description", "parameters",  "handler", ...}
+    and Anthropic SDK format      → {"name", "description", "input_schema", ...}
+
+    Ollama's /api/chat only accepts: type, function.name, function.description,
+    function.parameters — nothing else, and parameters must be a JSON object (dict),
+    never a string.
+
+    Processing order:
+      1. Prefer "parameters" key; fall back to "input_schema".
+      2. If the value is a JSON string, parse it to a dict.
+      3. Ensure the result is a dict with at least {"type": "object", "properties": {}}.
+      4. JSON round-trip to flush out any pydantic models / callables left in the schema.
+    """
+    # Prefer "parameters" (registry format); fall back to "input_schema" (Anthropic format)
+    params = tool.get("parameters") or tool.get("input_schema") or {}
+
+    # Ollama requires parameters to be a JSON object — never a string.
+    # Some generated or hot-reloaded tools store the schema as a serialised string.
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except Exception:
+            params = {}
+
+    # Ensure the value is a dict; reject anything else (list, int, None, …)
+    if not isinstance(params, dict):
+        params = {}
+
+    # Minimum valid JSON Schema object — Ollama rejects schemas missing these keys
+    if "type" not in params:
+        params["type"] = "object"
+    if "properties" not in params:
+        params["properties"] = {}
+
+    # Force a JSON round-trip so every value is a plain Python type.
+    # Hot-reloaded generated tools can store pydantic models or callables
+    # inside the schema, which httpx cannot serialise.
+    try:
+        params = json.loads(json.dumps(params, default=str))
+    except Exception:
+        params = {"type": "object", "properties": {}}
+
+    return {
+        "type": "function",
+        "function": {
+            "name":        str(tool.get("name", "")),
+            "description": str(tool.get("description", "")),
+            "parameters":  params,
+        },
+    }
+
+
 # Ollama's default address. Can be overridden via config.json → "ollama_base_url"
 DEFAULT_BASE_URL    = "http://localhost:11434"
 DEFAULT_MODEL       = "qwen2.5:7b"
@@ -224,22 +282,73 @@ async def local_agent_call(
         Final text response string, or an error message if Ollama is unreachable.
     """
 
-    # --- Convert Anthropic-format tool definitions to Ollama/OpenAI format ---
-    # Anthropic: {"name": ..., "description": ..., "input_schema": {...}}
-    # OpenAI:    {"type": "function", "function": {"name": ..., "description": ..., "parameters": {...}}}
-    ollama_tools = []
-    for t in tools:
-        ollama_tools.append({
-            "type": "function",
-            "function": {
-                "name":        t["name"],
-                "description": t.get("description", ""),
-                "parameters":  t.get("input_schema", {"type": "object", "properties": {}}),
-            },
-        })
+    # --- Convert tool definitions to Ollama/OpenAI format ---
+    # Uses the module-level _strip_tool_for_api() helper which:
+    #   • accepts both registry format (has "parameters" + "handler") and
+    #     Anthropic SDK format (has "input_schema")
+    #   • drops every non-serializable field (handler, destructive, …)
+    #   • does a JSON round-trip on the schema to sanitise pydantic / callable values
+    ollama_tools = [_strip_tool_for_api(t) for t in tools]
 
-    # Build the working message list (deep copy so we don't mutate the caller's list)
-    working_messages = list(messages)
+    # Build the working message list, normalising Anthropic-format history to
+    # the plain {role, content: str} format Ollama's /api/chat requires.
+    #
+    # Anthropic history can contain:
+    #   - content as a list of typed blocks: [{type:"text", text:"..."}, {type:"tool_use",...}]
+    #   - assistant turns with tool_use blocks (no plain text)
+    #   - user turns with tool_result blocks
+    # Ollama expects content to be a plain string and does not understand
+    # tool_use / tool_result block types from the Anthropic schema.
+    # We extract only the visible text from each turn; tool interactions from
+    # prior Claude sessions are represented as brief inline summaries.
+    def _normalise_messages(raw: list) -> list:
+        out = []
+        for msg in raw:
+            role = msg.get("role", "user")
+            # Skip roles Ollama does not understand
+            if role not in ("user", "assistant", "system", "tool"):
+                continue
+            raw_content = msg.get("content", "")
+
+            if isinstance(raw_content, str):
+                # Already a plain string — keep as-is
+                text = raw_content
+            elif isinstance(raw_content, list):
+                # List of Anthropic content blocks — extract text parts only
+                parts = []
+                for block in raw_content:
+                    if isinstance(block, dict):
+                        btype = block.get("type", "")
+                        if btype == "text":
+                            parts.append(block.get("text", ""))
+                        elif btype == "tool_use":
+                            # Summarise the tool call so the model has some context
+                            tname = block.get("name", "tool")
+                            tinput = block.get("input", {})
+                            parts.append(f"[Called tool: {tname}({tinput})]")
+                        elif btype == "tool_result":
+                            parts.append(f"[Tool result: {str(block.get('content', ''))[:200]}]")
+                        # Other block types (image, document, etc.) are silently skipped
+                    elif hasattr(block, "type"):
+                        # SDK object (e.g. TextBlock)
+                        btype = block.type
+                        if btype == "text":
+                            parts.append(getattr(block, "text", ""))
+                        elif btype == "tool_use":
+                            tname = getattr(block, "name", "tool")
+                            tinput = getattr(block, "input", {})
+                            parts.append(f"[Called tool: {tname}({tinput})]")
+                text = " ".join(p for p in parts if p).strip()
+            else:
+                text = str(raw_content)
+
+            if not text:
+                continue
+
+            out.append({"role": role, "content": text})
+        return out
+
+    working_messages = _normalise_messages(list(messages))
 
     for iteration in range(max_iterations):
         logger.info(f"[local_llm] local_agent_call iteration {iteration + 1} (timeout={timeout}s)")
@@ -268,8 +377,16 @@ async def local_agent_call(
                 "Try increasing local_agent_timeout in config, or use a smaller model."
             )
         except httpx.HTTPStatusError as e:
-            logger.warning(f"[local_llm] Ollama HTTP {e.response.status_code} in local_agent_call.")
-            return f"Error: Ollama returned HTTP {e.response.status_code}."
+            body = ""
+            try:
+                body = e.response.text[:300]
+            except Exception:
+                pass
+            logger.warning(
+                f"[local_llm] Ollama HTTP {e.response.status_code} in local_agent_call. "
+                f"Body: {body!r}"
+            )
+            return f"Error: Ollama returned HTTP {e.response.status_code}: {body}"
         except Exception as e:
             logger.warning(f"[local_llm] Unexpected error in local_agent_call: {e}")
             return f"Error: {e}"

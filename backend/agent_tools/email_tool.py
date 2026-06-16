@@ -29,6 +29,8 @@ Tools registered:
 import email as _email_module
 import imaplib
 import logging
+import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -290,6 +292,11 @@ async def email_classify_and_plan(
     The local model sees only From/Subject/Date — never body content.
     Returns: {to_delete: [ids], to_keep: [ids], unsure: [ids], summary: str}
     """
+
+    cfg_path = Path(__file__).resolve().parent.parent.parent / "config.json"
+    config = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+    batch_size = config.get("email", {}).get("classify_batch_size", 20)
+
     err = _require_connection()
     if err:
         return err
@@ -297,8 +304,8 @@ async def email_classify_and_plan(
     ids = [i.strip() for i in email_ids.split(",") if i.strip()]
     if not ids:
         return {"success": False, "error": "email_ids is empty."}
-    if len(ids) > 100:
-        ids = ids[:100]
+    if len(ids) > batch_size:
+        ids = ids[:batch_size]
         logger.warning("[email] Truncated classify batch to 100 IDs.")
 
     try:

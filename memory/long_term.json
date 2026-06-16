@@ -793,6 +793,24 @@
       "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
       "tools_used": [],
       "duration_seconds": 0
+    },
+    {
+      "id": "d58a04a3-773e-4e2b-9e99-1bcf5ae05e30",
+      "timestamp": "2026-06-16T09:36:59.197478+00:00",
+      "goal": "can you help me clear out my emails? Which one of my email can be for sure deleted?",
+      "outcome": "failure",
+      "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
+      "tools_used": [],
+      "duration_seconds": 0
+    },
+    {
+      "id": "125b7963-a041-4e98-861b-9783105772b5",
+      "timestamp": "2026-06-16T10:09:20.196630+00:00",
+      "goal": "Can you help me delete not needed emails from my account?",
+      "outcome": "failure",
+      "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
+      "tools_used": [],
+      "duration_seconds": 0
     }
   ],
   "facts": [
