@@ -864,6 +864,30 @@
       "summary": "Failed after 0 steps: Object of type function is not JSON serializable",
       "tools_used": [],
       "duration_seconds": 0
+    },
+    {
+      "id": "71b6fde2-69b6-466a-8424-90ca72610ed1",
+      "timestamp": "2026-06-16T18:54:39.960806+00:00",
+      "goal": "Write yourself a simple tool called get_joke that returns a random joke from a hardcoded list of 5 jokes, then register it and use it.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "execute_code"
+      ],
+      "duration_seconds": 67
+    },
+    {
+      "id": "f1f446de-5911-485b-935b-dee4097d6cbc",
+      "timestamp": "2026-06-16T18:55:34.054665+00:00",
+      "goal": "Write yourself a simple tool called get_joke that returns a random joke from a hardcoded list of 5 jokes, then register it and use it.",
+      "outcome": "success",
+      "summary": "Completed in 5 steps.",
+      "tools_used": [
+        "write_tool",
+        "get_joke",
+        "reload_tool"
+      ],
+      "duration_seconds": 19
     }
   ],
   "facts": [

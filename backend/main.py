@@ -39,14 +39,15 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).parent.parent / ".env")
@@ -141,6 +142,33 @@ def load_config() -> dict:
         return json.load(f)
 
 config = load_config()
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Remote access auth token
+# ---------------------------------------------------------------------------
+
+def _ensure_auth_token(cfg: dict, cfg_path: Path) -> str:
+    """
+    Generate and persist a random auth token on first startup.
+    Prints the token to the console so the user can copy it.
+    The token is a 32-byte URL-safe random string (~256 bits of entropy).
+    """
+    remote_cfg = cfg.setdefault("remote_access", {})
+    token = remote_cfg.get("auth_token", "")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        remote_cfg["auth_token"] = token
+        cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        logger.info("=" * 60)
+        logger.info("[remote] AUTH TOKEN GENERATED (first run):")
+        logger.info(f"[remote] {token}")
+        logger.info("[remote] Copy this token — you need it to connect remotely.")
+        logger.info("[remote] It is saved in config.json and won't change.")
+        logger.info("=" * 60)
+    return token
+
+AUTH_TOKEN   = _ensure_auth_token(config, CONFIG_PATH)
+REQUIRE_AUTH = config.get("remote_access", {}).get("require_auth", True)
 
 # ---------------------------------------------------------------------------
 # Tool registration
@@ -343,12 +371,93 @@ async def _broadcast(event_type: str, data: dict) -> None:
 
 app = FastAPI(
     title="Personal AI Agent",
-    description="Phase 7 — UI Overhaul",
-    version="3.0.0",
+    description="Phase 10 — Remote Access",
+    version="4.0.0",
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+# ---------------------------------------------------------------------------
+# Phase 10 — HTTP auth middleware
+# Skips auth for the root page, static assets, and the /login page itself.
+# All other HTTP endpoints require a valid token via query param or header.
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not REQUIRE_AUTH:
+        return await call_next(request)
+
+    # Always allow: root page (so redirect to /login works), static files, login page
+    if request.url.path in ("/", "/login", "/favicon.ico") or request.url.path.startswith("/static"):
+        return await call_next(request)
+
+    # Accept token via query param, X-Auth-Token header, or Authorization: Bearer header
+    token = (
+        request.query_params.get("token")
+        or request.headers.get("X-Auth-Token")
+        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    )
+    if token != AUTH_TOKEN:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Login page (public, no auth required)
+# ---------------------------------------------------------------------------
+
+@app.get("/login", include_in_schema=False)
+async def login_page():
+    return HTMLResponse("""
+<!DOCTYPE html><html><head><title>Assistant — Connect</title>
+<style>
+  body { font-family: monospace; background: #1e1e2e; color: #cdd6f4;
+         display: flex; align-items: center; justify-content: center;
+         height: 100vh; margin: 0; }
+  .box { background: #313244; padding: 32px; border-radius: 12px; min-width: 320px; }
+  h2 { margin-top: 0; }
+  input { width: 100%; padding: 10px; margin: 8px 0 16px;
+          background: #1e1e2e; color: #cdd6f4;
+          border: 1px solid #45475a; border-radius: 6px;
+          box-sizing: border-box; font-family: monospace; font-size: 14px; }
+  button { width: 100%; padding: 10px; background: #89b4fa; color: #1e1e2e;
+           border: none; border-radius: 6px; cursor: pointer;
+           font-weight: bold; font-size: 14px; }
+  button:hover { background: #b4d0fa; }
+  .err { color: #f38ba8; font-size: 13px; margin-top: 8px; display: none; }
+</style></head><body>
+<div class="box">
+  <h2>🤖 Assistant</h2>
+  <p>Enter your access token to connect.</p>
+  <input type="password" id="tok" placeholder="Paste token here" autofocus>
+  <button onclick="go()">Connect</button>
+  <div class="err" id="err">Invalid token — check config.json or server console.</div>
+</div>
+<script>
+function go() {
+  const t = document.getElementById('tok').value.trim();
+  if (!t) return;
+  // Validate by hitting /status with the token before redirecting
+  fetch('/status?token=' + encodeURIComponent(t))
+    .then(r => {
+      if (r.ok) {
+        window.location.href = '/?token=' + encodeURIComponent(t);
+      } else {
+        document.getElementById('err').style.display = 'block';
+      }
+    })
+    .catch(() => { document.getElementById('err').style.display = 'block'; });
+}
+document.getElementById('tok').addEventListener('keydown', e => {
+  if (e.key === 'Enter') go();
+});
+// If already have a token in URL, auto-connect
+const t = new URLSearchParams(location.search).get('token');
+if (t) window.location.href = '/?token=' + encodeURIComponent(t);
+</script></body></html>
+""")
 
 
 @app.on_event("startup")
@@ -687,7 +796,13 @@ pending_plans:         dict = {}   # Phase 3e
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+    # Phase 10 — reject connections with an invalid token
+    if REQUIRE_AUTH and token != AUTH_TOKEN:
+        await websocket.close(code=4401, reason="Unauthorized")
+        logger.warning("[ws] Rejected connection — invalid or missing token")
+        return
+
     await websocket.accept()
     _active_connections.add(websocket)
     logger.info("[ws] New WebSocket connection.")

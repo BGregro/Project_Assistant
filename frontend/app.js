@@ -1,20 +1,49 @@
 /**
- * app.js  —  Phase 4.5 Frontend
+ * app.js  —  Phase 10 Frontend (Remote Access)
  *
- * Changes from Phase 3 / 4:
- *   - Header toolbar: connection dot (green/amber/red), icon buttons only
- *   - Status bar (below input): shows last status event, auto-clears in 8s
- *     Status events no longer render as chat bubbles
- *   - Task-run containers: tool blocks + final reply grouped under a
- *     collapsible header (goal / badge / step-count / elapsed)
- *   - Task history: loaded from GET /task?history=10, shown in Tasks tab
- *   - State restore on reconnect: last complete/cancelled task restores
- *     step timeline; interrupted-banner for status="running"
- *   - Settings panel gains "Active model" read-only display
- *   - All Phase 3 / 4 functionality fully preserved
+ * Phase 10 additions:
+ *   - AUTH_TOKEN extracted from URL query param (?token=...)
+ *   - authFetch() helper adds X-Auth-Token header to all API calls
+ *   - WebSocket URL includes token as query param
+ *   - checkAuth() redirects to /login if server returns 401
+ *   - All fetch('/...') replaced with authFetch('/...')
  */
 
 'use strict';
+
+// ============================================================
+// Phase 10 — Remote access auth
+// ============================================================
+
+/** Token passed in URL as ?token=... — empty string if local access */
+const AUTH_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+
+/**
+ * Drop-in replacement for fetch() that attaches the auth token header.
+ * Falls back to a plain fetch when no token is present (local access).
+ */
+function authFetch(url, options = {}) {
+    if (AUTH_TOKEN) {
+        options.headers = options.headers || {};
+        options.headers['X-Auth-Token'] = AUTH_TOKEN;
+    }
+    return fetch(url, options);
+}
+
+/**
+ * On load, verify we're authenticated. If the server returns 401 and we
+ * have no token, redirect to the login page so the user can enter one.
+ */
+async function checkAuth() {
+    if (!AUTH_TOKEN) {
+        try {
+            const r = await fetch('/status');
+            if (r.status === 401) {
+                window.location.href = '/login';
+            }
+        } catch (_) { /* network error — stay on page */ }
+    }
+}
 
 // ============================================================
 // DOM references — core
@@ -123,7 +152,11 @@ let _researchCurrent = 0;
 
 function connectWS() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+  // Phase 10: include auth token as query param when present
+  const wsUrl = AUTH_TOKEN
+      ? `${protocol}//${location.host}/ws?token=${encodeURIComponent(AUTH_TOKEN)}`
+      : `${protocol}//${location.host}/ws`;
+  ws = new WebSocket(wsUrl);
 
   setConnDot('reconnecting');
 
@@ -1007,7 +1040,7 @@ function _removeResearchBar() {
 
 async function loadTaskHistory() {
   try {
-    const res  = await fetch('/task?history=10');
+    const res  = await authFetch('/task?history=10');
     const data = await res.json();
 
     // Check for interrupted (running) task
@@ -1678,7 +1711,7 @@ if (btnClear) {
 
 async function fetchMemoryCounts() {
   try {
-    const res  = await fetch('/memory');
+    const res  = await authFetch('/memory');
     const data = await res.json();
     const tasksEl    = document.getElementById('mem-tasks-count');
     const factsEl    = document.getElementById('mem-facts-count');
@@ -1704,7 +1737,7 @@ function updateProfileStatus(loaded) {
 
 async function pollStatus() {
   try {
-    const res  = await fetch('/status');
+    const res  = await authFetch('/status');
     const data = await res.json();
     populateSettingsFromStatus(data);
   } catch (e) {
@@ -1807,6 +1840,9 @@ function renderMarkdownWithCode(text) {
 // ============================================================
 
 async function init() {
+  // Phase 10: verify auth before doing anything else
+  await checkAuth();
+
   connectWS();
   pollStatus();
   setInterval(pollStatus, 30_000);
@@ -1821,7 +1857,7 @@ async function init() {
   // ensure the indicator is correct even if pollStatus races with the server.
   setTimeout(async () => {
     try {
-      const r = await fetch('/status');
+      const r = await authFetch('/status');
       const d = await r.json();
       updateProfileStatus(d.profile_loaded);
     } catch(e) {}
@@ -1848,7 +1884,7 @@ async function loadProcesses() {
   if (!list) return;
 
   try {
-    const res  = await fetch('/processes');
+    const res  = await authFetch('/processes');
     const data = await res.json();
     const procs = data.processes || data || [];
     renderProcessCards(Array.isArray(procs) ? procs : []);
@@ -2000,7 +2036,7 @@ async function loadSchedule() {
   if (!list) return;
 
   try {
-    const res  = await fetch('/scheduled');
+    const res  = await authFetch('/scheduled');
     const data = await res.json();
     renderScheduleCards(data.tasks || []);
   } catch (e) {
@@ -2091,7 +2127,7 @@ async function loadCredentials() {
   if (!el) return;
 
   try {
-    const res  = await fetch('/credentials');
+    const res  = await authFetch('/credentials');
     const data = await res.json();
     // Backend returns {credentials: [...], count: N} or {names: [...]}
     const count = data.count ?? (data.credentials || data.names || []).length;
@@ -2128,7 +2164,7 @@ async function loadAnalytics() {
   if (!content) return;
 
   try {
-    const res  = await fetch('/analytics');
+    const res  = await authFetch('/analytics');
     const data = await res.json();
     renderAnalytics(content, data);
   } catch (e) {

@@ -1,4 +1,9 @@
 {
+  "remote_access": {
+    "enabled": true,
+    "auth_token": "52-dpg8hd_o8kCtvla1MuFPlJoX7Jf9R63X6m2q1c90",
+    "require_auth": true
+  },
   "llm": {
     "primary": "claude-haiku-4-5",
     "complex": "claude-sonnet-4-6",
