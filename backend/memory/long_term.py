@@ -435,6 +435,11 @@ def log_task(
         "tools_used":       list(tools_used),
         "duration_seconds": int(duration_seconds),
     }
+    # Improvement 4: record which tool was active at failure time.
+    # The last tool in tools_used is typically the one that triggered it,
+    # making analyze_performance() more useful for identifying failure patterns.
+    if outcome != "success" and tools_used:
+        entry["failed_at_tool"] = tools_used[-1]
     data["tasks"].append(entry)
     # Keep only the most recent _MAX_TASKS entries (trim oldest)
     if len(data["tasks"]) > _MAX_TASKS:

@@ -168,60 +168,75 @@ async def write_tool(filename: str, code: str) -> dict[str, Any]:
           "validation": "OK" | error message,
         }
     """
-    # --- Filename safety check ---
-    ok, reason = _check_filename(filename)
-    if not ok:
-        logger.warning(f"[tool_writer] Rejected unsafe filename: {filename!r} — {reason}")
-        return {"success": False, "path": "", "validation": f"Invalid filename: {reason}"}
-
-    # --- Ensure the generated directory exists ---
-    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-
-    dest = GENERATED_DIR / filename
-
-    # --- Write the code ---
     try:
-        dest.write_text(code, encoding="utf-8")
-        logger.info(f"[tool_writer] Wrote tool file: {dest}")
-    except OSError as e:
-        return {"success": False, "path": str(dest), "validation": f"Write error: {e}"}
+        # --- Filename safety check ---
+        ok, reason = _check_filename(filename)
+        if not ok:
+            logger.warning(f"[tool_writer] Rejected unsafe filename: {filename!r} — {reason}")
+            return {"success": False, "path": "", "validation": f"Invalid filename: {reason}"}
 
-    # --- Static validation ---
-    valid, msg = validate_tool_file(dest)
-    if not valid:
-        logger.warning(f"[tool_writer] Validation failed for {filename}: {msg}")
-        # Leave the file on disk so the agent can read it back and fix it,
-        # but report the failure clearly.
-        return {"success": False, "path": str(dest), "validation": msg}
+        # --- Ensure the generated directory exists ---
+        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"[tool_writer] {filename} passed validation — call reload_tool to activate.")
+        dest = GENERATED_DIR / filename
 
-    # ── Runtime validation (syntax + import in subprocess sandbox) ────────────
-    syntax_valid, import_valid, test_error = _test_tool_file(dest)
-    ready_to_reload = syntax_valid and import_valid
+        # --- Write the code ---
+        try:
+            dest.write_text(code, encoding="utf-8")
+            logger.info(f"[tool_writer] Wrote tool file: {dest}")
+        except OSError as e:
+            return {"success": False, "path": str(dest), "validation": f"Write error: {e}"}
 
-    if not ready_to_reload:
-        logger.warning(
-            f"[tool_writer] Runtime test failed for {filename}: {test_error}"
-        )
+        # --- Static validation ---
+        valid, msg = validate_tool_file(dest)
+        if not valid:
+            logger.warning(f"[tool_writer] Validation failed for {filename}: {msg}")
+            # Leave the file on disk so the agent can read it back and fix it,
+            # but report the failure clearly.
+            return {"success": False, "path": str(dest), "validation": msg}
+
+        logger.info(f"[tool_writer] {filename} passed validation — call reload_tool to activate.")
+
+        # ── Runtime validation (syntax + import in subprocess sandbox) ────────────
+        syntax_valid, import_valid, test_error = _test_tool_file(dest)
+        ready_to_reload = syntax_valid and import_valid
+
+        if not ready_to_reload:
+            logger.warning(
+                f"[tool_writer] Runtime test failed for {filename}: {test_error}"
+            )
+            return {
+                "success":         False,
+                "path":            str(dest),
+                "validation":      "OK",           # static validation passed …
+                "syntax_valid":    syntax_valid,
+                "import_valid":    import_valid,
+                "ready_to_reload": False,
+                "error":           test_error,     # … but runtime test failed
+            }
+
         return {
-            "success":         False,
+            "success":         True,
             "path":            str(dest),
-            "validation":      "OK",           # static validation passed …
-            "syntax_valid":    syntax_valid,
-            "import_valid":    import_valid,
-            "ready_to_reload": False,
-            "error":           test_error,     # … but runtime test failed
+            "validation":      "OK",
+            "syntax_valid":    True,
+            "import_valid":    True,
+            "ready_to_reload": True,
         }
 
-    return {
-        "success":         True,
-        "path":            str(dest),
-        "validation":      "OK",
-        "syntax_valid":    True,
-        "import_valid":    True,
-        "ready_to_reload": True,
-    }
+    except TypeError as e:
+        return {
+            "success": False,
+            "error": f"Serialization error: {e}",
+            "hint": (
+                "The tool code likely passed a Python function or non-serializable object "
+                "as a return value or to register_tool(). Ensure all return values are plain "
+                "dicts/lists/strings/numbers, and register_tool() receives description as a "
+                "string (second argument), not the handler function."
+            ),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 async def reload_tool(filename: str) -> dict[str, Any]:
@@ -241,32 +256,47 @@ async def reload_tool(filename: str) -> dict[str, Any]:
           "message": str,
         }
     """
-    ok, reason = _check_filename(filename)
-    if not ok:
-        return {"success": False, "message": f"Invalid filename: {reason}"}
+    try:
+        ok, reason = _check_filename(filename)
+        if not ok:
+            return {"success": False, "message": f"Invalid filename: {reason}"}
 
-    path = GENERATED_DIR / filename
+        path = GENERATED_DIR / filename
 
-    if not path.exists():
+        if not path.exists():
+            return {
+                "success": False,
+                "message": (
+                    f"File not found: {path}. "
+                    "Use write_tool first to create the file before calling reload_tool."
+                ),
+            }
+
+        # hot_reload_tool handles validation + importlib loading + register_* call.
+        # send_event=None because we have no WebSocket handle here;
+        # main.py's auto-loader passes a real send_event on startup.
+        success, message = await hot_reload_tool(path, send_event=None)
+
+        if success:
+            logger.info(f"[tool_writer] reload_tool: {filename} registered successfully.")
+        else:
+            logger.warning(f"[tool_writer] reload_tool: {filename} failed — {message}")
+
+        return {"success": success, "message": message}
+
+    except TypeError as e:
         return {
             "success": False,
-            "message": (
-                f"File not found: {path}. "
-                "Use write_tool first to create the file before calling reload_tool."
+            "error": f"Serialization error: {e}",
+            "hint": (
+                "The tool code likely passed a Python function or non-serializable object "
+                "as a return value or to register_tool(). Ensure all return values are plain "
+                "dicts/lists/strings/numbers, and register_tool() receives description as a "
+                "string (second argument), not the handler function."
             ),
         }
-
-    # hot_reload_tool handles validation + importlib loading + register_* call.
-    # send_event=None because we have no WebSocket handle here;
-    # main.py's auto-loader passes a real send_event on startup.
-    success, message = await hot_reload_tool(path, send_event=None)
-
-    if success:
-        logger.info(f"[tool_writer] reload_tool: {filename} registered successfully.")
-    else:
-        logger.warning(f"[tool_writer] reload_tool: {filename} failed — {message}")
-
-    return {"success": success, "message": message}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ---------------------------------------------------------------------------

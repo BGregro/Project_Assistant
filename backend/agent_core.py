@@ -117,10 +117,11 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "it modifies only the specified lines and preserves the rest. "
             "If a project requires packages not yet installed, call install_package for each "
             "dependency before running the project. "
-            "RESUMING A PROJECT: Always call read_project_state(project_name) first — "
-            "it gives you completed files, pending files, last action, and the recommended "
-            "next step in one call. Only use get_project_status + manual file reads if "
-            "state.json does not yet exist. "
+            "RESUMING A PROJECT: When the user mentions a project by name "
+            "(e.g. 'continue X', 'work on X', 'status of X'), ALWAYS call "
+            "read_project_state(project_name) as the FIRST tool call. Never read individual "
+            "files before checking the state snapshot. If state.json doesn't exist, call "
+            "get_project_status instead. "
             "MID-TASK QUESTIONS: If you are unsure about a key decision (which API to use, "
             "which approach to take, whether to overwrite an existing file), call "
             "ask_user(question) to pause and get the user's input. Much better than guessing."
@@ -152,7 +153,10 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
     "memory": {
         "keywords": [r"remember", r"recall", r"log", r"save.*finding", r"past.*task"],
         "content": (
-            "\n\nMEMORY: After completing any research task you MUST call log_research. "
+            "\n\nMEMORY: Before starting any research or build task, call recall_memory first "
+            "to check if relevant work was already done. Before scaffolding a project, call "
+            "recall_projects. This prevents duplicate work and reuses past findings. "
+            "After completing any research task you MUST call log_research. "
             "After learning any specific fact about the user or their system, call log_fact. "
             "Use recall_memory to retrieve past tasks and facts before starting a new task "
             "that might overlap with prior work."
@@ -361,6 +365,10 @@ class AgentCore:
         self._current_goal: str = ""
 
         self._base_system_prompt = (
+            "You are a universal personal AI assistant. You are not specialized for any single project. "
+            "Always read the user's intent fresh. Keep responses concise — avoid unnecessary markdown "
+            "formatting, tables, or emoji in conversational replies. Use formatting only when it "
+            "genuinely helps (structured data, code, comparisons).\n\n"
             "You are a capable personal AI agent with access to filesystem tools. "
             "Use tools whenever they would help complete the user's request. "
             "Before using a tool, briefly state what you're about to do. "
@@ -671,7 +679,8 @@ class AgentCore:
         Returns "local" or "claude".
         """
         if self.local_sufficient_default != "ask":
-            return self.local_sufficient_default
+            choice = self.local_sufficient_default
+            return choice if choice in ("local", "claude") else "claude"
 
         event = asyncio.Event()
         self._pending_tier_choices[message_id] = {
@@ -689,14 +698,12 @@ class AgentCore:
         try:
             await asyncio.wait_for(event.wait(), timeout=15.0)
         except asyncio.TimeoutError:
-            logger.info(
-                f"[agent] Tier choice timed out for {message_id!r} "
-                f"— using default: {self.local_sufficient_default}"
-            )
+            logger.info("[agent] Tier choice timed out — defaulting to Claude")
 
-        choice = self._pending_tier_choices.pop(message_id, {}).get(
-            "choice", self.local_sufficient_default
-        )
+        choice = self._pending_tier_choices.pop(message_id, {}).get("choice", "claude")
+        # Ensure timeout/default never produces "ask" as a model name
+        if choice not in ("local", "claude"):
+            choice = "claude"
         logger.info(f"[agent] Tier choice resolved → {choice!r}")
         return choice
 
@@ -765,6 +772,19 @@ class AgentCore:
                 model=self.local_model,
                 base_url=self.ollama_url,
             )
+
+            # Improvement 2: Short affirmatives must never be answered locally —
+            # they almost always refer to an ongoing tool-based task and need Claude.
+            SHORT_AFFIRMATIVES = {
+                "yes", "no", "ok", "okay", "sure", "proceed", "continue", "go",
+                "do it", "go ahead", "go on", "next", "keep going", "finish",
+                "complete it", "done", "stop", "y", "yep", "yeah", "nope",
+                "correct", "right", "good", "great", "perfect", "sounds good",
+            }
+            stripped = user_message.strip().lower().rstrip(".,!")
+            if intent == "SIMPLE" and (stripped in SHORT_AFFIRMATIVES or len(user_message.strip()) < 15):
+                intent = "TOOL"
+                logger.debug(f"[agent] Short affirmative override: SIMPLE → TOOL ('{stripped}')")
 
             if intent == "SIMPLE":
                 # Bug fix (Phase 3g): self-directed tasks must never be answered
@@ -915,6 +935,19 @@ class AgentCore:
                 model=self.local_model,
                 base_url=self.ollama_url,
             )
+
+            # Improvement 2: Short affirmatives must never be answered locally —
+            # they almost always refer to an ongoing tool-based task and need Claude.
+            _SHORT_AFFIRMATIVES = {
+                "yes", "no", "ok", "okay", "sure", "proceed", "continue", "go",
+                "do it", "go ahead", "go on", "next", "keep going", "finish",
+                "complete it", "done", "stop", "y", "yep", "yeah", "nope",
+                "correct", "right", "good", "great", "perfect", "sounds good",
+            }
+            _stripped = user_message.strip().lower().rstrip(".,!")
+            if intent == "SIMPLE" and (_stripped in _SHORT_AFFIRMATIVES or len(user_message.strip()) < 15):
+                intent = "TOOL"
+                logger.debug(f"[agent] Short affirmative override: SIMPLE → TOOL ('{_stripped}')")
 
             if intent == "SIMPLE":
                 # Bug fix (Phase 3g): self-directed tasks must never be answered

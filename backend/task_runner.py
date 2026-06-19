@@ -101,6 +101,11 @@ class TaskRunner:
         # answer string populated by answer_question() when the user responds.
         self._pending_questions: dict[str, dict] = {}
 
+        # Improvement 5: timestamp of the last rate-limit error.
+        # Used to pace requests for 2 minutes after any 429 to avoid
+        # hitting the limit again immediately after a retry.
+        self._last_rate_limit_ts: float = 0.0
+
     # ------------------------------------------------------------------
     # Public control API
     # ------------------------------------------------------------------
@@ -282,6 +287,12 @@ class TaskRunner:
                     await send_event("task_stopped", {"reason": "error", "error": msg})
                     return msg
 
+                # Improvement 5: post-rate-limit pacing.
+                # After any 429, slow down for 2 minutes to avoid immediately
+                # hitting the rate limit again on the very next request.
+                if self._last_rate_limit_ts and (time.time() - self._last_rate_limit_ts) < 120:
+                    await asyncio.sleep(2.0)
+
                 # ── 0. Sanitize message history ────────────────────────
                 # Delegate to agent._sanitize_messages() — the canonical
                 # implementation lives on AgentCore (Fix 1) so the repair
@@ -354,6 +365,7 @@ class TaskRunner:
                     })
                     raise
                 except anthropic.RateLimitError:
+                    self._last_rate_limit_ts = time.time()
                     await send_event("error", {
                         "text": "Claude API rate limit hit. Try again shortly."
                     })
