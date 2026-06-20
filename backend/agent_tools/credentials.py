@@ -88,7 +88,7 @@ def _save(data: dict) -> None:
     CREDS_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = CREDS_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    tmp.rename(CREDS_FILE)
+    tmp.replace(CREDS_FILE)
     logger.debug(f"[credentials] Saved {len(data)} credential(s) to disk.")
 
 

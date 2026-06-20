@@ -17,6 +17,7 @@ None / the original input, never raising exceptions to the caller.
 
 import json
 import logging
+import time
 import httpx
 from typing import Optional, Any
 
@@ -247,9 +248,10 @@ async def local_agent_call(
     messages: list[dict],
     model: str = DEFAULT_AGENT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
-    max_iterations: int = 10,
+    max_iterations: int = 25,
     tool_dispatcher: Any = None,
     timeout: float = 300.0,
+    send_event=None,  # optional — if provided, emits task_progress events
 ) -> str:
     """
     Run a full agentic loop entirely through Ollama — no Claude API required.
@@ -277,6 +279,9 @@ async def local_agent_call(
         timeout:         Per-request HTTP timeout in seconds. Configurable via
                          config.json → "local_agent_timeout" (default 300s).
                          Larger models on CPU may need several minutes per response.
+        send_event:      Optional async callable(event_type, data) — if provided,
+                         emits task_progress events so the frontend step timeline
+                         reflects local tool calls in real time.
 
     Returns:
         Final text response string, or an error message if Ollama is unreachable.
@@ -425,13 +430,38 @@ async def local_agent_call(
 
             logger.info(f"[local_llm] Tool call: {name}({args})")
 
+            # Emit "running" progress event if a send_event callback is wired up
+            if send_event and name:
+                await send_event("task_progress", {
+                    "step": iteration + 1,
+                    "label": f"[local] {name}",
+                    "status": "running",
+                    "elapsed_ms": 0,
+                })
+
+            _tool_start_ms = int(time.monotonic() * 1000)
+
             if tool_dispatcher is not None:
                 try:
                     result = await tool_dispatcher(name, args)
+                    result_success = True
                 except Exception as e:
                     result = {"success": False, "error": str(e)}
+                    result_success = False
             else:
                 result = {"success": False, "error": "No tool dispatcher available in local mode."}
+                result_success = False
+
+            elapsed = int(time.monotonic() * 1000) - _tool_start_ms
+
+            # Emit "done"/"failed" progress event
+            if send_event and name:
+                await send_event("task_progress", {
+                    "step": iteration + 1,
+                    "label": f"[local] {name}",
+                    "status": "done" if result_success else "failed",
+                    "elapsed_ms": elapsed,
+                })
 
             # Ollama expects tool results as role="tool" messages
             tool_result_messages.append({
@@ -442,8 +472,25 @@ async def local_agent_call(
 
         working_messages.extend(tool_result_messages)
 
-    # Reached max iterations without a final answer
-    return "Error: local agent reached the maximum number of tool-use iterations without a final answer."
+    # Reached max iterations without a final answer — graceful fallback
+    # Collect useful content from tool results gathered so far
+    collected = []
+    for msg in working_messages:
+        if isinstance(msg, dict) and msg.get("role") == "tool":
+            content = msg.get("content", "")
+            if content and len(str(content)) > 20:
+                collected.append(str(content)[:300])
+
+    if collected:
+        summary = "\n\n".join(collected[:5])  # show up to 5 results
+        return (
+            f"I reached the iteration limit before forming a complete answer. "
+            f"Here is what I found:\n\n{summary}"
+        )
+    return (
+        "I was unable to complete this task locally within the iteration limit. "
+        "Try again with Claude (use the tier banner to choose Claude instead of local)."
+    )
 
 
 async def is_ollama_available(base_url: str = DEFAULT_BASE_URL) -> bool:

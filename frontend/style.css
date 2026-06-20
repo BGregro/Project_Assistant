@@ -262,6 +262,14 @@ body { display: flex; flex-direction: column; height: 100dvh; }
   padding: 5px 11px;
 }
 
+/* Queued message that is now being actively processed */
+.msg-bubble.queued-bubble.queued-active {
+  border-left: 2px solid var(--accent-green);
+  border-style: solid;
+  color: var(--text);
+  font-style: normal;
+}
+
 /* ============================================================
    TASK RUN CONTAINERS
    Groups all tool blocks + final reply from a single task run.

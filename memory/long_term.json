@@ -944,6 +944,199 @@
         "email_connect"
       ],
       "duration_seconds": 11
+    },
+    {
+      "id": "fe735762-3843-4d6d-9237-e7679a37d20f",
+      "timestamp": "2026-06-20T07:49:43.076979+00:00",
+      "goal": "Scan my inbox for emails older than 90 days and show me what categories you find. Use dry_run mode — don't delete anything.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "email_connect"
+      ],
+      "duration_seconds": 6
+    },
+    {
+      "id": "1cd2d872-2202-4db3-ad13-d8379284686f",
+      "timestamp": "2026-06-20T07:52:17.926924+00:00",
+      "goal": "I generated a new gmail app password. Store it and test it.",
+      "outcome": "success",
+      "summary": "Completed in 0 steps.",
+      "tools_used": [],
+      "duration_seconds": 4
+    },
+    {
+      "id": "4da057e6-b1f7-429f-8b4a-cf9653742efc",
+      "timestamp": "2026-06-20T07:54:35.801108+00:00",
+      "goal": "cvov znsk xmhe koun [Context: the assistant last said: 'I'm ready to store your new Gmail app password. Please provide it now, and I'll encrypt it and test the connection immediately....']",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "store_credential",
+        "email_connect"
+      ],
+      "duration_seconds": 68
+    },
+    {
+      "id": "db240614-a0fc-451a-b375-4b9b272b2ad3",
+      "timestamp": "2026-06-20T07:58:23.770723+00:00",
+      "goal": "try to connect to my email with this credentials: cvov znsk xmhe koun",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "store_credential"
+      ],
+      "duration_seconds": 13
+    },
+    {
+      "id": "1a8b9b7f-96fc-4555-ab73-96032ab2b56e",
+      "timestamp": "2026-06-20T08:02:41.180939+00:00",
+      "goal": "try to connect to my email. Check back on the current conversation",
+      "outcome": "success",
+      "summary": "Completed in 3 steps.",
+      "tools_used": [
+        "store_credential",
+        "email_connect"
+      ],
+      "duration_seconds": 13
+    },
+    {
+      "id": "6b862378-50bd-414c-b535-1b00c970e69e",
+      "timestamp": "2026-06-20T08:21:06.525997+00:00",
+      "goal": "I want you to be able to access my youtube channel. What credentials should I give you and how?",
+      "outcome": "success",
+      "summary": "Completed in 0 steps.",
+      "tools_used": [],
+      "duration_seconds": 3
+    },
+    {
+      "id": "c70ee390-975a-467f-bf63-728234aef281",
+      "timestamp": "2026-06-20T08:26:48.885492+00:00",
+      "goal": "Youtube api key: AIzaSyCmeA5XnMmngicRyMNb6olqNoTZOY3Tvzs",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "store_credential"
+      ],
+      "duration_seconds": 64
+    },
+    {
+      "id": "f1eb7e5d-501b-4f32-8885-5c85d8ee39fe",
+      "timestamp": "2026-06-20T08:29:13.980530+00:00",
+      "goal": "I approved it, why couldn't you store the credentials?",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "store_credential"
+      ],
+      "duration_seconds": 8
+    },
+    {
+      "id": "d4be78bb-29d8-4195-8138-8815b736377c",
+      "timestamp": "2026-06-20T08:32:31.347734+00:00",
+      "goal": "delete the temporary file and try again with storing the credentials",
+      "outcome": "success",
+      "summary": "Completed in 4 steps.",
+      "tools_used": [
+        "execute_code",
+        "store_credential"
+      ],
+      "duration_seconds": 62
+    },
+    {
+      "id": "e5bb2b41-a85a-4210-bfd5-41573d5a4147",
+      "timestamp": "2026-06-20T08:40:59.719647+00:00",
+      "goal": "Store my gmail app password: cvov znsk xmhe koun",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "store_credential"
+      ],
+      "duration_seconds": 7
+    },
+    {
+      "id": "1472bfb6-c825-4f0a-bbe8-e27156f2535a",
+      "timestamp": "2026-06-20T08:43:30.486030+00:00",
+      "goal": "store my youtube api key: AIzaSyCmeA5XnMmngicRyMNb6olqNoTZOY3Tvzs",
+      "outcome": "success",
+      "summary": "Completed in 0 steps.",
+      "tools_used": [],
+      "duration_seconds": 1
+    },
+    {
+      "id": "9b4105cf-db2c-4203-a641-41f8b7efc218",
+      "timestamp": "2026-06-20T08:45:41.027939+00:00",
+      "goal": "list my stored credentials [Context: the assistant last said: 'I already have your YouTube API key stored from earlier in this conversation (when you provided it the first time). It's securely saved as `youtube_api_key` and ready to use.  Is there something else ...']",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "list_credentials"
+      ],
+      "duration_seconds": 2
+    },
+    {
+      "id": "83fd2a1d-ee9e-4d5c-b305-94a8a55ff28a",
+      "timestamp": "2026-06-20T08:47:04.115343+00:00",
+      "goal": "Search YouTube for 'Python tutorial 2025' and show me the top 3 results.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "youtube_search"
+      ],
+      "duration_seconds": 4
+    },
+    {
+      "id": "e9ad1c13-867f-42ee-884b-427bc41e76a4",
+      "timestamp": "2026-06-20T08:49:23.293249+00:00",
+      "goal": "access my gmail acount [Context: the assistant last said: 'Here are the top 3 results for \"Python tutorial 2025\":  1. **Python Full Course for Beginners** (Programming with Mosh)    - Published: Feb 12, 2025    - Video ID: K5KVEU3aaeQ    - \"Master Python from...']",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "email_connect"
+      ],
+      "duration_seconds": 9
+    },
+    {
+      "id": "d830c20b-54f7-4f07-b14f-4806ab0fdd23",
+      "timestamp": "2026-06-20T08:52:01.241218+00:00",
+      "goal": "write down the contents of the latest email I got",
+      "outcome": "success",
+      "summary": "Completed in 0 steps.",
+      "tools_used": [],
+      "duration_seconds": 2
+    },
+    {
+      "id": "cdcb5b60-c69a-469e-b62f-72557a6a99ef",
+      "timestamp": "2026-06-20T09:23:38.507055+00:00",
+      "goal": "connect to my gmail account and send me everything you can about my latest email",
+      "outcome": "success",
+      "summary": "Completed in 0 steps.",
+      "tools_used": [],
+      "duration_seconds": 2
+    },
+    {
+      "id": "89e090f1-5fe8-47b5-8d54-0dab6af1b389",
+      "timestamp": "2026-06-20T09:25:42.771780+00:00",
+      "goal": "you should have my credentials, use them to connect to my email and complete my request",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "get_credential"
+      ],
+      "duration_seconds": 5
+    },
+    {
+      "id": "f0ad2b5f-4cb1-4a02-9bac-aefdae6b23f6",
+      "timestamp": "2026-06-20T09:29:13.951148+00:00",
+      "goal": "complete my prevoius request, my email address is: bodageri1@gmail.com",
+      "outcome": "success",
+      "summary": "Completed in 3 steps.",
+      "tools_used": [
+        "gmail_scan_inbox",
+        "get_credential",
+        "gmail_connect"
+      ],
+      "duration_seconds": 30
     }
   ],
   "facts": [

@@ -868,6 +868,28 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
             if question_id:
                 task_runner.answer_question(question_id, answer)
 
+        elif msg_type == "requeue_message":
+            # Emitted by task_runner when a message arrived during the race window
+            # between task completion and _is_running becoming False.
+            # Re-process it as a fresh user message.
+            requeue_text = raw.get("content", "")
+            if requeue_text:
+                logger.info(
+                    f"[ws] Re-processing race-condition queued message: {requeue_text[:60]!r}"
+                )
+                context_note, agent_messages = await build_context(history, requeue_text)
+                asyncio.create_task(
+                    agent.run_with_task_runner(
+                        task_runner=task_runner,
+                        user_message=requeue_text,
+                        history=agent_messages,
+                        send_event=send_event,
+                        pending_confirmations=pending_confirmations,
+                        context_summary=context_note,
+                        pending_plans=pending_plans,
+                    )
+                )
+
         # Phase 9 — tier choice response from the frontend banner
         elif msg_type == "tier_response":
             message_id = raw.get("data", {}).get("message_id", "")

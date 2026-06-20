@@ -362,6 +362,26 @@ function handleServerEvent(type, data) {
       showTierBanner(data.message_id, data.message_preview, data.timeout_seconds);
       break;
 
+    case 'queued_message_active':
+      // A previously queued message is now being processed by the agent.
+      // Update any matching queued bubble to show active state.
+      (function() {
+        const preview40 = (data.preview || '').slice(0, 40);
+        const queuedBubbles = document.querySelectorAll('.queued-bubble');
+        queuedBubbles.forEach(function(el) {
+          if (el.textContent.includes(preview40)) {
+            el.classList.add('queued-active');
+            el.innerHTML = el.innerHTML.replace('↪ Queued:', '▶ Working on:');
+          }
+        });
+        const previewText = data.preview || '';
+        setStatusBar(
+          `▶ Working on: "${previewText.slice(0, 60)}${previewText.length > 60 ? '…' : ''}"`,
+          'active'
+        );
+      })();
+      break;
+
     default:
       console.warn('[ws] Unknown event type:', type);
   }

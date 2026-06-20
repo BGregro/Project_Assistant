@@ -307,6 +307,7 @@ class TaskRunner:
                     self._current_task["status"] = "cancelled"
                     self._save_task()
                     await send_event("task_stopped", {"reason": "user_cancelled"})
+                    self._is_running = False
                     # Phase 3f: log cancellation to long-term memory
                     try:
                         from memory.long_term import log_task as _log_task
@@ -325,6 +326,16 @@ class TaskRunner:
                 while True:
                     try:
                         queued_msg = self._message_queue.get_nowait()
+                        logger.info(
+                            f"[task_runner] Injected user message: {queued_msg[:60]!r}"
+                        )
+
+                        # Notify the UI which queued message is now being processed
+                        await send_event("queued_message_active", {
+                            "content": queued_msg,
+                            "preview": queued_msg[:80],
+                        })
+
                         messages.append({"role": "user", "content": queued_msg})
                         step_counter += 1
                         await send_event("task_progress", {
@@ -333,9 +344,6 @@ class TaskRunner:
                             "status":     "done",
                             "elapsed_ms": _elapsed_ms(run_start_ms),
                         })
-                        logger.info(
-                            f"[task_runner] Injected user message: {queued_msg[:60]!r}"
-                        )
                     except asyncio.QueueEmpty:
                         break
 
@@ -393,6 +401,8 @@ class TaskRunner:
                         f"[task_runner] Task {task_id} complete in "
                         f"{_elapsed_ms(run_start_ms)}ms."
                     )
+                    # Mark not-running before cleanup so any race-window messages can be re-queued
+                    self._is_running = False
                     # Phase 3f: persist outcome to long-term memory
                     try:
                         from memory.long_term import log_task as _log_task
@@ -425,6 +435,20 @@ class TaskRunner:
                             asyncio.ensure_future(_send_email(_subject, _body))
                     except Exception as _notif_e:
                         logger.debug(f"[task_runner] Email notification skipped (non-fatal): {_notif_e}")
+
+                    # Drain any messages that arrived during the race window between
+                    # task completion and _is_running = False being visible to main.py
+                    leftover = []
+                    while not self._message_queue.empty():
+                        try:
+                            leftover.append(self._message_queue.get_nowait())
+                        except asyncio.QueueEmpty:
+                            break
+                    if leftover and send_event:
+                        await send_event("requeue_message", {"content": leftover[0]})
+                        logger.info(
+                            f"[task_runner] Re-queued {len(leftover)} race-condition message(s)"
+                        )
 
                     return final_text
 
@@ -677,6 +701,8 @@ class TaskRunner:
             self._current_task["error"] = str(e)
             self._save_task()
             await send_event("task_stopped", {"reason": "error", "error": str(e)})
+            # Set running flag before cleanup so new messages aren't silently queued
+            self._is_running = False
             # Phase 3f: log failure to long-term memory
             try:
                 from memory.long_term import log_task as _log_task
@@ -692,7 +718,9 @@ class TaskRunner:
             return f"Task failed: {e}"
 
         finally:
-            # Always clear the running flag, even on unexpected exits
+            # Guard: ensure _is_running is always cleared even on unexpected exits.
+            # In normal (complete/cancelled/failed) paths it's already set above;
+            # this catches any edge case we haven't accounted for.
             self._is_running = False
 
         # Reached if an unknown stop_reason broke the loop without exception
