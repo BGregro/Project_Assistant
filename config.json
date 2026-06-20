@@ -7,7 +7,7 @@
   "llm": {
     "primary": "claude-haiku-4-5",
     "complex": "claude-sonnet-4-6",
-    "local": "qwen3:14b",
+    "local": "qwen3:8b",
     "local_agent": "qwen3:14b",
     "max_tokens_primary": 8192,
     "max_tokens_complex": 16000
@@ -65,7 +65,9 @@
   "igpu": {
     "enabled": true,
     "ollama_dir": "C:\\Users\\bodag\\Downloads\\ollama-ipex-llm-2.3.0b20250612-win",
-    "model_small": "qwen3:14b",
-    "context_size": 8192
+    "model_small": "qwen3:8b",
+    "model_large": "qwen3:14b",
+    "context_size": 8192,
+    "max_loaded_models": 2
   }
 }
