@@ -7,8 +7,8 @@
   "llm": {
     "primary": "claude-haiku-4-5",
     "complex": "claude-sonnet-4-6",
-    "local": "qwen2.5:14b",
-    "local_agent": "qwen2.5:14b",
+    "local": "qwen3:14b",
+    "local_agent": "qwen3:14b",
     "max_tokens_primary": 8192,
     "max_tokens_complex": 16000
   },
@@ -16,11 +16,11 @@
   "use_intent_routing": true,
   "use_tool_compression": true,
   "use_code_prevalidation": true,
-  "use_tool_prefilter": false,
+  "use_tool_prefilter": true,
   "auto_approve_code_execution": true,
   "local_fallback": true,
   "local_mode": false,
-  "local_agent_timeout": 1200,
+  "local_agent_timeout": 180,
   "local_sufficient_default": "ask",
   "ollama_base_url": "http://localhost:11434",
   "outputs_dir": "outputs",
@@ -61,5 +61,11 @@
     "code": {
       "timeout_seconds": 30
     }
+  },
+  "igpu": {
+    "enabled": true,
+    "ollama_dir": "C:\\Users\\bodag\\Downloads\\ollama-ipex-llm-2.3.0b20250612-win",
+    "model_small": "qwen3:14b",
+    "context_size": 8192
   }
 }

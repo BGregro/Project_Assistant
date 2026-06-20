@@ -726,17 +726,19 @@ async def prevalidate_code(
     the call times out, the code goes through to execute_code unchanged.
     Pre-validation is a cost-saving optimisation, not a security gate.
     """
-    system = (
-        f"Review this {language} code for obvious bugs, syntax errors, or logic errors "
-        f"that would cause it to fail. The code is intended to: {intent}. "
-        "Reply with either 'OK' if the code looks correct, or 'ISSUE: ' followed by a "
-        "one-sentence description of the problem. Nothing else."
+    # More thorough review prompt — iGPU speed makes this affordable on every call
+    prompt = (
+        f"Review this {language} code for: syntax errors, undefined variables, "
+        f"missing imports, logic errors, and common Python pitfalls.\n"
+        f"The code is intended to: {intent}\n\n"
+        f"Code:\n```{language}\n{code}\n```\n\n"
+        "Reply with 'OK' if correct, or 'ISSUE: ' followed by the specific problem. "
+        "Be specific about line numbers if possible."
     )
 
     payload: dict = {
         "model":      model,
-        "prompt":     code,
-        "system":     system,
+        "prompt":     prompt,
         "stream":     False,
         "keep_alive": -1,
     }
@@ -774,7 +776,7 @@ async def select_relevant_tools(
     all_tool_names: list[str],
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
-    max_tools: int = 10,
+    max_tools: int = 8,  # Lowered from 10 — iGPU speed allows tighter selection
 ) -> list[str]:
     """
     Use the local LLM to select the most relevant tools for the current request.
@@ -822,6 +824,73 @@ async def select_relevant_tools(
     except Exception as e:
         logger.warning(f"[local_llm] Tool selection failed ({e}) — using full tool list.")
         return all_tool_names
+
+
+async def generate_task_plan(
+    goal: str,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> list[str]:
+    """
+    Use the local model to generate a quick task plan before sending to Claude.
+    With iGPU acceleration this runs in ~5-8 seconds on Arc 140V.
+
+    Returns a list of step strings (3-6 items), or an empty list on failure.
+    The caller (agent_core.py) can inject this plan into the task context so
+    Claude starts with a structured outline rather than planning from scratch.
+    """
+    prompt = (
+        f"Create a brief numbered plan (3-6 steps) for this task: {goal}\n"
+        "Reply with ONLY the numbered steps, one per line. No introduction, no explanation."
+    )
+    try:
+        response = await local_llm_call(prompt, model, base_url=base_url)
+        if not response:
+            return []
+        lines = [l.strip() for l in response.strip().split("\n") if l.strip()]
+        # Keep only lines that start with a digit (numbered steps)
+        steps = [l for l in lines if l and l[0].isdigit()]
+        if len(steps) >= 2:
+            logger.info(f"[local_llm] generate_task_plan: {len(steps)} steps generated")
+            return steps
+        return []
+    except Exception as e:
+        logger.warning(f"[local_llm] generate_task_plan: error ({e})")
+        return []
+
+
+async def summarize_for_user(
+    content: str,
+    max_words: int,
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+) -> str:
+    """
+    Summarize long tool output into a concise user-facing response.
+
+    Used when the agent has a lot of data but should present it cleanly.
+    Fast enough on Arc iGPU (qwen3:14b) to use for every research result
+    presentation without noticeable delay.
+
+    Falls back to a truncated version of the original on any failure, so the
+    user always receives something useful.
+    """
+    prompt = (
+        f"Summarize the following in under {max_words} words for a non-technical user. "
+        f"Focus on the most important and actionable information:\n\n{content[:3000]}"
+    )
+    try:
+        result = await local_llm_call(prompt, model, base_url=base_url)
+        if result:
+            logger.info(
+                f"[local_llm] summarize_for_user: {len(content)} → {len(result)} chars"
+            )
+            return result
+    except Exception as e:
+        logger.warning(f"[local_llm] summarize_for_user: error ({e}), using truncated original")
+
+    # Fallback: truncate the raw content
+    return content[:500] + "..." if len(content) > 500 else content
 
 
 async def unload_model(model: str, base_url: str = DEFAULT_BASE_URL) -> None:

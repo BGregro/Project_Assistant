@@ -323,8 +323,8 @@ class AgentCore:
         llm_cfg = config.get("llm", {})
         self.primary_model:     str  = llm_cfg.get("primary",     "claude-haiku-4-5")
         self.complex_model:     str  = llm_cfg.get("complex",     "claude-sonnet-4-6")
-        self.local_model:       str  = llm_cfg.get("local",       "qwen2.5:14b")
-        self.local_agent_model: str  = llm_cfg.get("local_agent", "qwen2.5:14b")
+        self.local_model:       str  = llm_cfg.get("local",       "qwen3:14b")
+        self.local_agent_model: str  = llm_cfg.get("local_agent", "qwen3:14b")
 
         self.use_prompt_optimizer:  bool = config.get("use_prompt_optimizer",  True)
         self.use_intent_routing:    bool = config.get("use_intent_routing",    True)
@@ -402,7 +402,13 @@ class AgentCore:
             "outputs/ directory in the project root, not to backend/ or frontend/. "
             "Use write_file with a path like 'outputs/report.md' for text files. "
             "Use list_outputs() at the start of any task that might produce files, "
-            "to check what already exists and avoid duplicating work."
+            "to check what already exists and avoid duplicating work.\n\n"
+            # iGPU acceleration note — keep in sync with config.json llm.local
+            "The local preprocessing model (qwen3:14b) runs on an Intel Arc 140V iGPU "
+            "via ipex-llm Ollama and is fast — typical responses in 5-15 seconds. "
+            "Use LOCAL_SUFFICIENT routing generously for tasks that don't require "
+            "frontier reasoning: reading files, simple scripts, memory queries, "
+            "email classification, single web searches, summarisation."
         )
 
         # Phase 3g: Always inject user profile into the base system prompt at
