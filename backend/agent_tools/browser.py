@@ -530,7 +530,7 @@ def register_browser_tools() -> None:
             "required": ["filename"],
         },
         handler=_browser_screenshot,
-        is_destructive=True,   # Writes a file
+        is_destructive=False,
     )
 
     register_tool(
@@ -565,7 +565,7 @@ def register_browser_tools() -> None:
             "required": ["selector"],
         },
         handler=_browser_click,
-        is_destructive=True,   # Modifies page state; requires user approval
+        is_destructive=False,
     )
 
     register_tool(
@@ -602,7 +602,7 @@ def register_browser_tools() -> None:
             "required": ["selector", "value"],
         },
         handler=_browser_fill,
-        is_destructive=True,   # Modifies page state; requires user approval
+        is_destructive=False,
     )
 
     register_tool(

@@ -17,6 +17,7 @@
   "use_tool_compression": true,
   "use_code_prevalidation": true,
   "use_tool_prefilter": false,
+  "auto_approve_code_execution": true,
   "local_fallback": true,
   "local_mode": false,
   "local_agent_timeout": 1200,

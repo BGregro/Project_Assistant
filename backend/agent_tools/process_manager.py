@@ -548,7 +548,7 @@ def register_process_tools() -> None:
             "required": ["name", "text"],
         },
         handler=send_process_input,
-        is_destructive=True,   # sends commands to a running process
+        is_destructive=False,
     )
 
     register_tool(

@@ -536,6 +536,7 @@ async def status():
         "profile_loaded":          (Path(__file__).resolve().parent.parent / "memory" / "user_profile.json").exists(),
         "browser_available":       _browser_available,
         "local_sufficient_default": agent.local_sufficient_default,   # Phase 9
+        "auto_approve_code_execution": config.get("auto_approve_code_execution", False),
     })
 
 

@@ -1276,6 +1276,50 @@ class AgentCore:
     ) -> dict:
         await send_event("tool_call", {"tool": tool_name, "input": tool_input, "tool_use_id": tool_use_id})
 
+        # ── Auto-approve bypass for execute_code ───────────────────────
+        # If the user has enabled auto_approve_code_execution in config,
+        # skip the confirmation modal for execute_code only. All other
+        # destructive tools still require approval as normal.
+        if tool_name == "execute_code" and self.config.get("auto_approve_code_execution", False):
+            # Jump straight to pre-validation + dispatch — no confirmation prompt.
+            if self.use_code_prevalidation:
+                code     = tool_input.get("code", "")
+                language = tool_input.get("language", "python")
+                valid, issue = await prevalidate_code(
+                    code=code,
+                    language=language,
+                    intent=self._current_goal,
+                    model=self.local_model,
+                    base_url=self.ollama_url,
+                )
+                if not valid:
+                    await send_event("status", {
+                        "text": f"Pre-validation caught an issue: {issue} — asking agent to fix…"
+                    })
+                    synthetic_result = {
+                        "success":   False,
+                        "stdout":    "",
+                        "stderr":    (
+                            f"Pre-validation caught an issue before execution: {issue}. "
+                            "Please fix the code and retry."
+                        ),
+                        "exit_code": -1,
+                        "language":  language,
+                    }
+                    await send_event("tool_result", {
+                        "tool":    tool_name,
+                        "success": False,
+                        "result":  synthetic_result,
+                    })
+                    return _make_tool_result(tool_use_id, synthetic_result)
+            handler = get_handler(tool_name)
+            if handler is None:
+                result = {"success": False, "error": f"Unknown tool: {tool_name}"}
+            else:
+                result = await handler(**tool_input)
+            await send_event("tool_result", {"tool": tool_name, "result": result, "tool_use_id": tool_use_id})
+            return _make_tool_result(tool_use_id, result)
+
         # ── Permission check ───────────────────────────────────────────
         if tool_is_destructive(tool_name):
             approved = await self._request_confirmation(

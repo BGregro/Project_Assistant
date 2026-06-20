@@ -7,7 +7,10 @@
     "machine learning basics",
     "LaTeX",
     "PDF manipulation",
-    "execute_code"
+    "execute_code",
+    "distributed computing",
+    "parallel processing",
+    "get_media_info"
   ],
   "education": "3rd year Computer Engineering student",
   "languages": [
@@ -45,6 +48,8 @@
     "email management",
     "automation tools",
     "email privacy",
-    "security practices"
+    "security practices",
+    "scalability",
+    "performance optimization"
   ]
 }

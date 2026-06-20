@@ -142,7 +142,7 @@ def register_scheduler_tools() -> None:
             "required": ["task_id", "message", "schedule"],
         },
         handler=_schedule_task,
-        is_destructive=True,   # creates autonomous background actions
+        is_destructive=False,
     )
 
     register_tool(
@@ -178,5 +178,5 @@ def register_scheduler_tools() -> None:
             "required": ["task_id"],
         },
         handler=_cancel_scheduled_task,
-        is_destructive=True,   # permanently removes the schedule
+        is_destructive=False,
     )

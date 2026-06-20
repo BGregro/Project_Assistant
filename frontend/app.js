@@ -109,6 +109,8 @@ const toggleEmbeddings    = document.getElementById('toggle-embeddings');
 const toggleEmbeddingsLbl = document.getElementById('toggle-embeddings-label');
 const toggleToolPrefilter    = document.getElementById('toggle-tool-prefilter');
 const toggleToolPrefilterLbl = document.getElementById('toggle-tool-prefilter-label');
+const toggleAutoApproveCode    = document.getElementById('toggle-auto-approve-code');
+const toggleAutoApproveCodeLbl = document.getElementById('toggle-auto-approve-code-label');
 const inpTreeRoot         = document.getElementById('inp-tree-root');
 const selLocalSufficient  = document.getElementById('sel-local-sufficient'); // Phase 9
 
@@ -1415,6 +1417,16 @@ if (toggleToolPrefilter) {
   });
 }
 
+if (toggleAutoApproveCode) {
+  toggleAutoApproveCode.addEventListener('click', () => {
+    const wasOn = toggleAutoApproveCode.classList.contains('on');
+    const next  = !wasOn;
+    toggleAutoApproveCode.classList.toggle('on', next);
+    if (toggleAutoApproveCodeLbl) toggleAutoApproveCodeLbl.textContent = next ? 'on' : 'off';
+    sendWS({ type: 'set_config', data: { key: 'auto_approve_code_execution', value: next } });
+  });
+}
+
 // Phase 9 — local_sufficient_default dropdown
 if (selLocalSufficient) {
   selLocalSufficient.addEventListener('change', () => {
@@ -1525,6 +1537,12 @@ function populateSettingsFromStatus(data) {
     const pf = !!data.use_tool_prefilter;
     toggleToolPrefilter.classList.toggle('on', pf);
     if (toggleToolPrefilterLbl) toggleToolPrefilterLbl.textContent = pf ? 'on' : 'off';
+  }
+
+  if (toggleAutoApproveCode) {
+    const aa = !!data.auto_approve_code_execution;
+    toggleAutoApproveCode.classList.toggle('on', aa);
+    if (toggleAutoApproveCodeLbl) toggleAutoApproveCodeLbl.textContent = aa ? 'on' : 'off';
   }
 
   applyLocalMode(!!data.local_mode);
