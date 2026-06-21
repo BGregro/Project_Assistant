@@ -901,6 +901,12 @@ class TaskRunner:
             from agent_tools.local_llm import local_llm_call
             from memory.long_term import log_reflection
 
+            # Tell the user reflection is happening
+            if send_event:
+                await send_event("status", {
+                    "text": "🪞 Generating task reflection in background…"
+                })
+
             prompt = (
                 f"A task just completed. Generate a brief 2-3 sentence reflection.\n\n"
                 f"Goal: {goal}\n"
@@ -932,6 +938,18 @@ class TaskRunner:
                     logger.info(
                         f"[task_runner] Phase 12a: reflection stored for task {task_id[:8]}..."
                     )
+                    if send_event:
+                        # Show a brief preview of the reflection in the status bar
+                        preview = reflection[:120] + "…" if len(reflection) > 120 else reflection
+                        await send_event("status", {
+                            "text": f"🪞 Reflection: {preview}"
+                        })
+                        # Emit as a distinct event so the frontend can show it as a bubble
+                        await send_event("reflection_generated", {
+                            "task_id": task_id,
+                            "reflection": reflection,
+                            "goal_preview": goal[:60],
+                        })
                 else:
                     logger.warning(
                         f"[task_runner] Phase 12a: log_reflection returned False for {task_id[:8]}"

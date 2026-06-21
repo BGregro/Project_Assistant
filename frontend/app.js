@@ -362,6 +362,10 @@ function handleServerEvent(type, data) {
       showTierBanner(data.message_id, data.message_preview, data.timeout_seconds);
       break;
 
+    case 'reflection_generated':
+      appendReflectionBubble(data.goal_preview, data.reflection);
+      break;
+
     case 'queued_message_active':
       // A previously queued message is now being processed by the agent.
       // Update any matching queued bubble to show active state.
@@ -1888,6 +1892,28 @@ function attachCopyBtn(codeBlockEl) {
 // ============================================================
 
 function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
+
+/**
+ * Append a self-reflection bubble to the chat after a task completes.
+ * Triggered by the 'reflection_generated' WebSocket event emitted by task_runner.py.
+ *
+ * @param {string} goalPreview  - First 60 chars of the task goal.
+ * @param {string} reflection   - The 2-3 sentence reflection text from qwen3:14b.
+ */
+function appendReflectionBubble(goalPreview, reflection) {
+    const el = document.createElement('div');
+    el.className = 'message reflection-bubble';
+    el.innerHTML = `
+        <div class="reflection-header">
+            <span class="reflection-icon">🪞</span>
+            <span class="reflection-label">Self-reflection</span>
+            <span class="reflection-goal">${escapeHtml(goalPreview)}…</span>
+        </div>
+        <div class="reflection-text">${escapeHtml(reflection)}</div>
+    `;
+    chatMessages.appendChild(el);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
 function escapeHtml(str) {
   return String(str)

@@ -355,8 +355,17 @@ async def local_agent_call(
 
     working_messages = _normalise_messages(list(messages))
 
+    _step = 0
+    _loop_start = time.monotonic()
+
     for iteration in range(max_iterations):
         logger.info(f"[local_llm] local_agent_call iteration {iteration + 1} (timeout={timeout}s)")
+
+        # Emit a thinking indicator so the UI shows the model is working
+        if send_event:
+            await send_event("status", {
+                "text": f"[local] Thinking… (iteration {iteration + 1}/{max_iterations})"
+            })
 
         payload = {
             "model":      model,
@@ -432,8 +441,9 @@ async def local_agent_call(
 
             # Emit "running" progress event if a send_event callback is wired up
             if send_event and name:
+                _step += 1
                 await send_event("task_progress", {
-                    "step": iteration + 1,
+                    "step": _step,
                     "label": f"[local] {name}",
                     "status": "running",
                     "elapsed_ms": 0,
@@ -456,11 +466,12 @@ async def local_agent_call(
 
             # Emit "done"/"failed" progress event
             if send_event and name:
+                total_elapsed = int((time.monotonic() - _loop_start) * 1000)
                 await send_event("task_progress", {
-                    "step": iteration + 1,
+                    "step": _step,
                     "label": f"[local] {name}",
                     "status": "done" if result_success else "failed",
-                    "elapsed_ms": elapsed,
+                    "elapsed_ms": total_elapsed,
                 })
 
             # Ollama expects tool results as role="tool" messages

@@ -1114,3 +1114,42 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
   color: var(--text-muted);
   min-width: 24px;
 }
+
+/* ── Phase 12a: Self-reflection bubbles ─────────────────────────────────── */
+.reflection-bubble {
+    background: color-mix(in srgb, var(--accent-purple) 8%, var(--bg-secondary));
+    border-left: 3px solid var(--accent-purple);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 6px 0;
+    font-size: 0.88em;
+    max-width: 85%;
+}
+.reflection-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    opacity: 0.75;
+    font-size: 0.82em;
+}
+.reflection-icon { font-size: 1em; }
+.reflection-label {
+    font-weight: 600;
+    color: var(--accent-purple);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.reflection-goal {
+    color: var(--text-muted);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+.reflection-text {
+    color: var(--text-primary);
+    line-height: 1.5;
+    font-style: italic;
+}

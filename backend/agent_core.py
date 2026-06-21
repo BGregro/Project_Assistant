@@ -1179,6 +1179,7 @@ class AgentCore:
         so large models have enough time to respond.
         """
         await send_event("status", {"text": "Running locally (Ollama)…"})
+        await send_event("task_started", {"task_id": f"local_{id(messages)}"})
 
         async def _dispatch(tool_name: str, tool_input: dict) -> dict:
             fake_id = f"local_{tool_name}_{id(tool_input)}"
@@ -1203,8 +1204,10 @@ class AgentCore:
             max_iterations=self.max_iterations,
             tool_dispatcher=_dispatch,
             timeout=self.local_agent_timeout,
+            send_event=send_event,   # ← emit task_progress for each tool call
         )
 
+        await send_event("task_stopped", {"reason": "complete"})
         await send_event("message", {"text": final_text, "source": "local"})
         return final_text
 
