@@ -61,6 +61,9 @@ from uuid import uuid4
 
 import anthropic
 
+# Phase 12b: performance metrics — imported lazily inside functions to avoid
+# circular imports at module load time.  See record_tool_call / record_task calls.
+
 logger = logging.getLogger(__name__)
 
 # Path to the persisted task state file.
@@ -325,6 +328,17 @@ class TaskRunner:
                         )
                     except Exception as _lt_e:
                         logger.warning(f"[task_runner] Long-term log (cancel) failed (non-fatal): {_lt_e}")
+                    # Phase 12b: record cancelled task metrics
+                    try:
+                        from memory import performance as _perf
+                        _perf.record_task(
+                            goal=initial_message,
+                            outcome="cancelled",
+                            duration_seconds=int(time.time() - _start_time),
+                            tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                        )
+                    except Exception as _perf_e:
+                        logger.debug(f"[task_runner] Metrics record_task (cancel) failed (non-fatal): {_perf_e}")
                     return "Task cancelled."
 
                 # ── 2. Drain injected user messages ────────────────────
@@ -421,6 +435,18 @@ class TaskRunner:
                         )
                     except Exception as _lt_e:
                         logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
+
+                    # Phase 12b: record task-level metrics
+                    try:
+                        from memory import performance as _perf
+                        _perf.record_task(
+                            goal=initial_message,
+                            outcome="success",
+                            duration_seconds=int(time.time() - _start_time),
+                            tools_used=list({s["tool"] for s in self._current_task["steps"]}),
+                        )
+                    except Exception as _perf_e:
+                        logger.debug(f"[task_runner] Metrics record_task failed (non-fatal): {_perf_e}")
 
                     # Phase 12a: fire background reflection — never blocks the user
                     if _logged_task_id:
@@ -560,6 +586,25 @@ class TaskRunner:
                         elapsed = _elapsed_ms(tool_step_start)
                         success = _result_success(result_msg)
                         tool_status = "done" if success else "failed"
+
+                        # Phase 12b: record per-tool metric (fire-and-forget, non-fatal)
+                        try:
+                            from memory import performance as _perf
+                            _failure_reason = ""
+                            if not success:
+                                try:
+                                    _payload = json.loads(result_msg.get("content", "{}"))
+                                    _failure_reason = str(_payload.get("error", ""))[:200]
+                                except Exception:
+                                    pass
+                            _perf.record_tool_call(
+                                tool_name=block.name,
+                                success=success,
+                                duration_ms=elapsed,
+                                failure_reason=_failure_reason,
+                            )
+                        except Exception as _perf_e:
+                            logger.debug(f"[task_runner] Metrics record_tool_call failed (non-fatal): {_perf_e}")
 
                         await send_event("task_progress", {
                             "step":       assigned_step,
@@ -734,6 +779,17 @@ class TaskRunner:
                 )
             except Exception as _lt_e:
                 logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
+            # Phase 12b: record failed task metrics
+            try:
+                from memory import performance as _perf
+                _perf.record_task(
+                    goal=initial_message,
+                    outcome="failure",
+                    duration_seconds=int(time.time() - _start_time),
+                    tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                )
+            except Exception as _perf_e:
+                logger.debug(f"[task_runner] Metrics record_task (failure) failed (non-fatal): {_perf_e}")
             return f"Task failed: {e}"
 
         finally:

@@ -645,6 +645,18 @@ async def get_credentials():
         return JSONResponse({"credentials": [], "count": 0})
 
 
+@app.get("/metrics")
+async def get_metrics():
+    """
+    Phase 12b: Return the raw performance_metrics.json content.
+
+    Used by the frontend analytics dashboard to display per-tool call counts,
+    success rates, and task-type breakdowns without going through the agent.
+    """
+    from memory import performance
+    return JSONResponse(performance.load())
+
+
 @app.get("/analytics")
 async def get_analytics():
     """
@@ -656,17 +668,21 @@ async def get_analytics():
         rate           — success rate as a percentage (0–100)
         avg_duration   — mean duration in seconds (rounded)
         top_tools      — list of {name, count} for the 5 most-used tools
+        tool_metrics_available — Phase 12b: True if performance_metrics.json has data
+        top_failing_tools      — Phase 12b: up to 3 tools with highest failure rates
     """
     from memory.long_term import load as load_long_term
     try:
         data = load_long_term()
     except Exception as e:
         logger.warning(f"[analytics] Could not load long-term store: {e}")
-        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": []})
+        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": [],
+                             "tool_metrics_available": False, "top_failing_tools": []})
 
     tasks = data.get("tasks", [])
     if not tasks:
-        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": []})
+        return JSONResponse({"total": 0, "success": 0, "rate": 0, "avg_duration": 0, "top_tools": [],
+                             "tool_metrics_available": False, "top_failing_tools": []})
 
     success   = sum(1 for t in tasks if t.get("outcome") == "success")
     durations = [t.get("duration_seconds", 0) for t in tasks]
@@ -678,12 +694,25 @@ async def get_analytics():
 
     top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:5]
 
+    # Phase 12b: augment with performance_metrics.json data
+    tool_metrics_available = False
+    top_failing_tools: list = []
+    try:
+        from memory import performance as perf_module
+        perf = perf_module.load()
+        tool_metrics_available = len(perf.get("tools", {})) > 0
+        top_failing_tools = perf_module.get_top_failing_tools(3)
+    except Exception as _perf_e:
+        logger.debug(f"[analytics] Could not load performance metrics (non-fatal): {_perf_e}")
+
     return JSONResponse({
         "total":        len(tasks),
         "success":      success,
         "rate":         round(success / len(tasks) * 100, 1),
         "avg_duration": round(sum(durations) / len(durations)),
         "top_tools":    [{"name": k, "count": v} for k, v in top_tools],
+        "tool_metrics_available": tool_metrics_available,
+        "top_failing_tools":      top_failing_tools,
     })
 
 
