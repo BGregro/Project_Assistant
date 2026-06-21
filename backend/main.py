@@ -45,6 +45,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -538,6 +539,33 @@ async def status():
         "local_sufficient_default": agent.local_sufficient_default,   # Phase 9
         "auto_approve_code_execution": config.get("auto_approve_code_execution", False),
     })
+
+
+@app.get("/ollama-models")
+async def get_ollama_models():
+    """
+    Fetch all locally available Ollama models and return them as a list.
+    Used by the settings panel to populate model dropdowns dynamically.
+    Returns name, size in GB, and modification date for each model.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{config.get('ollama_base_url', 'http://localhost:11434')}/api/tags")
+            resp.raise_for_status()
+            models = resp.json().get("models", [])
+            return {
+                "success": True,
+                "models": [
+                    {
+                        "name": m["name"],
+                        "size_gb": round(m.get("size", 0) / 1e9, 1),
+                        "modified": m.get("modified_at", ""),
+                    }
+                    for m in models
+                ]
+            }
+    except Exception as e:
+        return {"success": False, "models": [], "error": str(e)}
 
 
 @app.get("/task")

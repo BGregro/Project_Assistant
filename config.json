@@ -64,7 +64,7 @@
   },
   "igpu": {
     "enabled": true,
-    "ollama_dir": "C:\\Users\\bodag\\Downloads\\ollama-ipex-llm-2.3.0b20250612-win",
+    "ollama_dir": "C:\\Users\\bodag\\OneDrive\\PROJECTS\\Project_Assistant\\ollama-ipex-llm",
     "model_small": "qwen3:8b",
     "model_large": "qwen3:14b",
     "context_size": 8192,

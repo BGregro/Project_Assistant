@@ -19,7 +19,19 @@
     "English"
   ],
   "available_time": "evenings and weekends",
-  "hardware": "Lenovo ThinkPad E14 Gen7, 32GB RAM, Windows",
+  "hardware": {
+    "laptop": "Lenovo ThinkPad E14 Gen7",
+    "cpu": "Intel Core Ultra 7 (Lunar Lake, 4 performance + 4 efficiency cores)",
+    "igpu": "Intel Arc 140V (8 Xe2 cores, 1.85 GHz)",
+    "npu": "Intel NPU (40 TOPS INT8)",
+    "ram": "32GB LPDDR5x (137 GB/s bandwidth)",
+    "os": "Windows 11",
+    "inference_backend": "ipex-llm on Arc 140V iGPU (SYCL/XPU)",
+    "local_models": {
+      "preprocessing": "qwen3:8b (intent routing, compression, optimization)",
+      "agent_loop": "qwen3:14b (local agent, code validation, email classification)"
+    }
+  },
   "constraints": [
     "no upfront investment",
     "legal only"

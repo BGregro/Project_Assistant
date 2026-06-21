@@ -1372,6 +1372,7 @@ if (btnModeLocal) {
 function openSettings() {
   settingsPanel.classList.add('open');
   settingsBackdrop.classList.add('visible');
+  loadOllamaModels();  // refresh model list every time settings opens
 }
 function closeSettings() {
   settingsPanel.classList.remove('open');
@@ -1394,6 +1395,42 @@ window.toggleAdvanced = function() {
 // ============================================================
 // Settings — model dropdowns
 // ============================================================
+
+/**
+ * Fetch available Ollama models from the backend and populate the
+ * local model dropdown(s) dynamically.  Called on init and when the
+ * settings panel is opened so the list is always fresh.
+ */
+async function loadOllamaModels() {
+  try {
+    const res = await authFetch('/ollama-models');
+    const data = await res.json();
+    if (!data.success || !data.models.length) return;
+
+    const models = data.models;
+
+    // Populate both local model dropdowns with available models.
+    // Currently only sel-local-agent-model exists; the loop handles any future additions.
+    ['sel-local-agent-model'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const currentVal = sel.value;  // preserve current selection
+      sel.innerHTML = '';             // clear existing (hardcoded) options
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = `${m.name} (${m.size_gb}GB)`;
+        sel.appendChild(opt);
+      });
+      // Restore previous selection if it still exists in the new list
+      if ([...sel.options].some(o => o.value === currentVal)) {
+        sel.value = currentVal;
+      }
+    });
+  } catch(e) {
+    console.warn('[settings] Could not load Ollama models:', e);
+  }
+}
 
 if (selPrimaryModel) {
   selPrimaryModel.addEventListener('change', () => {
@@ -1903,6 +1940,9 @@ async function init() {
 
   // Phase 7 — load credentials count once on startup
   setTimeout(loadCredentials, 800);
+
+  // Populate local model dropdowns from live Ollama model list
+  loadOllamaModels();
 }
 
 init();

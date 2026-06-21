@@ -241,6 +241,45 @@ async def scan_system() -> dict[str, Any]:
     ollama_url = _get_ollama_url()
     result["ollama_models"] = await _list_ollama_models(ollama_url)
 
+    # ── Inference acceleration (iGPU / ipex-llm) ──────────────────────────────────────────────
+    igpu_info: dict = {"acceleration": "none", "backend": "cpu"}
+    try:
+        cfg_path = Path(__file__).resolve().parent.parent.parent / "config.json"
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        igpu_cfg = cfg.get("igpu", {})
+
+        if igpu_cfg.get("enabled"):
+            igpu_info = {
+                "acceleration": "Intel Arc iGPU via ipex-llm",
+                "backend": "SYCL/XPU",
+                "model_preprocessing": igpu_cfg.get("model_small", "unknown"),
+                "model_agent_loop": igpu_cfg.get("model_large", "unknown"),
+                "context_size_tokens": igpu_cfg.get("context_size", 2048),
+                "max_models_in_memory": igpu_cfg.get("max_loaded_models", 1),
+                "ollama_dir": igpu_cfg.get("ollama_dir", ""),
+            }
+
+        # Query Ollama /api/ps for live loaded models
+        try:
+            ps_resp = httpx.get(f"{ollama_url}/api/ps", timeout=3.0)
+            if ps_resp.status_code == 200:
+                ps_models = ps_resp.json().get("models", [])
+                igpu_info["currently_loaded_models"] = [
+                    {
+                        "name": m.get("name", "unknown"),
+                        "size_mb": round(m.get("size", 0) / 1_000_000, 1),
+                        "expires_at": m.get("expires_at", "never (keep_alive=-1)"),
+                    }
+                    for m in ps_models
+                ]
+        except Exception:
+            igpu_info["currently_loaded_models"] = "unavailable (Ollama not responding)"
+
+    except Exception as exc:
+        igpu_info["error"] = str(exc)
+
+    result["inference_acceleration"] = igpu_info
+
     logger.info("[self_knowledge] System scan complete.")
     return result
 
