@@ -162,6 +162,22 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "that might overlap with prior work."
         ),
     },
+    "episode_memory": {
+        "keywords": [
+            r"reflect", r"reflection", r"episode", r"what.*worked", r"past.*task",
+            r"recent.*task", r"last.*task", r"history", r"pattern", r"improve",
+        ],
+        "content": (
+            "\n\nEPISODE MEMORY: After completing any significant task, use "
+            "get_recent_episodes() to review your recent history and reflect on patterns. "
+            "Use get_episode(task_id) to retrieve a specific past task including its reflection. "
+            "Reflections are generated automatically in the background after every task by "
+            "qwen3:14b — you can also add a manual reflection with log_reflection(task_id, text) "
+            "when you notice something worth recording mid-conversation. "
+            "Episode memory is the foundation of self-improvement: use it to spot recurring "
+            "failures, identify what approaches work best, and inform your planning on new tasks."
+        ),
+    },
     "browser": {
         "keywords": [r"browser", r"open.*url", r"visit", r"website", r"navigate", r"screenshot",
                      r"click", r"fill", r"form", r"login", r"submit"],

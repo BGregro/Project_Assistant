@@ -414,7 +414,8 @@ def log_task(
     summary: str,
     tools_used: list,
     duration_seconds: int,
-) -> None:
+    reflection: str = "",
+) -> str:
     """
     Append a completed (or failed/cancelled) task to the tasks list.
 
@@ -424,28 +425,36 @@ def log_task(
         summary:          A short human-readable summary of what happened.
         tools_used:       List of tool names that were called during the task.
         duration_seconds: Wall-clock seconds the task ran for.
+        reflection:       Optional pre-generated reflection (Phase 12a).
+
+    Returns:
+        The UUID of the newly created task entry (used by the background
+        reflection job to call log_reflection() after generation).
     """
     data = load()
+    task_id = str(uuid4())
     entry = {
-        "id":               str(uuid4()),
+        "id":               task_id,
         "timestamp":        _now_iso(),
         "goal":             goal,
         "outcome":          outcome,
         "summary":          summary,
         "tools_used":       list(tools_used),
         "duration_seconds": int(duration_seconds),
+        # Phase 12a — episode reflection fields
+        "reflection":       reflection,          # 2-3 sentence post-task reflection
+        "failure_type":     "",                  # populated by Phase 14b classifier
+        # Improvement 4: record which tool was active at failure time.
+        # The last tool in tools_used is typically the one that triggered it,
+        # making analyze_performance() more useful for identifying failure patterns.
+        "failed_at_tool":   tools_used[-1] if outcome != "success" and tools_used else "",
     }
-    # Improvement 4: record which tool was active at failure time.
-    # The last tool in tools_used is typically the one that triggered it,
-    # making analyze_performance() more useful for identifying failure patterns.
-    if outcome != "success" and tools_used:
-        entry["failed_at_tool"] = tools_used[-1]
     data["tasks"].append(entry)
     # Keep only the most recent _MAX_TASKS entries (trim oldest)
     if len(data["tasks"]) > _MAX_TASKS:
         data["tasks"] = data["tasks"][-_MAX_TASKS:]
     save(data)
-    logger.info(f"[long_term] Task logged: outcome={outcome!r}, goal={goal[:60]!r}")
+    logger.info(f"[long_term] Task logged: id={task_id[:8]}, outcome={outcome!r}, goal={goal[:60]!r}")
 
     # Phase 8: fire-and-forget background profile update — never blocks the caller
     import asyncio as _asyncio
@@ -456,6 +465,46 @@ def log_task(
         # If no running loop (sync test context), skip silently
     except RuntimeError:
         pass
+
+    return task_id
+
+
+# ---------------------------------------------------------------------------
+# Phase 12a: Episode reflection helpers
+# ---------------------------------------------------------------------------
+
+def log_reflection(task_id: str, reflection_text: str) -> bool:
+    """
+    Add or update the reflection field on an existing task entry.
+    Called by the background reflection job after task completion.
+
+    This is also exposed as a tool so Claude can manually add reflections
+    when it notices something worth recording mid-conversation.
+
+    Returns True if the task was found and updated, False otherwise.
+    """
+    data = load()
+    for task in data.get("tasks", []):
+        if task.get("id") == task_id:
+            task["reflection"] = reflection_text
+            task["reflection_generated_at"] = _now_iso()
+            save(data)
+            logger.info(f"[long_term] Reflection logged for task {task_id[:8]}...")
+            return True
+    logger.warning(f"[long_term] Task {task_id} not found for reflection")
+    return False
+
+
+def get_episode(task_id: str) -> dict | None:
+    """
+    Retrieve a complete task episode including its reflection.
+    Returns the full task dict or None if not found.
+    """
+    data = load()
+    for task in data.get("tasks", []):
+        if task.get("id") == task_id:
+            return task
+    return None
 
 
 # ---------------------------------------------------------------------------

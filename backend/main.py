@@ -85,6 +85,7 @@ from agent_tools.interaction import (                                        # P
     set_task_runner as set_interaction_runner,
     set_send_event as set_interaction_event,
 )
+from agent_tools.episode_memory import register_episode_memory_tools         # Phase 12a
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
 try:
@@ -328,9 +329,14 @@ async def _autoload_generated_tools() -> None:
 agent       = AgentCore(config)
 task_runner = TaskRunner(config=config)   # Phase 3b / 3d
 
+# Phase 12a — wire agent reference so background reflection can read model config.
+task_runner._agent_ref = agent
+
 # Phase 6a — wire interaction module refs now that both objects exist.
 set_interaction_runner(task_runner)
 register_interaction_tools()            # Phase 6a
+
+register_episode_memory_tools()         # Phase 12a
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output

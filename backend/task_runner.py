@@ -96,6 +96,11 @@ class TaskRunner:
         # without re-sending the full scaffold every turn.
         self._project_manifest: dict | None = None
 
+        # Phase 12a: reference to AgentCore — used by _generate_reflection to
+        # read ollama_url and local_agent_model without a circular import.
+        # Set by main.py after both objects are instantiated.
+        self._agent_ref = None
+
         # Phase 6a: pending mid-task questions.
         # Keyed by question_id; each value holds the asyncio.Event and the
         # answer string populated by answer_question() when the user responds.
@@ -404,9 +409,10 @@ class TaskRunner:
                     # Mark not-running before cleanup so any race-window messages can be re-queued
                     self._is_running = False
                     # Phase 3f: persist outcome to long-term memory
+                    _logged_task_id: str = ""
                     try:
                         from memory.long_term import log_task as _log_task
-                        _log_task(
+                        _logged_task_id = _log_task(
                             goal=initial_message,
                             outcome="success",
                             summary=f"Completed in {len(self._current_task['steps'])} steps.",
@@ -415,6 +421,19 @@ class TaskRunner:
                         )
                     except Exception as _lt_e:
                         logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
+
+                    # Phase 12a: fire background reflection — never blocks the user
+                    if _logged_task_id:
+                        asyncio.get_event_loop().create_task(
+                            self._generate_reflection(
+                                task_id=_logged_task_id,
+                                goal=initial_message,
+                                tools_used=list({s["tool"] for s in self._current_task["steps"]}),
+                                outcome="success",
+                                duration_seconds=int(time.time() - _start_time),
+                                send_event=send_event,
+                            )
+                        )
 
                     # Phase 9b: fire-and-forget email notification on completion
                     try:
@@ -790,6 +809,83 @@ class TaskRunner:
         }]
         logger.info(f"[task_runner] History repaired — injected {len(synthetic_results)} synthetic tool_result(s).")
         return repaired
+
+    # ------------------------------------------------------------------
+    # Phase 12a: background reflection generator
+    # ------------------------------------------------------------------
+
+    async def _generate_reflection(
+        self,
+        task_id: str,
+        goal: str,
+        tools_used: list,
+        outcome: str,
+        duration_seconds: int,
+        send_event,
+    ) -> None:
+        """
+        Generate a structured reflection on the completed task using qwen3:14b.
+
+        Runs as a background fire-and-forget coroutine — any failure is logged
+        and silently swallowed. Never blocks the user or the main task loop.
+
+        The reflection is stored in the task entry's 'reflection' field via
+        long_term.log_reflection(). It becomes the raw material for Phase 14
+        (pattern detection) and Phase 17 (strategy evolution).
+
+        Args:
+            task_id:          UUID of the just-logged task entry.
+            goal:             The original user message / task description.
+            tools_used:       Unique set of tool names used during the task.
+            outcome:          "success", "failure", or "partial".
+            duration_seconds: Wall-clock seconds the task ran for.
+            send_event:       Active WebSocket send_event (used for optional debug status).
+        """
+        try:
+            from agent_tools.local_llm import local_llm_call
+            from memory.long_term import log_reflection
+
+            prompt = (
+                f"A task just completed. Generate a brief 2-3 sentence reflection.\n\n"
+                f"Goal: {goal}\n"
+                f"Outcome: {outcome}\n"
+                f"Tools used: {', '.join(tools_used) if tools_used else 'none'}\n"
+                f"Duration: {duration_seconds}s\n\n"
+                "Reflect on: what worked well, what could have been done better, "
+                "and what you would do differently next time. "
+                "Be specific and honest. Write in first person ('I used...', 'I should have...'). "
+                "2-3 sentences maximum."
+            )
+
+            # Read model config from agent reference (set by main.py); fall back to defaults.
+            local_model = (
+                getattr(self._agent_ref, "local_agent_model", "qwen3:14b")
+                if self._agent_ref else "qwen3:14b"
+            )
+            ollama_url = (
+                getattr(self._agent_ref, "ollama_url", "http://localhost:11434")
+                if self._agent_ref else "http://localhost:11434"
+            )
+
+            reflection = await local_llm_call(prompt, local_model, ollama_url)
+            reflection = reflection.strip() if reflection else ""
+
+            if reflection and len(reflection) > 10:
+                success = log_reflection(task_id, reflection)
+                if success:
+                    logger.info(
+                        f"[task_runner] Phase 12a: reflection stored for task {task_id[:8]}..."
+                    )
+                else:
+                    logger.warning(
+                        f"[task_runner] Phase 12a: log_reflection returned False for {task_id[:8]}"
+                    )
+            else:
+                logger.debug("[task_runner] Phase 12a: reflection was empty — skipping")
+
+        except Exception as e:
+            # Never propagate — background task failure must not affect the user
+            logger.debug(f"[task_runner] Phase 12a: background reflection failed (non-fatal): {e}")
 
     # ------------------------------------------------------------------
     # Phase 3d: context compression helper
