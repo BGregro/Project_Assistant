@@ -86,6 +86,7 @@ from agent_tools.interaction import (                                        # P
     set_send_event as set_interaction_event,
 )
 from agent_tools.episode_memory import register_episode_memory_tools         # Phase 12a
+from agent_tools.knowledge_graph import register_knowledge_graph_tools       # Phase 12c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
 try:
@@ -297,7 +298,8 @@ logger.info(
     f"youtube (youtube_search, youtube_get_video_stats, youtube_get_trending, "
     f"youtube_get_video_comments, youtube_get_channel_info, youtube_search_captions), "
     f"interaction (ask_user), "
-    f"project_manager (get_project_status, mark_file_complete, read_project_state)"
+    f"project_manager (get_project_status, mark_file_complete, read_project_state), "
+    f"knowledge_graph (query_knowledge_graph, add_graph_edge)"
     f"{_browser_log}"
 )
 
@@ -337,6 +339,7 @@ set_interaction_runner(task_runner)
 register_interaction_tools()            # Phase 6a
 
 register_episode_memory_tools()         # Phase 12a
+register_knowledge_graph_tools()        # Phase 12c
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output

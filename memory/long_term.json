@@ -1,41 +1,6 @@
 {
   "tasks": [
     {
-      "id": "52524145-59d3-4fb6-b482-1960db6807a0",
-      "timestamp": "2026-06-08T20:18:50.359688+00:00",
-      "goal": "What do you know about me? Tell me everything in your profile.",
-      "outcome": "success",
-      "summary": "Completed in 1 steps.",
-      "tools_used": [
-        "read_user_profile"
-      ],
-      "duration_seconds": 4
-    },
-    {
-      "id": "27d2d21d-6ce6-41f1-9e5c-4b24c80ff545",
-      "timestamp": "2026-06-08T20:20:57.334409+00:00",
-      "goal": "Scan my system and tell me about my setup",
-      "outcome": "success",
-      "summary": "Completed in 1 steps.",
-      "tools_used": [
-        "scan_system"
-      ],
-      "duration_seconds": 11
-    },
-    {
-      "id": "cca0b516-73c8-40d9-9831-16772e21229e",
-      "timestamp": "2026-06-08T20:25:17.783775+00:00",
-      "goal": "Search the web for the best free resources to learn Rust programming and summarize what you find.",
-      "outcome": "success",
-      "summary": "Completed in 5 steps.",
-      "tools_used": [
-        "search_web",
-        "log_research",
-        "fetch_page"
-      ],
-      "duration_seconds": 200
-    },
-    {
       "id": "2c1a632d-e888-4c35-ab67-c4262c7eec31",
       "timestamp": "2026-06-08T20:33:28.073350+00:00",
       "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and everything else you know about me). Use criteria: legal, passive income preferred, no customer service.",
@@ -1233,6 +1198,47 @@
       "failure_type": "",
       "failed_at_tool": "",
       "reflection_generated_at": "2026-06-21T20:43:34.756692+00:00"
+    },
+    {
+      "id": "a77eae63-9a62-4e44-9d71-272caa9f7aa3",
+      "timestamp": "2026-07-03T06:50:39.492355+00:00",
+      "goal": "Search for Python 3.14 release notes and give me a summary.",
+      "outcome": "failure",
+      "summary": "Failed after 0 steps: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_",
+      "tools_used": [],
+      "duration_seconds": 61,
+      "reflection": "",
+      "failure_type": "",
+      "failed_at_tool": ""
+    },
+    {
+      "id": "f22caa8c-e142-4d00-a6a6-252ede2f78c0",
+      "timestamp": "2026-07-03T07:06:43.940731+00:00",
+      "goal": "Search for Python news today. [Context: the assistant last said: 'The result of 2 + 2 is **4**.   Let me know if you need further assistance!...']",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "search_web"
+      ],
+      "duration_seconds": 196,
+      "reflection": "",
+      "failure_type": "",
+      "failed_at_tool": ""
+    },
+    {
+      "id": "a796c479-9760-44cc-a77d-9b7e2ed5fbfe",
+      "timestamp": "2026-07-03T07:13:13.960044+00:00",
+      "goal": "Show me your most recent episode and reflection.",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "get_recent_episodes",
+        "get_episode"
+      ],
+      "duration_seconds": 188,
+      "reflection": "",
+      "failure_type": "",
+      "failed_at_tool": ""
     }
   ],
   "facts": [

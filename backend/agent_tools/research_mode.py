@@ -29,6 +29,7 @@ import json
 import logging
 import pathlib
 import re
+from datetime import datetime, timezone
 
 from agent_tools import register_tool
 from agent_tools.local_llm import local_llm_call
@@ -65,6 +66,19 @@ def _query_known(goal: str) -> list:
     except Exception as e:
         logger.warning(f"[research_mode] Could not query long-term memory: {e}")
         return []
+
+
+def _get_research_cache_days() -> int:
+    """
+    Read research_cache_days from config.json (project root).
+    Defaults to 7 if the file/key is missing or malformed.
+    """
+    cfg_path = pathlib.Path(__file__).resolve().parent.parent.parent / "config.json"
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+        return int(cfg.get("research_cache_days", 7))
+    except Exception:
+        return 7
 
 
 def _parse_sub_questions(raw: str) -> list[str]:
@@ -150,12 +164,52 @@ async def _deep_research(
     # count by the number of already-covered angles (min 2).
     already_known_raw = _query_known(goal)
 
+    # ── 1b. Datetime-aware cache check (Improvement 1) ──────────────────
+    # If any already-known entries are within the configurable staleness
+    # window, short-circuit entirely and hand Claude the cached findings
+    # instead of spending a local-LLM call + fresh web searches.
+    try:
+        from memory.long_term import _parse_ts, _age_label
+    except Exception:
+        _parse_ts = _age_label = None  # type: ignore
+
+    if _parse_ts is not None:
+        cache_days = _get_research_cache_days()
+        recent = [
+            r for r in already_known_raw
+            if (dt := _parse_ts(r.get("timestamp", ""))) is not None
+            and (datetime.now(timezone.utc) - dt).days < cache_days
+        ]
+        if recent:
+            ages = [_age_label(r.get("timestamp", "")) for r in recent]
+            logger.info(
+                f"[research_mode] {len(recent)} research entr{'y' if len(recent)==1 else 'ies'} "
+                f"within {cache_days}-day cache window for '{goal[:60]}' — returning cached findings."
+            )
+            return {
+                "success": True,
+                "goal": goal,
+                "cached": True,
+                "cache_age": ages[0],  # most recent
+                "note": f"Found {len(recent)} recent research entries ({ages[0]}). Using cached findings.",
+                "existing_findings": [
+                    {"topic": r.get("topic", ""), "findings": r.get("findings", "")[:500], "age": age}
+                    for r, age in zip(recent, ages)
+                ],
+                "instruction": (
+                    "Use existing_findings instead of researching from scratch. "
+                    "Note the age of each finding — if older than a few days, "
+                    "consider refreshing key facts with a quick search before relying on them."
+                ),
+            }
+
     # Build the compact already_known list (topic + first 300 chars of findings)
     already_known = []
     for entry in already_known_raw:
         already_known.append({
             "topic":            entry.get("topic", ""),
             "findings_summary": entry.get("findings", "")[:300],
+            "age":              _age_label(entry.get("timestamp", "")) if _age_label else "unknown age",
         })
 
     # Reduce max_questions by number of already-known angles (minimum 2)

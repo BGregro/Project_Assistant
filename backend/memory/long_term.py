@@ -48,6 +48,47 @@ import chromadb
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Datetime helpers (Improvement 1 — datetime-aware memory queries)
+# ---------------------------------------------------------------------------
+
+def _parse_ts(ts_str: str) -> datetime | None:
+    """Parse an ISO timestamp string into a timezone-aware datetime. Returns None on failure."""
+    if not ts_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _age_label(ts_str: str) -> str:
+    """Return a human-readable age string: 'today', '3 days ago', '2 weeks ago', etc."""
+    dt = _parse_ts(ts_str)
+    if not dt:
+        return "unknown age"
+    delta = datetime.now(timezone.utc) - dt
+    days = delta.days
+    if days == 0:
+        return "today"
+    if days == 1:
+        return "yesterday"
+    if days < 7:
+        return f"{days} days ago"
+    if days < 14:
+        return "1 week ago"
+    if days < 30:
+        return f"{days // 7} weeks ago"
+    if days < 60:
+        return "1 month ago"
+    if days < 365:
+        return f"{days // 30} months ago"
+    return f"{days // 365} year(s) ago"
+
+
+# ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------
 
@@ -709,6 +750,10 @@ def query_tasks(keyword: str = "", last_n: int = 10) -> list:
 
     Keyword matching is case-insensitive and checks both goal and summary.
     If keyword is empty, returns the most recent last_n tasks regardless.
+
+    Improvement 1: results are sorted by timestamp descending (most recent
+    first) and each result gets an 'age' field (e.g. '3 days ago') so
+    callers — and Claude — know how fresh each task entry is.
     """
     tasks = load()["tasks"]
     if keyword:
@@ -717,7 +762,12 @@ def query_tasks(keyword: str = "", last_n: int = 10) -> list:
             t for t in tasks
             if kw in t.get("goal", "").lower() or kw in t.get("summary", "").lower()
         ]
-    return tasks[-last_n:]
+    # Sort by timestamp descending (most recent first)
+    tasks.sort(key=lambda t: t.get("timestamp", ""), reverse=True)
+    # Add human-readable age label to each result
+    for t in tasks:
+        t["age"] = _age_label(t.get("timestamp", ""))
+    return tasks[:last_n]
 
 
 def query_facts(key: str = "") -> list:
@@ -725,6 +775,10 @@ def query_facts(key: str = "") -> list:
     Return all non-expired facts, optionally filtered by key substring.
 
     Expired facts (where expires < now) are silently excluded.
+
+    Improvement 1: each returned fact gets an 'age' label and a
+    'may_be_stale' flag (True if the fact is older than 90 days), so
+    Claude can decide whether to trust it as-is or verify it again.
     """
     now = datetime.now(timezone.utc)
     facts = []
@@ -743,6 +797,11 @@ def query_facts(key: str = "") -> list:
         k = key.lower()
         facts = [f for f in facts if k in f.get("key", "").lower()]
 
+    for fact in facts:
+        age_days = (now - (_parse_ts(fact.get("timestamp", "")) or now)).days
+        fact["age"] = _age_label(fact.get("timestamp", ""))
+        fact["may_be_stale"] = age_days > 90  # flag facts older than 90 days
+
     return facts
 
 
@@ -752,12 +811,18 @@ def query_research(topic: str = "", last_n: int = 10) -> list:
 
     This is the substring fallback — prefer semantic_query_research() for
     better recall across paraphrased topics.
+
+    Improvement 1: results are sorted by timestamp descending (most recent
+    first) and each result gets an 'age' field.
     """
     research = load()["research"]
     if topic:
         t = topic.lower()
         research = [r for r in research if t in r.get("topic", "").lower()]
-    return research[-last_n:]
+    research.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    for r in research:
+        r["age"] = _age_label(r.get("timestamp", ""))
+    return research[:last_n]
 
 
 def semantic_query_research(query: str, n_results: int = 3) -> list[dict]:
@@ -897,10 +962,11 @@ def get_context_summary(current_goal: str) -> str:
     if matching_research:
         research_lines = []
         for r in matching_research[-2:]:  # at most 2 research snippets in summary
+            age = _age_label(r.get("timestamp", ""))
             research_lines.append(
-                f"{r['topic'][:40]}: {r['findings'][:80]}"
+                f"Research ({age}): {r['topic'][:40]}: {r['findings'][:80]}"
             )
-        parts.append("Research: " + " | ".join(research_lines))
+        parts.append(" | ".join(research_lines))
 
     if not parts:
         return ""

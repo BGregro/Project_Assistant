@@ -465,6 +465,16 @@ class TaskRunner:
                             )
                         )
 
+                        # Phase 12c: fire-and-forget background knowledge graph update.
+                        # Same rationale as reflection above — never blocks the user.
+                        asyncio.get_running_loop().create_task(
+                            self._update_knowledge_graph(
+                                goal=initial_message,
+                                tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                                outcome="success",
+                            )
+                        )
+
                     # Phase 9b: fire-and-forget email notification on completion
                     try:
                         import json as _json
@@ -976,8 +986,30 @@ class TaskRunner:
                 logger.debug("[task_runner] Phase 12a: reflection was empty — skipping")
 
         except Exception as e:
-            # Never propagate — background task failure must not affect the user
             logger.debug(f"[task_runner] Phase 12a: background reflection failed (non-fatal): {e}")
+
+    async def _update_knowledge_graph(self, goal: str, tools_used: list, outcome: str) -> None:
+        """
+        Phase 12c: auto-populate the semantic knowledge graph after each task.
+        Runs as fire-and-forget background task. Never blocks.
+        """
+        try:
+            from agent_tools.knowledge_graph import add_node, add_edge, extract_concepts_from_text
+
+            concepts = extract_concepts_from_text(goal)
+
+            for tool in tools_used:
+                add_node(tool, "tool")
+                for concept in concepts[:5]:
+                    add_node(concept, "concept")
+                    add_edge(concept, tool, "solved_with", strength=1.0 if outcome == "success" else 0.5)
+
+            for i, t1 in enumerate(tools_used):
+                for t2 in tools_used[i + 1:]:
+                    add_edge(t1, t2, "used_together", strength=1.0)
+
+        except Exception as e:
+            logger.debug(f"[task_runner] Phase 12c: knowledge graph update failed (non-fatal): {e}")
 
     # ------------------------------------------------------------------
     # Phase 3d: context compression helper

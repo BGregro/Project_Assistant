@@ -23,6 +23,7 @@
   "local_agent_timeout": 180,
   "local_sufficient_default": "ask",
   "ollama_base_url": "http://localhost:11434",
+  "research_cache_days": 7,
   "outputs_dir": "outputs",
   "tree_root": ".",
   "permissions": {

@@ -178,6 +178,18 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "failures, identify what approaches work best, and inform your planning on new tasks."
         ),
     },
+    "knowledge": {
+        "keywords": [
+            r"what do you know", r"how are these related", r"connections",
+            r"knowledge graph", r"related to",
+        ],
+        "content": (
+            "\n\nKNOWLEDGE GRAPH: Use query_knowledge_graph(concept) to explore how concepts, "
+            "tools, and topics are connected. Use add_graph_edge to manually note a relationship "
+            "you discover. The graph is built automatically from your task history — tools used "
+            "together gain stronger connections over time."
+        ),
+    },
     "browser": {
         "keywords": [r"browser", r"open.*url", r"visit", r"website", r"navigate", r"screenshot",
                      r"click", r"fill", r"form", r"login", r"submit"],
