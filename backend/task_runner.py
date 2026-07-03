@@ -450,7 +450,11 @@ class TaskRunner:
 
                     # Phase 12a: fire background reflection — never blocks the user
                     if _logged_task_id:
-                        asyncio.get_event_loop().create_task(
+                        # get_running_loop() (not get_event_loop()) is required here:
+                        # this runs inside an active async context, and get_event_loop()
+                        # can return a closed or wrong loop on some execution paths,
+                        # silently dropping the background reflection task.
+                        asyncio.get_running_loop().create_task(
                             self._generate_reflection(
                                 task_id=_logged_task_id,
                                 goal=initial_message,
@@ -898,6 +902,7 @@ class TaskRunner:
             send_event:       Active WebSocket send_event (used for optional debug status).
         """
         try:
+            import re
             from agent_tools.local_llm import local_llm_call
             from memory.long_term import log_reflection
 
@@ -931,6 +936,19 @@ class TaskRunner:
 
             reflection = await local_llm_call(prompt, local_model, ollama_url)
             reflection = reflection.strip() if reflection else ""
+
+            # qwen3 models output chain-of-thought in <think>...</think> blocks.
+            # local_llm_call() already strips these internally, but strip again
+            # here defensively before storing — this field is persisted to
+            # long_term.json and shown directly to the user, so any leftover
+            # thinking-mode residue must never reach either destination.
+            reflection = re.sub(r'<think>.*?</think>', '', reflection, flags=re.DOTALL).strip()
+
+            # If the model only output a think block with nothing after, fall
+            # back to skipping this reflection entirely rather than storing junk.
+            if not reflection or len(reflection) < 10:
+                logger.debug("[task_runner] Reflection was only thinking output — skipping")
+                return
 
             if reflection and len(reflection) > 10:
                 success = log_reflection(task_id, reflection)

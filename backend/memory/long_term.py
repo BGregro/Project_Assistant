@@ -338,7 +338,7 @@ async def _auto_update_profile(task_goal: str, tools_used: list, outcome: str) -
     if _backend_dir not in _sys.path:
         _sys.path.insert(0, _backend_dir)
 
-    from agent_tools.local_llm import local_llm_call
+    from agent_tools.local_llm import local_llm_call, strip_think_tags
 
     profile_path = Path(__file__).resolve().parent.parent.parent / "memory" / "user_profile.json"
     if not profile_path.exists():
@@ -367,6 +367,12 @@ async def _auto_update_profile(task_goal: str, tools_used: list, outcome: str) -
         response = await local_llm_call(prompt, "qwen2.5:14b", base_url="http://localhost:11434")
         if not response:
             return
+
+        # Defensive: local_llm_call already strips <think>...</think> blocks,
+        # but strip again here in case any thinking-mode residue slipped
+        # through — this response is parsed as JSON, so leftover chain-of-
+        # thought text would break json.loads().
+        response = strip_think_tags(response)
 
         # Strip optional markdown fences before parsing
         clean = response.strip()

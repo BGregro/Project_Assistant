@@ -17,11 +17,28 @@ None / the original input, never raising exceptions to the caller.
 
 import json
 import logging
+import re
 import time
 import httpx
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
+
+
+def strip_think_tags(text: str) -> str:
+    """
+    Strip qwen3 thinking mode output (<think>...</think> blocks).
+
+    qwen3 models in thinking mode prefix their response with a chain-of-thought
+    wrapped in these tags. Only the text after </think> is the actual answer.
+    If stripping would leave nothing behind (the model only emitted a think
+    block), fall back to the original text rather than returning an empty
+    string, so callers can still apply their own "too short" guards.
+    """
+    if not text:
+        return text
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    return cleaned if cleaned else text.strip()
 
 
 def _strip_tool_for_api(tool: dict) -> dict:
@@ -123,7 +140,10 @@ async def local_llm_call(
             response = await client.post(f"{base_url}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
-            text = data.get("response", "").strip()
+            # qwen3 thinking-mode models prefix output with <think>...</think>
+            # chain-of-thought. Strip it here so every caller of local_llm_call
+            # automatically gets the clean answer text.
+            text = strip_think_tags(data.get("response", "").strip())
             return text if text else None
 
     except httpx.ConnectError:
@@ -420,7 +440,7 @@ async def local_agent_call(
         # --- No tool calls: final answer ---
         if not tool_calls:
             logger.info(f"[local_llm] local_agent_call finished in {iteration + 1} iteration(s).")
-            return content.strip() if content else "No response generated."
+            return strip_think_tags(content.strip()) if content else "No response generated."
 
         # --- Tool calls: dispatch each one and feed results back ---
         tool_result_messages = []
@@ -573,7 +593,9 @@ async def classify_intent(
             response = await client.post(f"{base_url}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
-            raw = data.get("response", "").strip().upper()
+            # Guard against thinking-mode output — unlikely for a one-word
+            # classification but cheap to strip defensively.
+            raw = strip_think_tags(data.get("response", "").strip()).upper()
             if raw in _VALID_INTENTS:
                 logger.info(f"[local_llm] classify_intent → {raw}")
                 return raw
@@ -640,7 +662,7 @@ async def compress_tool_result(
             response = await client.post(f"{base_url}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
-            compressed_text = data.get("response", "").strip()
+            compressed_text = strip_think_tags(data.get("response", "").strip())
 
         if compressed_text:
             ratio = len(compressed_text) / len(serialised)
@@ -697,7 +719,7 @@ async def summarize_completed_steps(
             response = await client.post(f"{base_url}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
-            summary = data.get("response", "").strip()
+            summary = strip_think_tags(data.get("response", "").strip())
 
         if summary:
             logger.info(
