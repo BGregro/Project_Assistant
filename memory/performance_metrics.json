@@ -1,0 +1,27 @@
+{
+  "tools": {
+    "list_outputs": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 31,
+      "last_failure_reason": "",
+      "last_used": "2026-06-21T20:31:18.934337+00:00"
+    }
+  },
+  "task_types": {
+    "file_operations": {
+      "count": 1,
+      "success_count": 1,
+      "total_duration_seconds": 128,
+      "avg_tools_per_task": 1.0
+    },
+    "software_development": {
+      "count": 2,
+      "success_count": 2,
+      "total_duration_seconds": 131,
+      "avg_tools_per_task": 0.0
+    }
+  },
+  "last_updated": "2026-06-21T20:42:48.706533+00:00"
+}
