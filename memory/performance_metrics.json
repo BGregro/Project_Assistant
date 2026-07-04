@@ -31,6 +31,30 @@
       "total_duration_ms": 0,
       "last_failure_reason": "",
       "last_used": "2026-07-03T07:12:10.309063+00:00"
+    },
+    "query_knowledge_graph": {
+      "call_count": 2,
+      "success_count": 2,
+      "failure_count": 0,
+      "total_duration_ms": 0,
+      "last_failure_reason": "",
+      "last_used": "2026-07-04T17:34:10.131235+00:00"
+    },
+    "timeline_memory": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 16,
+      "last_failure_reason": "",
+      "last_used": "2026-07-04T17:43:13.389827+00:00"
+    },
+    "query_memory": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 2516,
+      "last_failure_reason": "",
+      "last_used": "2026-07-04T17:49:37.079480+00:00"
     }
   },
   "task_types": {
@@ -47,17 +71,17 @@
       "avg_tools_per_task": 0.0
     },
     "research": {
-      "count": 2,
-      "success_count": 1,
-      "total_duration_seconds": 257,
-      "avg_tools_per_task": 0.5
+      "count": 4,
+      "success_count": 3,
+      "total_duration_seconds": 498,
+      "avg_tools_per_task": 0.75
     },
     "general": {
-      "count": 1,
-      "success_count": 1,
-      "total_duration_seconds": 188,
-      "avg_tools_per_task": 2.0
+      "count": 2,
+      "success_count": 2,
+      "total_duration_seconds": 358,
+      "avg_tools_per_task": 1.5
     }
   },
-  "last_updated": "2026-07-03T07:13:13.977700+00:00"
+  "last_updated": "2026-07-04T17:50:23.714459+00:00"
 }

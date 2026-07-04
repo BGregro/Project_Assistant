@@ -10,7 +10,7 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-03T07:06:44.816635+00:00",
-      "last_seen": "2026-07-03T07:06:44.816635+00:00"
+      "last_seen": "2026-07-04T17:50:24.706839+00:00"
     },
     "python": {
       "type": "concept",
@@ -65,6 +65,60 @@
       "metadata": {},
       "first_seen": "2026-07-03T07:13:14.899314+00:00",
       "last_seen": "2026-07-03T07:13:14.899314+00:00"
+    },
+    "query_knowledge_graph": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:35:17.721871+00:00",
+      "last_seen": "2026-07-04T17:35:17.721871+00:00"
+    },
+    "research": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:35:17.758747+00:00",
+      "last_seen": "2026-07-04T17:35:17.758747+00:00"
+    },
+    "connected": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:35:17.792804+00:00",
+      "last_seen": "2026-07-04T17:35:17.792804+00:00"
+    },
+    "memory": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:35:17.819401+00:00",
+      "last_seen": "2026-07-04T17:50:24.735224+00:00"
+    },
+    "timeline_memory": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:45:25.710438+00:00",
+      "last_seen": "2026-07-04T17:45:25.710438+00:00"
+    },
+    "everything": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:45:25.724868+00:00",
+      "last_seen": "2026-07-04T17:45:25.724868+00:00"
+    },
+    "query_memory": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:50:24.692724+00:00",
+      "last_seen": "2026-07-04T17:50:24.692724+00:00"
+    },
+    "anything": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:50:24.771192+00:00",
+      "last_seen": "2026-07-04T17:50:24.771192+00:00"
+    },
+    "youtube": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-04T17:50:24.799881+00:00",
+      "last_seen": "2026-07-04T17:50:24.799881+00:00"
     }
   },
   "edges": [
@@ -175,7 +229,88 @@
       "sources": [],
       "first_seen": "2026-07-03T07:13:14.996920+00:00",
       "last_seen": "2026-07-03T07:13:14.996920+00:00"
+    },
+    {
+      "from": "search",
+      "to": "query_knowledge_graph",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:35:17.755276+00:00",
+      "last_seen": "2026-07-04T17:35:17.755276+00:00"
+    },
+    {
+      "from": "research",
+      "to": "query_knowledge_graph",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:35:17.778844+00:00",
+      "last_seen": "2026-07-04T17:35:17.778844+00:00"
+    },
+    {
+      "from": "connected",
+      "to": "query_knowledge_graph",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:35:17.802813+00:00",
+      "last_seen": "2026-07-04T17:35:17.802813+00:00"
+    },
+    {
+      "from": "memory",
+      "to": "query_knowledge_graph",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:35:17.830511+00:00",
+      "last_seen": "2026-07-04T17:35:17.830511+00:00"
+    },
+    {
+      "from": "everything",
+      "to": "timeline_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:45:25.742777+00:00",
+      "last_seen": "2026-07-04T17:45:25.742777+00:00"
+    },
+    {
+      "from": "search",
+      "to": "query_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:50:24.720844+00:00",
+      "last_seen": "2026-07-04T17:50:24.720844+00:00"
+    },
+    {
+      "from": "memory",
+      "to": "query_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:50:24.752829+00:00",
+      "last_seen": "2026-07-04T17:50:24.752829+00:00"
+    },
+    {
+      "from": "anything",
+      "to": "query_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:50:24.787421+00:00",
+      "last_seen": "2026-07-04T17:50:24.787421+00:00"
+    },
+    {
+      "from": "youtube",
+      "to": "query_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-04T17:50:24.814917+00:00",
+      "last_seen": "2026-07-04T17:50:24.814917+00:00"
     }
   ],
-  "last_updated": "2026-07-03T07:13:14.996920+00:00"
+  "last_updated": "2026-07-04T17:50:24.814917+00:00"
 }

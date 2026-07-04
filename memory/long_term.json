@@ -1,47 +1,6 @@
 {
   "tasks": [
     {
-      "id": "2c1a632d-e888-4c35-ab67-c4262c7eec31",
-      "timestamp": "2026-06-08T20:33:28.073350+00:00",
-      "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and everything else you know about me). Use criteria: legal, passive income preferred, no customer service.",
-      "outcome": "failure",
-      "summary": "Failed after 9 steps: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.2: `tool_use` ids we",
-      "tools_used": [
-        "deep_research",
-        "read_user_profile",
-        "search_web",
-        "fetch_page"
-      ],
-      "duration_seconds": 412
-    },
-    {
-      "id": "88420b0f-8750-4d98-bda4-4adda269ee3c",
-      "timestamp": "2026-06-09T05:55:11.921224+00:00",
-      "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and other information you have about me). Use criteria: legal, passive income preferred, no customer service.",
-      "outcome": "failure",
-      "summary": "Failed after 12 steps: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.6: `tool_use` ids we",
-      "tools_used": [
-        "read_user_profile",
-        "deep_research",
-        "fetch_page",
-        "search_web"
-      ],
-      "duration_seconds": 609
-    },
-    {
-      "id": "a6da12f6-7f2c-4d3b-bef3-edfe345cd7a6",
-      "timestamp": "2026-06-09T06:31:59.687792+00:00",
-      "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and everything else you know about me). Use criteria: legal, passive income preferred, no customer service",
-      "outcome": "failure",
-      "summary": "Failed after 9 steps: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'messages.11: `tool_use` ids w",
-      "tools_used": [
-        "fetch_page",
-        "search_web",
-        "recall_memory"
-      ],
-      "duration_seconds": 519
-    },
-    {
       "id": "2603a885-cd6c-40ef-afb7-a2bde876777f",
       "timestamp": "2026-06-09T07:11:20.400507+00:00",
       "goal": "Research ways to make money online that fit a computer engineering student with evenings free and no upfront budget (and everything else you know about me). Use criteria: legal, passive income preferred, no customer service.",
@@ -1236,6 +1195,49 @@
         "get_episode"
       ],
       "duration_seconds": 188,
+      "reflection": "",
+      "failure_type": "",
+      "failed_at_tool": ""
+    },
+    {
+      "id": "c21e84de-5b25-42b2-b99b-73d2019ba191",
+      "timestamp": "2026-07-04T17:35:16.808024+00:00",
+      "goal": "How are 'search_web' and 'research' connected in your memory?",
+      "outcome": "success",
+      "summary": "Completed in 2 steps.",
+      "tools_used": [
+        "query_knowledge_graph"
+      ],
+      "duration_seconds": 129,
+      "reflection": "I used query_knowledge_graph effectively to map the relationship between 'search_web' and 'research,' revealing how the former provides raw data while the latter synthesizes it. I should have cross-verified with external sources to ensure the connection wasn't oversimplified. Next time, I’d integrate multiple tools to validate the depth of their interdependence.",
+      "failure_type": "",
+      "failed_at_tool": "",
+      "reflection_generated_at": "2026-07-04T17:36:14.879798+00:00"
+    },
+    {
+      "id": "5fe32bac-e650-478a-a4a7-7f21db2126cd",
+      "timestamp": "2026-07-04T17:45:24.761786+00:00",
+      "goal": "Show me everything you did in June 2026.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "timeline_memory"
+      ],
+      "duration_seconds": 170,
+      "reflection": "",
+      "failure_type": "",
+      "failed_at_tool": ""
+    },
+    {
+      "id": "a152075a-792d-45f3-acf6-aba2e942a6b9",
+      "timestamp": "2026-07-04T17:50:23.695764+00:00",
+      "goal": "Search all your memory for anything about YouTube.",
+      "outcome": "success",
+      "summary": "Completed in 1 steps.",
+      "tools_used": [
+        "query_memory"
+      ],
+      "duration_seconds": 112,
       "reflection": "",
       "failure_type": "",
       "failed_at_tool": ""

@@ -100,11 +100,11 @@ def _strip_tool_for_api(tool: dict) -> dict:
 
 # Ollama's default address. Can be overridden via config.json → "ollama_base_url"
 DEFAULT_BASE_URL    = "http://localhost:11434"
-DEFAULT_MODEL       = "qwen2.5:7b"
-DEFAULT_AGENT_MODEL = "qwen2.5:14b"
+DEFAULT_MODEL       = "qwen3:8b"   # preprocessing tier — always resident
+DEFAULT_AGENT_MODEL = "qwen3:14b"  # agent/reflection tier — always resident
 
 # Generous timeouts: local inference can be slow on CPU
-GENERATE_TIMEOUT = 60.0
+GENERATE_TIMEOUT = 180.0  # qwen3 with thinking mode needs up to 3 minutes
 # NOTE: local_agent_call() no longer uses CHAT_TIMEOUT — it accepts a `timeout`
 # parameter so the caller (agent_core.py) can pass config-driven values.
 # CHAT_TIMEOUT is kept here only for reference / backward compatibility.
