@@ -317,17 +317,33 @@ class TaskRunner:
                     await send_event("task_stopped", {"reason": "user_cancelled"})
                     self._is_running = False
                     # Phase 3f: log cancellation to long-term memory
+                    _cancelled_task_id: str = ""
+                    _cancel_duration = int(time.time() - _start_time)
                     try:
                         from memory.long_term import log_task as _log_task
-                        _log_task(
+                        _cancelled_task_id = _log_task(
                             goal=initial_message,
                             outcome="failure",
                             summary=f"Cancelled by user after {len(self._current_task.get('steps', []))} steps.",
                             tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
-                            duration_seconds=int(time.time() - _start_time),
+                            duration_seconds=_cancel_duration,
                         )
                     except Exception as _lt_e:
                         logger.warning(f"[task_runner] Long-term log (cancel) failed (non-fatal): {_lt_e}")
+
+                    # Phase 12a: fire background reflection for cancelled tasks too —
+                    # only worth reflecting on if the task actually ran for a while.
+                    if _cancelled_task_id and _cancel_duration > 10:
+                        asyncio.get_running_loop().create_task(
+                            self._generate_reflection(
+                                task_id=_cancelled_task_id,
+                                goal=initial_message,
+                                tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                                outcome="cancelled",
+                                duration_seconds=_cancel_duration,
+                                send_event=send_event,
+                            )
+                        )
                     # Phase 12b: record cancelled task metrics
                     try:
                         from memory import performance as _perf
@@ -782,17 +798,37 @@ class TaskRunner:
             # Set running flag before cleanup so new messages aren't silently queued
             self._is_running = False
             # Phase 3f: log failure to long-term memory
+            _failed_task_id: str = ""
+            _failure_duration = int(time.time() - _start_time)
             try:
                 from memory.long_term import log_task as _log_task
-                _log_task(
+                _failed_task_id = _log_task(
                     goal=initial_message,
                     outcome="failure",
                     summary=f"Failed after {len(self._current_task.get('steps', []))} steps: {str(e)[:120]}",
                     tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
-                    duration_seconds=int(time.time() - _start_time),
+                    duration_seconds=_failure_duration,
                 )
             except Exception as _lt_e:
                 logger.warning(f"[task_runner] Long-term log failed (non-fatal): {_lt_e}")
+
+            # Phase 12a: fire background reflection for failed tasks too —
+            # helps surface what went wrong for Phase 14b failure classification.
+            if _failed_task_id:
+                try:
+                    asyncio.get_running_loop().create_task(
+                        self._generate_reflection(
+                            task_id=_failed_task_id,
+                            goal=initial_message,
+                            tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                            outcome="failure",
+                            duration_seconds=_failure_duration,
+                            send_event=send_event,
+                        )
+                    )
+                except RuntimeError:
+                    # No running loop available in this exception context — skip silently.
+                    pass
             # Phase 12b: record failed task metrics
             try:
                 from memory import performance as _perf
@@ -931,7 +967,7 @@ class TaskRunner:
                 "Reflect on: what worked well, what could have been done better, "
                 "and what you would do differently next time. "
                 "Be specific and honest. Write in first person ('I used...', 'I should have...'). "
-                "2-3 sentences maximum."
+                "2-3 sentences maximum. No preamble, no labels, just the reflection text."
             )
 
             # Read model config from agent reference (set by main.py); fall back to defaults.

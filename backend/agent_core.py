@@ -159,7 +159,12 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "After completing any research task you MUST call log_research. "
             "After learning any specific fact about the user or their system, call log_fact. "
             "Use recall_memory to retrieve past tasks and facts before starting a new task "
-            "that might overlap with prior work."
+            "that might overlap with prior work. "
+            "ADVANCED MEMORY QUERIES: Use query_memory(query, memory_types) for unified search "
+            "across all layers — faster than calling individual tools separately. Use "
+            "correlate_memories(concept1, concept2) to understand connections between topics. "
+            "Use timeline_memory(start_date, end_date) to review activity in a specific period "
+            "(e.g. '2026-06-01' to '2026-07-01')."
         ),
     },
     "episode_memory": {

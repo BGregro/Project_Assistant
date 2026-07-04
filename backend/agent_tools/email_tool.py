@@ -343,6 +343,7 @@ async def email_classify_and_plan(
         hint_part = f" Category hint: {category_hint}." if category_hint else ""
 
         prompt = (
+            "/no_think\n\n"  # Disables qwen3 chain-of-thought — plain per-email classification
             f"Classify each email as DELETE (clearly unwanted: newsletter, promotion, "
             f"automated notification, old receipt) or KEEP (personal, important, from a real person). "
             f"{hint_part}"
