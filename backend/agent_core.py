@@ -1172,13 +1172,27 @@ class AgentCore:
         else:
             tools = get_all_definitions()
 
+        # ── Phase 11.5a fix: cache_control must live inside the system
+        # content block, not as a top-level API parameter (the API silently
+        # ignores it there). Wrapping the system string as a content block
+        # list with an explicit cache_control breakpoint tells Claude to
+        # cache the (stable) system prompt separately from the growing
+        # message history, which is cached automatically.
+        system_block = [
+            {
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
         response = await self.client.messages.create(
             model=model,
             max_tokens=max_tok,
-            system=system,
+            system=system_block,      # list format, not string
             tools=tools,
             messages=messages,
-            cache_control={"type": "ephemeral"},  # ← ADD THIS
+            # no top-level cache_control here — it's inside the block above
         )
 
         # ── Phase 11.5a: Cache performance tracking ─────────────────────

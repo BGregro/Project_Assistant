@@ -949,7 +949,7 @@ class TaskRunner:
         """
         try:
             import re
-            from agent_tools.local_llm import local_llm_call
+            from agent_tools.local_llm import strip_think_tags
             from memory.long_term import log_reflection
 
             # Tell the user reflection is happening
@@ -980,14 +980,33 @@ class TaskRunner:
                 if self._agent_ref else "http://localhost:11434"
             )
 
-            reflection = await local_llm_call(prompt, local_model, ollama_url)
-            reflection = reflection.strip() if reflection else ""
+            # Direct Ollama call with output token cap for reflection.
+            # num_predict caps total output tokens (thinking + response combined).
+            # 512 tokens = enough for deep thinking + 2-3 sentence reflection
+            # without freezing the laptop. Without this cap, thinking mode can
+            # generate thousands of internal tokens before producing the actual
+            # 2-3 sentence reflection, saturating the iGPU and freezing the UI.
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=180.0) as _client:
+                _resp = await _client.post(
+                    f"{ollama_url}/api/generate",
+                    json={
+                        "model": local_model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "keep_alive": -1,
+                        "options": {"num_predict": 512},
+                    },
+                )
+                _resp.raise_for_status()
+                raw_reflection = _resp.json().get("response", "").strip()
 
-            # qwen3 models output chain-of-thought in <think>...</think> blocks.
-            # local_llm_call() already strips these internally, but strip again
-            # here defensively before storing — this field is persisted to
-            # long_term.json and shown directly to the user, so any leftover
-            # thinking-mode residue must never reach either destination.
+            reflection = strip_think_tags(raw_reflection).strip()
+
+            # Defensive second pass — strip_think_tags() already handles
+            # <think>...</think> blocks, but this guards against any leftover
+            # residue before the field is persisted to long_term.json and
+            # shown directly to the user.
             reflection = re.sub(r'<think>.*?</think>', '', reflection, flags=re.DOTALL).strip()
 
             # If the model only output a think block with nothing after, fall

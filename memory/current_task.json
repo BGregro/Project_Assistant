@@ -1,13 +1,13 @@
 {
-  "id": "78db9640-ef88-4acb-9d62-afad9b5e1802",
-  "started_at": "2026-07-04T17:48:30.798588+00:00",
-  "initial_message": "Search all your memory for anything about YouTube.",
+  "id": "2324d770-ef3a-415b-99d5-571d73ecee40",
+  "started_at": "2026-07-05T07:46:32.856754+00:00",
+  "initial_message": "Show me a timeline of everything you did in July 2026.",
   "steps": [
     {
       "step": 2,
-      "tool": "query_memory",
+      "tool": "timeline_memory",
       "status": "done",
-      "elapsed_ms": 2516
+      "elapsed_ms": 0
     }
   ],
   "status": "complete"
