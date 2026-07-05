@@ -1172,13 +1172,30 @@ class AgentCore:
         else:
             tools = get_all_definitions()
 
-        return await self.client.messages.create(
+        response = await self.client.messages.create(
             model=model,
             max_tokens=max_tok,
             system=system,
             tools=tools,
             messages=messages,
+            cache_control={"type": "ephemeral"},  # ← ADD THIS
         )
+
+        # ── Phase 11.5a: Cache performance tracking ─────────────────────
+        # Automatic caching places a single breakpoint at the last cacheable
+        # block and moves it forward as the conversation grows. From turn 2
+        # onward, previously-sent system/tool/message content should read
+        # from cache at 10% of normal input token cost.
+        usage = response.usage
+        cache_read = getattr(usage, "cache_read_input_tokens", 0)
+        cache_write = getattr(usage, "cache_creation_input_tokens", 0)
+        if cache_read or cache_write:
+            logger.debug(
+                f"[agent] Cache: read={cache_read} tokens (10% cost), "
+                f"write={cache_write} tokens (125% cost)"
+            )
+
+        return response
 
     # ------------------------------------------------------------------
     # Local-only agentic loop

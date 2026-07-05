@@ -19,6 +19,7 @@ continuous self-assessment, and strategy learning from experience.
   - `qwen3:8b` — preprocessing tier (intent routing, compression, optimization)
   - `qwen3:14b` — agent loop + background maintenance
   - Both models resident simultaneously (OLLAMA_MAX_LOADED_MODELS=2)
+  - DEFAULT_MODEL = "qwen3:8b", DEFAULT_AGENT_MODEL = "qwen3:14b" in local_llm.py
 - **Self-hosted search:** SearXNG on Docker at http://localhost:8888
 - **Goal:** Learning + practical utility, incrementally extensible system
 
@@ -58,32 +59,36 @@ User message
      ├── Mid-task step summarization: compress completed steps during long runs
      ├── Email classification: batch header analysis
      ├── Deep research sub-question generation
+     ├── Background reflection generation (fire-and-forget after tasks)
      └── Background memory maintenance (nightly consolidation job)
           │
           ▼
-     [Claude API]
+     [Claude API — with prompt caching]
      ├── claude-haiku-4-5: tool calls, structured tasks, most interactions
-     └── claude-sonnet-4-6: complex reasoning, planning, self-modification,
-                             research synthesis, multi-file app development
+     ├── claude-sonnet-4-6: complex reasoning, planning, self-modification
+     ├── Prompt caching: system prompt + conversation history cached at 10% cost
+     └── Batch processing: nightly maintenance and analysis jobs at 50% cost
 ```
 
 **Key efficiency principles:**
 - Claude's context window contains only clean, compressed, relevant information
 - Local tier preprocesses everything — it's a pipeline, not just a fallback
 - Both local models stay resident in iGPU shared memory (no reload delays)
+- Prompt caching: conversation history reads at 10% of normal input token cost
+- Batch processing: maintenance jobs run at 50% cost asynchronously overnight
 - Background maintenance runs free of charge on the local model during idle time
 
-**Config controls (all runtime-adjustable via settings panel):**
-- `use_prompt_optimizer`, `use_intent_routing`, `use_tool_compression`
-- `use_code_prevalidation`, `use_tool_prefilter`
-- `local_fallback`, `local_mode`, `local_sufficient_default` (ask/local/claude)
-- `primary` (claude-haiku-4-5), `complex` (claude-sonnet-4-6)
-- `local` (qwen3:8b), `local_agent` (qwen3:14b)
-- `local_agent_timeout` (default 180s with iGPU), `auto_approve_code_execution`
-- `igpu.enabled`, `igpu.max_loaded_models` (2)
+**API Efficiency Stack:**
+- `use_prompt_optimizer`: local prompt rewriting before API call
+- `use_intent_routing`: local classification routes to cheapest capable model
+- `use_tool_compression`: local stripping of verbose tool output
+- `use_code_prevalidation`: local bug detection saves failed execute_code calls
+- `use_tool_prefilter`: local selection of 8-10 relevant tools per request
+- Prompt caching: `cache_control` on system prompt + automatic message caching
+- Batch processing: Anthropic Messages Batches API for async overnight jobs
 
-## Current Tool Inventory (Phases 1–11 complete)
-55+ tools registered at startup. All visible to Claude via the tool registry.
+## Current Tool Inventory (Phases 1–12d complete)
+60+ tools registered at startup. All visible to Claude via the tool registry.
 
 | Tool | File | Description |
 |---|---|---|
@@ -105,10 +110,14 @@ User message
 | `recall_memory` | memory_tool.py | Query past tasks, facts, and research |
 | `log_fact` | memory_tool.py | Store a specific fact to long-term memory |
 | `recall_projects` | memory_tool.py | Query past built projects |
+| `correlate_memories` | memory_tool.py | Find connections between two concepts |
+| `timeline_memory` | memory_tool.py | Chronological activity in a date range |
+| `query_memory` | memory_tool.py | Unified search across all memory layers |
 | `read_user_profile` | self_knowledge.py | Read memory/user_profile.json |
 | `scan_system` | self_knowledge.py | Scan tools, packages, projects, iGPU status |
 | `get_context_usage` | self_knowledge.py | Estimate current context window usage |
 | `analyze_performance` | self_knowledge.py | AI-generated improvement suggestions |
+| `get_performance_metrics` | self_knowledge.py | Per-tool call counts and success rates |
 | `update_user_profile` | profile_updater.py | Update fields in user_profile.json |
 | `deep_research` | research_mode.py | Structured research plan with cache check |
 | `ask_user` | interaction.py | Pause mid-task and ask user a question |
@@ -161,6 +170,11 @@ User message
 | `email_classify_and_plan` | email_tool.py | Local LLM classifies emails keep/delete |
 | `email_delete_batch` | email_tool.py | Delete approved emails (dry_run default) |
 | `email_disconnect` | email_tool.py | Disconnect from IMAP |
+| `log_reflection` | episode_memory.py | Add/update reflection on a task episode |
+| `get_episode` | episode_memory.py | Retrieve full task episode with reflection |
+| `get_recent_episodes` | episode_memory.py | Get last N task episodes with reflections |
+| `query_knowledge_graph` | knowledge_graph.py | Query concept connections in semantic graph |
+| `add_graph_edge` | knowledge_graph.py | Add a relationship to the knowledge graph |
 
 Generated tools in `agent_tools/generated/` auto-load on startup.
 All generated files (reports, scripts, data) saved to `outputs/`.
@@ -168,9 +182,11 @@ All generated files (reports, scripts, data) saved to `outputs/`.
 ## Memory Architecture
 - **Short-term:** last N conversation turns (verbatim, history.json)
 - **Semantic:** ChromaDB vector store with nomic-embed-text embeddings
-- **Long-term:** `memory/long_term.json` — tasks (with reflection), facts,
-  research (semantically indexed), projects
+- **Long-term:** `memory/long_term.json` — tasks (with reflection + failure_type),
+  facts (with age + staleness flag), research (semantically indexed), projects
 - **Research index:** ChromaDB collection for semantic research retrieval
+- **Performance metrics:** `memory/performance_metrics.json` — per-tool stats
+- **Knowledge graph:** `memory/semantic_graph.json` — concept/tool/project relationships
 - **User profile:** `memory/user_profile.json` — skills, goals, hardware, preferences
 - **Task checkpoint:** `memory/current_task.json` — last task state, survives reconnect
 - **Project progress:** `outputs/{name}/progress.json` — per-project build state
@@ -181,148 +197,122 @@ All generated files (reports, scripts, data) saved to `outputs/`.
 ## Development Phases
 
 ### Phases 1–11 ✓ COMPLETE
-
-**Phases 1–5:** Base agent, extended tools, autonomous agent, software dev agent,
-quality & reliability, external integrations (GitHub, credentials, YouTube, browser,
-scheduler).
-
-**Phase 6 — Long Task Reliability ✓**
-- ask_user: mid-task question pause/resume
-- Project state snapshots for reliable resumption
-
-**Phase 7 — UI Overhaul ✓**
-- Processes panel, scheduler view, credential manager UI
-- Agent analytics dashboard, live process output streaming
-- Collapsible task containers, status bar, task history
-
-**Phase 8 — Self-Improvement Infrastructure ✓**
-- get_context_usage, analyze_performance tools
-- Auto-profile updating from task history (background)
-- Tiered system prompt (only relevant sections per message)
-- File content cache (mtime-based, 20 entries)
-
-**Phase 9 — Media & Notifications ✓**
-- ffmpeg wrapper tools (convert, extract, trim, merge, info)
-- SMTP email notifications with task completion trigger
-- File watcher with pattern-based action triggers
-- Email inbox scanner + local LLM classifier (batch_size=20)
-- LOCAL_SUFFICIENT tier: user chooses local vs Claude per task
-
-**Phase 10 — Remote Access ✓**
-- Token-based auth middleware
-- 0.0.0.0 binding, Tailscale/Cloudflare Tunnel support
-- Login page, mobile-accessible UI
-
-**Phase 11 — iGPU Acceleration ✓**
-- ipex-llm Ollama on Intel Arc 140V (SYCL/XPU backend)
-- Auto-start via run.py with .env management
-- Two-model strategy: qwen3:8b (preprocessing) + qwen3:14b (agent)
-- Both models resident simultaneously in shared iGPU memory
-- Hardware self-awareness in scan_system and user_profile
+Phases 1–5: Base agent, extended tools, autonomous agent, software dev agent,
+quality & reliability, external integrations.
+Phase 6: Long task reliability (ask_user, project state snapshots).
+Phase 7: UI overhaul (processes, scheduler, analytics, task history panels).
+Phase 8: Self-improvement infrastructure (tiered prompt, file cache, auto-profile).
+Phase 9: Media & notifications (ffmpeg, SMTP, file watcher, email tool, LOCAL_SUFFICIENT).
+Phase 10: Remote access (token auth, 0.0.0.0, Tailscale/Cloudflare support).
+Phase 11: iGPU acceleration (ipex-llm, qwen3:8b+14b resident, hardware self-awareness).
 
 ---
 
-### Phase 12 — Enhanced Memory Architecture (CURRENT TARGET)
-*Roadmap Point 1: Expand Persistent Memory*
+### Phase 11.5 — API Efficiency Improvements (CURRENT TARGET)
 
-**12a — Episode journal with reflection (Alpha)**
-Add a `reflection` field to every task entry in long_term.json.
-After task completion, qwen3:14b generates a 2-3 sentence reflection:
-what worked, what didn't, what would be done differently.
-New tool: `log_reflection(task_id, reflection_text)`.
-New tool: `get_episode(task_id)` — retrieve full episode including reflection.
+**11.5a — Prompt Caching (implement now)**
+Enable Anthropic prompt caching on all Claude API calls.
+The system prompt and tool definitions are stable across requests within a session.
+Conversation history grows but previous turns are cacheable.
+Cache reads cost 10% of normal input token price — 60-90% savings on long tasks.
 
-**12b — Performance metrics database (Beta)**
-New file `memory/performance_metrics.json`.
-Track per-tool: call count, success count, average duration, last_failure_reason.
-Track per-task-type (classified by the local model): success rate, avg duration.
-New tool: `get_performance_metrics(tool_name_or_task_type)`.
-Updated `analyze_performance()` reads from metrics rather than re-computing.
+Implementation in `backend/agent_core.py` `_run_claude_once()`:
+- Add `cache_control={"type": "ephemeral"}` at the top level of the API call
+  (automatic caching — caches everything up to the last message automatically)
+- For the system prompt: mark it with an explicit `cache_control` breakpoint
+  so the stable system content is cached separately from the growing messages
+- Track cache hit stats: log `response.usage.cache_read_input_tokens` to
+  `memory/performance_metrics.json` under a new `"api_cache"` section
+- Note: when `use_tool_prefilter` is enabled, tool definitions change per call
+  and the tool cache invalidates. Prompt caching still applies to system + messages.
 
-**12c — Semantic knowledge graph (Gamma)**
-New file `memory/semantic_graph.json`.
-Nodes: concepts, projects, tools, skills, people, external services.
-Edges: {from, to, relationship, strength, last_seen}.
-Built automatically: when a task uses tools X and Y together → add edge.
-When research finds concept A related to B → add edge.
-New tool: `query_knowledge_graph(concept, depth=2)` — return connected nodes.
-New tool: `add_graph_edge(from_node, to_node, relationship)`.
+**11.5b — Batch Processing Infrastructure**
+New file `backend/batch_processor.py`.
+Wraps the Anthropic Message Batches API for async overnight jobs.
 
-**12d — Advanced memory query API (Delta)**
-New tool: `correlate_memories(concept1, concept2)` — find tasks/facts/research
-that mention both concepts, return connection analysis via local model.
-New tool: `timeline_memory(start_date, end_date)` — chronological review
-of all agent activity in a date range.
-New tool: `query_memory(query, memory_types, filters)` — unified search
-across all memory layers with type filtering.
+```python
+# Key functions:
+submit_batch(requests: list[dict], job_name: str) -> str  # returns batch_id
+poll_batch(batch_id: str) -> dict  # {status, succeeded, failed, total}
+get_results(batch_id: str) -> list[dict]  # [{custom_id, result_type, content}]
+cancel_batch(batch_id: str) -> None
+list_pending_batches() -> list[dict]  # batches not yet retrieved
+```
+
+Batch jobs store their IDs in `memory/pending_batches.json`.
+A scheduled APScheduler job polls pending batches every 30 minutes and
+processes results when they arrive.
+
+**11.5c — Historical Reflection Backfill**
+Use batch processing to generate reflections for the 100 historical tasks
+that were logged before Phase 12a. Submit all 100 as a batch at 50% cost,
+receive results within 1 hour, write them to `long_term.json` via `log_reflection`.
+Triggered by a new tool: `backfill_reflections()` — submits the batch and
+schedules a job to process results when ready.
 
 ---
 
-### Phase 13 — Goal Tracking System
+### Phase 12 — Enhanced Memory Architecture ✓ COMPLETE
+
+**12a — Episode journal with reflection ✓**
+Background qwen3:14b reflection after every task. `log_reflection`, `get_episode`,
+`get_recent_episodes` tools. Reflection field in every task entry.
+Note: `DEFAULT_MODEL = "qwen3:8b"` in local_llm.py fixed model churn bug.
+
+**12b — Performance metrics database ✓**
+`memory/performance_metrics.json`, per-tool call/success/duration tracking.
+`get_performance_metrics` tool, updated `analyze_performance` reads from metrics.
+
+**12c — Semantic knowledge graph ✓**
+`memory/semantic_graph.json`, nodes and edges auto-built from task history.
+`query_knowledge_graph`, `add_graph_edge` tools. Background updates after tasks.
+
+**12d — Advanced memory query API ✓**
+`correlate_memories`, `timeline_memory`, `query_memory` tools.
+Datetime-aware queries with age labels, staleness flags on facts.
+Configurable research cache TTL (`research_cache_days` in config.json).
+
+---
+
+### Phase 13 — Goal Tracking System (NEXT)
 *Roadmap Point 2: Autonomous Goal-Pursuit*
 
 **13a — Goal registry (Alpha)**
 New file `memory/goals.json`.
-Goal data structure: {goal_id, title, description, status, created_date,
-target_date, milestones[], current_strategy, blockers[], related_tasks[],
-related_projects[], priority}.
+Goal structure: {goal_id, title, description, status, created_date, target_date,
+milestones[], current_strategy, blockers[], related_tasks[], priority}.
 New tools: `create_goal`, `update_goal`, `list_goals`, `get_goal`.
-UI: Goals tab in right panel showing active goals with status badges.
+UI: Goals tab in right panel with status badges.
 
 **13b — Progress tracking and milestone management (Beta)**
-Link tasks to goals: when logging a task, optionally specify goal_id.
-Milestone completion detection: when all sub-tasks for a milestone are done,
-auto-mark milestone complete and notify user.
-New tool: `log_goal_progress(goal_id, progress_note, milestone_completed)`.
-New tool: `get_goal_progress(goal_id)` — full history of progress entries.
+Link tasks to goals in `log_task()` (optional goal_id param).
+Milestone completion detection and notification.
+New tools: `log_goal_progress`, `get_goal_progress`.
 
 **13c — Autonomous planning per goal (Gamma)**
-New tool: `decompose_goal(goal_id)` — local model breaks goal into sub-tasks
-with estimated durations. Returns task list for user approval.
-New tool: `schedule_goal_work(goal_id, hours_per_week)` — automatically
-schedule decomposed sub-tasks using the existing APScheduler system.
-New tool: `detect_goal_blocker(goal_id)` — analyze recent progress entries,
-flag if no progress in >7 days, suggest pivot strategies.
+New tools: `decompose_goal` (local model breaks into sub-tasks),
+`schedule_goal_work` (APScheduler integration), `detect_goal_blocker`.
 
 **13d — Proactive goal reporting (Delta)**
-Scheduled weekly job: generate goal status report for all active goals.
-Report includes: on-track goals, at-risk goals, upcoming milestones, suggested
-next actions for highest-priority goal.
-Send via email if enabled, always save to outputs/goal_reports/.
-New tool: `generate_goal_report()` — trigger on-demand version.
+Weekly scheduled job: goal status report saved to outputs/goal_reports/.
+Send via email if enabled. New tool: `generate_goal_report()`.
 
 ---
 
 ### Phase 14 — Continuous Self-Reflection & Assessment
 *Roadmap Point 3: Self-Assessment*
-
-**14a — Automatic post-task reflection (Alpha)**
-In task_runner.py, after every completed task, fire a background job:
-call qwen3:14b with the task goal, tools used, outcome, and duration.
-Generate structured reflection: what worked, what failed, what assumptions
-were made, what would be done differently.
-Store reflection in long_term.json task entry (Phase 12a).
-Never blocks task completion — pure background fire-and-forget.
+*(14a already partially built via Phase 12a background reflection)*
 
 **14b — Failure classification system (Beta)**
-When a task fails, automatically classify the failure type using local model:
-- `tool_integration_error`: tool call failed or returned wrong format
-- `logic_error`: agent reasoned incorrectly about the task
-- `knowledge_gap`: agent lacked needed information
-- `resource_constraint`: rate limit, context overflow, timeout
-- `user_communication`: misunderstood the goal
-- `external_failure`: API down, file missing, network error
-Store classification in failed_at_tool + new `failure_type` field.
-New tool: `classify_failure(task_id)` — run classification on demand.
+Classify task failures: tool_integration_error, logic_error, knowledge_gap,
+resource_constraint, user_communication, external_failure.
+Store `failure_type` field (already in schema, not yet populated automatically).
+New tool: `classify_failure(task_id)`.
 
 **14c — Pattern detection and improvement proposals (Gamma)**
-Background job runs every 10 completed tasks:
-scan failure logs for repeated failure types on same tools or task types.
-If tool X has >30% failure rate: generate specific improvement proposal
-(add retry logic, write wrapper tool, switch approach).
+Background job every 10 tasks: scan failures for patterns.
 Store proposals in `memory/improvement_proposals.json`.
-New tool: `get_improvement_proposals()` — retrieve pending proposals.
-New tool: `apply_improvement_proposal(proposal_id)` — agent acts on proposal.
+New tools: `get_improvement_proposals`, `apply_improvement_proposal`.
 
 ---
 
@@ -330,76 +320,43 @@ New tool: `apply_improvement_proposal(proposal_id)` — agent acts on proposal.
 *Roadmap Point 4: Capability Expansion*
 
 **15a — Capability gap detection (Alpha)**
-During task planning (before first tool call), local model checks:
-"Do existing tools cover all steps needed for this goal?"
-If gaps identified: emit a status event "Capability gap detected: [description]"
-and optionally propose writing a new tool.
-New system prompt instruction: "Before starting a complex task, check if any
-steps require capabilities not in the tool registry. If so, consider writing
-a new tool first."
-New tool: `analyze_capability_gap(task_goal)` — explicit gap analysis.
+Local model checks tool coverage before complex tasks.
+New tool: `analyze_capability_gap(task_goal)`.
 
-**15b — Tool design and implementation pipeline (Beta)**
-New tool: `design_tool(gap_description)` — local model generates tool spec:
-function name, parameters, return type, core logic, test cases, dependencies.
-Returns design document for user approval before implementation.
-Extends existing write_tool + reload_tool pipeline with design-first step.
-New tool: `implement_tool_from_design(design_spec)` — writes, validates,
-and reloads tool in one step.
+**15b — Tool design pipeline (Beta)**
+New tools: `design_tool(gap_description)`, `implement_tool_from_design(spec)`.
+Design-first workflow before write_tool.
 
-**15c — Tool performance tracking and registry metadata (Gamma)**
-Extend tool registry to store per-tool metadata:
-{created_date, purpose, call_count, success_count, last_used, created_by}.
-`created_by`: "system" for built-in tools, "agent" for generated tools.
-New tool: `get_tool_metadata(tool_name)`.
-New tool: `prune_unused_tools()` — list generated tools unused for >30 days,
-propose removal with user confirmation.
-Background job: weekly tool health report summarizing tool usage patterns.
+**15c — Tool performance tracking (Gamma)**
+Registry metadata: created_date, call_count, success_count, created_by.
+New tools: `get_tool_metadata`, `prune_unused_tools`.
 
 ---
 
 ### Phase 16 — Background Memory Maintenance
-*New concept: Memory Consolidation*
-
-The idea: a nightly background process using qwen3:14b that maintains memory
-health without any Claude API cost. Similar to how human brains consolidate
-memories during sleep.
+*New concept: Memory Consolidation + Batch Processing*
 
 **16a — Memory deduplication and cleanup (Alpha)**
-Nightly APScheduler job at 3:00 AM (configurable).
-Uses qwen3:14b to:
-- Find duplicate or near-identical facts in long_term.json
-- Identify stale facts (>90 days old, no longer referenced)
-- Merge redundant research entries on the same topic
-- Flag facts that may be outdated (e.g., "current Python version is X")
-Produces a cleanup report saved to outputs/maintenance/.
-Never deletes automatically — flags for review, user approves bulk cleanup.
+Nightly APScheduler job (3:00 AM, configurable).
+Uses qwen3:14b to find duplicate facts, stale entries, redundant research.
+Produces cleanup report in outputs/maintenance/. Never auto-deletes.
 
-**16b — Memory summarization and compression (Beta)**
+**16b — Memory summarization with batch processing (Beta)**
 For research entries older than 30 days with >500 word findings:
-local model generates a compressed 100-word summary.
-Store both full and compressed version — use compressed for context injection,
-full for when agent explicitly requests the entry.
-For task entries older than 7 days: compress tool_results in episode log.
-This keeps context injection fast even with large memory stores.
+EITHER qwen3:14b generates compressed 100-word summary locally,
+OR submit as batch to Claude (50% cost) for higher quality summaries.
+Batch approach: submit nightly, results arrive next morning.
 
 **16c — Pattern extraction and cross-linking (Gamma)**
-After deduplication pass, local model scans recent episodes and:
-- Identifies recurring patterns ("agent always searches before coding")
-- Extracts implicit strategies from successful task sequences
-- Updates semantic knowledge graph with new edges discovered
-- Generates weekly "patterns learned" summary
+Local model scans episodes for recurring patterns.
+Updates knowledge graph with newly discovered edges.
+Generates weekly "patterns learned" summary.
 Feeds into Phase 17 strategy registry.
 
 **16d — Memory health reporting (Delta)**
-Monthly report on memory health:
-- Total entries per type, growth rate, oldest entries
-- Duplicate rate (before vs. after consolidation)
-- Most-referenced facts and research topics
-- Knowledge gaps identified ("agent has never successfully done X")
-Sent via email if enabled, always saved to outputs/maintenance/.
-New tool: `run_memory_maintenance()` — trigger maintenance cycle on demand.
-New tool: `get_maintenance_report()` — read latest maintenance report.
+Monthly report: entry counts, growth rate, duplicate rate, knowledge gaps.
+New tools: `run_memory_maintenance()`, `get_maintenance_report()`.
+Batch processing: submit large analysis jobs overnight at 50% cost.
 
 ---
 
@@ -407,42 +364,27 @@ New tool: `get_maintenance_report()` — read latest maintenance report.
 *Roadmap Point 5: Continuous Learning*
 *Depends on Phases 12, 13, 14, 15, 16*
 
-**17a — Experience aggregation and strategy extraction (Alpha)**
-After Phase 16c has run at least 4 weeks, begin building strategy registry.
+**17a — Strategy extraction via batch processing (Alpha)**
 New file `memory/strategies.json`.
-Strategy structure: {strategy_id, problem_type, description, steps[],
-preconditions, expected_success_rate, evidence{successes, failures, notes},
-derived_from[task_ids], last_used, created_date}.
-New tool: `extract_strategy(task_ids)` — from a set of similar successful
-tasks, local model generalizes a reusable strategy.
-Minimum evidence threshold: 3+ successful uses before a strategy is created.
+Strategy structure: {strategy_id, problem_type, steps[], evidence, success_rate}.
+Batch submit groups of similar tasks to Claude overnight for pattern extraction.
+Results processed next morning, strategies added to registry.
+Minimum 3 successful uses before a strategy is created.
 
 **17b — Contextual strategy application (Beta)**
-New tool: `recall_relevant_strategies(task_goal)` — before starting any task,
-search strategy registry for applicable past approaches.
-New tool: `adapt_strategy(strategy_id, new_context)` — modify past strategy
-to fit current situation.
-New tool: `track_strategy_effectiveness(strategy_id, outcome)` — update
-success rate after applying a strategy.
-System prompt addition: "Before planning a complex task, call
-recall_relevant_strategies to check if a proven approach already exists."
+New tools: `recall_relevant_strategies`, `adapt_strategy`,
+`track_strategy_effectiveness`.
+System prompt: check strategies before planning complex tasks.
 
 **17c — Domain proficiency tracking (Gamma)**
-Track agent success rate per domain: web research, coding, email management,
-video processing, data analysis, system administration, etc.
-Domain classification done by local model per task.
-New tool: `get_domain_proficiency()` — return proficiency levels with trends.
-New tool: `identify_weak_domains()` — suggest which domains to practice.
-Weak domains flagged in weekly goal report (Phase 13d).
+Track success rate per domain (research, coding, email, video, etc.).
+New tools: `get_domain_proficiency`, `identify_weak_domains`.
 
-**17d — Knowledge synthesis and evolution reports (Delta)**
-Monthly synthesis report generated by qwen3:14b:
-- "What I learned this month" (new strategies, improved domains)
-- "Open questions I still can't reliably answer"
-- "Tools I've created and their impact"
-- "Goals progressed and milestones hit"
+**17d — Knowledge synthesis reports via batch processing (Delta)**
+Monthly synthesis report: what was learned, open questions, tool impact.
+Submitted as batch to Claude Sonnet overnight (50% cost).
 Sent via email, saved to outputs/synthesis/.
-New tool: `generate_synthesis_report(period)` — trigger on demand.
+New tool: `generate_synthesis_report(period)`.
 
 ---
 
@@ -450,57 +392,59 @@ New tool: `generate_synthesis_report(period)` — trigger on demand.
 ```
 agent/
 ├── backend/
-│   ├── main.py                  # FastAPI app, WebSocket, settings, broadcast
-│   ├── agent_core.py            # LLM loop, tool dispatch, routing, tiered prompt
-│   ├── task_runner.py           # Long-running task loop, sanitizer, compression
-│   ├── task_scheduler.py        # APScheduler wrapper, persistent schedules
+│   ├── main.py
+│   ├── agent_core.py            # prompt caching in _run_claude_once()
+│   ├── task_runner.py
+│   ├── task_scheduler.py
+│   ├── batch_processor.py       # Phase 11.5b — Anthropic Batches API wrapper
 │   ├── run.py                   # Windows launcher + ipex-llm auto-start
 │   ├── agent_tools/
-│   │   ├── __init__.py          # Tool registry with get_all_definitions()
-│   │   ├── filesystem.py        # File tools + cache + patch_file
-│   │   ├── capabilities.py      # list_capabilities
-│   │   ├── web.py               # search_web, fetch_page
-│   │   ├── system_info.py       # get_system_info (iGPU aware)
-│   │   ├── file_analysis.py     # analyze_file
-│   │   ├── local_llm.py         # Ollama client, all local LLM tasks
-│   │   ├── code_executor.py     # execute_code, install_package, streaming
-│   │   ├── tool_writer.py       # write_tool + design_tool, reload_tool
-│   │   ├── hot_reload.py        # validation + importlib hot-reload
-│   │   ├── memory_tool.py       # log_research, recall_memory, log_fact,
-│   │   │                        # recall_projects, query_memory, correlate_memories
-│   │   ├── self_knowledge.py    # read_user_profile, scan_system,
-│   │   │                        # get_context_usage, analyze_performance
-│   │   ├── profile_updater.py   # update_user_profile
-│   │   ├── research_mode.py     # deep_research (with cache check)
-│   │   ├── interaction.py       # ask_user (mid-task pause/resume)
-│   │   ├── browser.py           # browser_open/read/screenshot/click/fill/url
-│   │   ├── project_scaffold.py  # scaffold_project + control tool generation
-│   │   ├── project_manager.py   # get_project_status, mark_file_complete,
-│   │   │                        # read_project_state
-│   │   ├── project_tester.py    # run_project_test (with project memory logging)
-│   │   ├── github_tool.py       # github_* tools
-│   │   ├── credentials.py       # store/get/list_credentials (Fernet)
-│   │   ├── youtube_tool.py      # youtube_* tools (read-only, public data)
-│   │   ├── process_manager.py   # start/stop/read/send/list processes
-│   │   ├── scheduler_tool.py    # schedule/list/cancel scheduled tasks
-│   │   ├── media_tool.py        # convert/extract/trim/merge/info via ffmpeg
-│   │   ├── notification_tool.py # send_email, test_email_config
-│   │   ├── file_watcher.py      # watch_directory, stop_watching, list_watches
-│   │   ├── email_tool.py        # email_connect/scan/classify/delete/disconnect
-│   │   ├── # Phase 12+ (to be added):
-│   │   ├── episode_memory.py    # log_reflection, get_episode, correlate_memories
-│   │   ├── knowledge_graph.py   # query_knowledge_graph, add_graph_edge
-│   │   ├── goal_tracker.py      # create/update/list/get_goal, log_goal_progress
-│   │   ├── reflection_engine.py # reflect_on_task, classify_failure, proposals
-│   │   ├── capability_tools.py  # analyze_capability_gap, design_tool
-│   │   ├── memory_maintenance.py# run_memory_maintenance, get_maintenance_report
-│   │   ├── strategy_tools.py    # extract/recall/adapt/track strategies
-│   │   ├── generated/           # agent-written + scaffold control tools
-│   │   └── SEARXNG_SETUP.md
+│   │   ├── __init__.py
+│   │   ├── filesystem.py
+│   │   ├── capabilities.py
+│   │   ├── web.py
+│   │   ├── system_info.py
+│   │   ├── file_analysis.py
+│   │   ├── local_llm.py         # DEFAULT_MODEL="qwen3:8b", DEFAULT_AGENT_MODEL="qwen3:14b"
+│   │   ├── code_executor.py
+│   │   ├── tool_writer.py
+│   │   ├── hot_reload.py
+│   │   ├── memory_tool.py       # + correlate_memories, timeline_memory, query_memory
+│   │   ├── self_knowledge.py    # + get_performance_metrics
+│   │   ├── profile_updater.py
+│   │   ├── research_mode.py
+│   │   ├── interaction.py
+│   │   ├── browser.py
+│   │   ├── project_scaffold.py
+│   │   ├── project_manager.py
+│   │   ├── project_tester.py
+│   │   ├── github_tool.py
+│   │   ├── credentials.py
+│   │   ├── youtube_tool.py
+│   │   ├── process_manager.py
+│   │   ├── scheduler_tool.py
+│   │   ├── media_tool.py
+│   │   ├── notification_tool.py
+│   │   ├── file_watcher.py
+│   │   ├── email_tool.py
+│   │   ├── episode_memory.py
+│   │   ├── knowledge_graph.py
+│   │   ├── # Phase 13+:
+│   │   ├── goal_tracker.py
+│   │   ├── # Phase 14+:
+│   │   ├── reflection_engine.py
+│   │   ├── # Phase 15+:
+│   │   ├── capability_tools.py
+│   │   ├── # Phase 16+:
+│   │   ├── memory_maintenance.py
+│   │   ├── # Phase 17+:
+│   │   ├── strategy_tools.py
+│   │   └── generated/
 │   └── memory/
-│       ├── context.py           # History load/save/trim
-│       ├── embeddings.py        # ChromaDB vector store
-│       └── long_term.py         # Tasks, facts, research, projects + semantic index
+│       ├── context.py
+│       ├── embeddings.py
+│       ├── long_term.py
+│       └── performance.py
 ├── frontend/
 │   ├── index.html
 │   ├── style.css
@@ -508,29 +452,24 @@ agent/
 ├── memory/
 │   ├── history.json
 │   ├── current_task.json
-│   ├── long_term.json           # tasks (with reflections), facts, research, projects
-│   ├── user_profile.json        # skills, goals, hardware, preferences
-│   ├── credentials.json         # encrypted, gitignored
+│   ├── long_term.json
+│   ├── user_profile.json
+│   ├── credentials.json         # gitignored
 │   ├── scheduled_tasks.json
-│   ├── vectors/                 # ChromaDB persistent storage
-│   ├── # Phase 12+ (to be added):
-│   ├── performance_metrics.json # per-tool and per-task-type statistics
-│   ├── semantic_graph.json      # knowledge graph nodes and edges
-│   ├── improvement_proposals.json
-│   ├── # Phase 13+:
-│   ├── goals.json               # goal registry with milestones and blockers
-│   ├── # Phase 17+:
-│   └── strategies.json          # proven strategies with evidence tracking
+│   ├── performance_metrics.json
+│   ├── semantic_graph.json
+│   ├── pending_batches.json     # Phase 11.5b
+│   ├── improvement_proposals.json  # Phase 14c
+│   ├── goals.json               # Phase 13
+│   ├── strategies.json          # Phase 17
+│   └── vectors/
 ├── outputs/
 │   ├── {project_name}/
-│   │   ├── scaffold.json
-│   │   ├── progress.json
-│   │   └── state.json
-│   ├── goal_reports/            # Phase 13d weekly goal status reports
-│   ├── maintenance/             # Phase 16 memory maintenance reports
-│   └── synthesis/               # Phase 17d monthly synthesis reports
-├── config.json                  # All settings, runtime-editable via UI
-├── .env                         # ANTHROPIC_API_KEY, gitignored
+│   ├── goal_reports/
+│   ├── maintenance/
+│   └── synthesis/
+├── config.json
+├── .env
 ├── .gitignore
 ├── requirements.txt
 ├── SEARXNG_SETUP.md
@@ -538,57 +477,34 @@ agent/
 ```
 
 ## Coding Principles
-1. **Always modular** — each tool in its own file; core must not depend on tool
-   implementations; new capabilities slot in without touching existing code
-2. **Token-efficient** — local LLM preprocesses everything before Claude sees it;
-   Claude's context should be clean, dense, and relevant
+1. **Always modular** — each tool in its own file; no circular dependencies
+2. **Token-efficient** — local preprocessing + prompt caching + batch processing
 3. **Incremental complexity** — never skip a phase; stabilize before extending
-4. **Security first** — permission check before every file/code/network operation;
-   destructive actions always require user confirmation;
-   agent self-modification restricted to agent_tools/generated/ only;
-   agent_core.py, main.py, and task_runner.py are read-only to the agent
+4. **Security first** — permission checks; self-modification restricted to generated/
 5. **Commented code** — developer is learning; explain non-trivial parts
-6. **Windows compatible** — paths, subprocess calls must work on Windows;
-   always use run.py (ProactorEventLoop) not uvicorn directly
+6. **Windows compatible** — always use run.py (ProactorEventLoop)
 7. **Designed for long tasks** — context management, checkpointing, compression
-   must support tasks running for minutes or hours with many tool calls
-8. **Local model first** — use qwen3:8b/14b on iGPU for any task where quality
-   is sufficient; Claude API only when reasoning quality matters
+8. **Local model first** — qwen3:8b/14b on iGPU; Claude API when quality matters
+9. **Background first** — never block user on maintenance/reflection/analysis
 
 ## How to Help
-- **Always provide every created or edited file as a downloadable file** —
-  never just show code in a code block when a file is being created or modified
-- When writing code, always provide the full file content (not just diffs),
-  unless a partial snippet is explicitly requested
-- For architectural decisions, provide 2-3 options with a short pro/con list
-- When debugging, ask for the full error message and relevant code
-- When developing a new tool, always show how it fits into the existing system
-- Explicitly flag any security risks
-- After delivering files: short "What changed / What to do next" summary
-- After delivering files: "Test it" section with 3-5 concrete test prompts
+- **Always provide every created or edited file as a downloadable file**
+- Full file content, not diffs, unless partial is explicitly requested
+- 2-3 options with pro/con for architectural decisions
+- Explicitly flag security risks
+- After files: "What changed / What to do next" summary
+- After files: "Test it" section with 3-5 concrete test prompts
 
 ## Terminology
-- **Agent core:** the LLM + tool dispatch logic
-- **Tool:** a concrete function the agent can call
-- **Tool registry:** the live registry of all registered tools
-- **Permission layer:** the user approval system for destructive actions
-- **Context window:** the active LLM context, managed deliberately
 - **Preprocessing tier:** qwen3:8b on iGPU — fast local preprocessing pipeline
 - **Agent tier:** qwen3:14b on iGPU — quality local reasoning and agent loop
-- **Intent router:** local classifier routing SIMPLE/LOCAL_SUFFICIENT/TOOL/COMPLEX
-- **LOCAL_SUFFICIENT:** tasks local model can handle — user chooses local vs Claude
-- **Prompt optimizer:** local rewrite of raw user input before Claude API call
-- **Tool result compression:** local stripping of verbose tool output
-- **Tool pre-filter:** local selection of 8-10 relevant tools per request
-- **Tiered system prompt:** base prompt + contextual sections per message type
-- **Task runner:** the long-running autonomous execution loop
+- **Intent router:** SIMPLE/LOCAL_SUFFICIENT/TOOL/COMPLEX routing
+- **Prompt caching:** Claude API feature, 10% cost on cached content reads
+- **Batch processing:** Anthropic Batches API, 50% cost, async overnight jobs
+- **Task runner:** long-running autonomous execution loop
 - **Hot-reload:** re-registering tools at runtime without server restart
-- **Generated tools:** agent-written + scaffold control tools in agent_tools/generated/
-- **Project scaffold:** upfront architecture plan before multi-file implementation
-- **Control tool:** auto-generated tool for starting/stopping a built project
-- **State snapshot:** rich project state file updated at every step
 - **Memory consolidation:** nightly background maintenance on local model
-- **Episode:** a completed task with goal, tools, outcome, and reflection
-- **Knowledge graph:** semantic graph of concepts, projects, tools, and their relations
+- **Episode:** completed task with goal, tools, outcome, reflection, failure_type
+- **Knowledge graph:** semantic graph of concepts, tools, projects, relationships
 - **Strategy registry:** proven approaches extracted from past successful tasks
 - **Domain proficiency:** agent's measured success rate per task category
