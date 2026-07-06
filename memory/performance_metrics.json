@@ -9,12 +9,12 @@
       "last_used": "2026-06-21T20:31:18.934337+00:00"
     },
     "search_web": {
-      "call_count": 4,
-      "success_count": 4,
+      "call_count": 11,
+      "success_count": 11,
       "failure_count": 0,
-      "total_duration_ms": 230311,
+      "total_duration_ms": 1362545,
       "last_failure_reason": "",
-      "last_used": "2026-07-05T07:37:21.453139+00:00"
+      "last_used": "2026-07-05T08:24:47.452211+00:00"
     },
     "get_recent_episodes": {
       "call_count": 1,
@@ -65,12 +65,36 @@
       "last_used": "2026-07-05T07:36:51.297742+00:00"
     },
     "write_file": {
+      "call_count": 2,
+      "success_count": 2,
+      "failure_count": 0,
+      "total_duration_ms": 78,
+      "last_failure_reason": "",
+      "last_used": "2026-07-05T08:28:42.605341+00:00"
+    },
+    "deep_research": {
       "call_count": 1,
       "success_count": 1,
       "failure_count": 0,
-      "total_duration_ms": 47,
+      "total_duration_ms": 62313,
       "last_failure_reason": "",
-      "last_used": "2026-07-05T07:40:30.741575+00:00"
+      "last_used": "2026-07-05T08:01:54.156391+00:00"
+    },
+    "fetch_page": {
+      "call_count": 5,
+      "success_count": 5,
+      "failure_count": 0,
+      "total_duration_ms": 893812,
+      "last_failure_reason": "",
+      "last_used": "2026-07-05T08:25:03.435675+00:00"
+    },
+    "log_research": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 4969,
+      "last_failure_reason": "",
+      "last_used": "2026-07-05T08:33:45.248056+00:00"
     }
   },
   "task_types": {
@@ -87,10 +111,10 @@
       "avg_tools_per_task": 0.0
     },
     "research": {
-      "count": 6,
-      "success_count": 5,
-      "total_duration_seconds": 1371,
-      "avg_tools_per_task": 1.17
+      "count": 7,
+      "success_count": 6,
+      "total_duration_seconds": 3573,
+      "avg_tools_per_task": 1.72
     },
     "general": {
       "count": 4,
@@ -99,5 +123,5 @@
       "avg_tools_per_task": 1.0
     }
   },
-  "last_updated": "2026-07-05T07:49:32.573699+00:00"
+  "last_updated": "2026-07-05T08:35:55.799186+00:00"
 }

@@ -815,15 +815,27 @@ class TaskRunner:
             # Phase 12a: fire background reflection for failed tasks too —
             # helps surface what went wrong for Phase 14b failure classification.
             if _failed_task_id:
+                _failed_tools_used = list({s["tool"] for s in self._current_task.get("steps", [])})
+                _failed_at_tool = self._current_task.get("steps", [])[-1]["tool"] if self._current_task.get("steps") else ""
                 try:
                     asyncio.get_running_loop().create_task(
                         self._generate_reflection(
                             task_id=_failed_task_id,
                             goal=initial_message,
-                            tools_used=list({s["tool"] for s in self._current_task.get("steps", [])}),
+                            tools_used=_failed_tools_used,
                             outcome="failure",
                             duration_seconds=_failure_duration,
                             send_event=send_event,
+                        )
+                    )
+                    # Phase 12c: fire-and-forget knowledge graph update, including
+                    # causal edges for the tool active when the failure occurred.
+                    asyncio.get_running_loop().create_task(
+                        self._update_knowledge_graph(
+                            goal=initial_message,
+                            tools_used=_failed_tools_used,
+                            outcome="failure",
+                            failed_at_tool=_failed_at_tool,
                         )
                     )
                 except RuntimeError:
@@ -1043,10 +1055,28 @@ class TaskRunner:
         except Exception as e:
             logger.debug(f"[task_runner] Phase 12a: background reflection failed (non-fatal): {e}")
 
-    async def _update_knowledge_graph(self, goal: str, tools_used: list, outcome: str) -> None:
+    async def _update_knowledge_graph(
+        self,
+        goal: str,
+        tools_used: list,
+        outcome: str,
+        failed_at_tool: str = "",
+    ) -> None:
         """
         Phase 12c: auto-populate the semantic knowledge graph after each task.
         Runs as fire-and-forget background task. Never blocks.
+
+        Phase 12c upgrade: when the task did not succeed, also record causal
+        edges ("why" relationships) between the tool active at failure time
+        and a failure-outcome concept node. This enables later "why did this
+        happen?" queries (Phase 14 failure analysis) via query_knowledge_graph.
+
+        Args:
+            failed_at_tool: name of the tool that was active when the task
+                            failed. If not passed explicitly, falls back to
+                            self._current_task["failed_at_tool"] (mirrors the
+                            field persisted by memory.long_term.log_task),
+                            and finally to the last tool in tools_used.
         """
         try:
             from agent_tools.knowledge_graph import add_node, add_edge, extract_concepts_from_text
@@ -1062,6 +1092,20 @@ class TaskRunner:
             for i, t1 in enumerate(tools_used):
                 for t2 in tools_used[i + 1:]:
                     add_edge(t1, t2, "used_together", strength=1.0)
+
+            # Phase 12c: causal edges for failed tasks
+            if outcome != "success":
+                failed_tool = (
+                    failed_at_tool
+                    or (self._current_task or {}).get("failed_at_tool", "")
+                    or (tools_used[-1] if tools_used else "")
+                )
+                if failed_tool:
+                    failure_concept = f"failure:{outcome}"
+                    add_node(failure_concept, "concept")
+                    add_edge(failed_tool, failure_concept, "leads_to", strength=1.0)
+                    add_edge(failure_concept, failed_tool, "caused_by", strength=1.0)
+                    logger.debug(f"[task_runner] Causal edges: {failed_tool} leads_to {failure_concept}")
 
         except Exception as e:
             logger.debug(f"[task_runner] Phase 12c: knowledge graph update failed (non-fatal): {e}")

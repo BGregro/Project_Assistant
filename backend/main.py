@@ -87,6 +87,7 @@ from agent_tools.interaction import (                                        # P
 )
 from agent_tools.episode_memory import register_episode_memory_tools         # Phase 12a
 from agent_tools.knowledge_graph import register_knowledge_graph_tools       # Phase 12c
+from agent_tools.batch_tools import register_batch_tools, set_scheduler as set_batch_scheduler  # Phase 11.5b/c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
 try:
@@ -299,7 +300,8 @@ logger.info(
     f"youtube_get_video_comments, youtube_get_channel_info, youtube_search_captions), "
     f"interaction (ask_user), "
     f"project_manager (get_project_status, mark_file_complete, read_project_state), "
-    f"knowledge_graph (query_knowledge_graph, add_graph_edge)"
+    f"knowledge_graph (query_knowledge_graph, add_graph_edge), "
+    f"batches (backfill_reflections, list_batch_jobs)"
     f"{_browser_log}"
 )
 
@@ -340,6 +342,15 @@ register_interaction_tools()            # Phase 6a
 
 register_episode_memory_tools()         # Phase 12a
 register_knowledge_graph_tools()        # Phase 12c
+
+# Phase 11.5b/11.5c — batch processing tools need the scheduler reference
+# (same injection pattern as scheduler_tool.py) so backfill_reflections()
+# can register its 30-minute result-polling job.
+set_batch_scheduler(task_scheduler)
+try:
+    register_batch_tools()
+except Exception as _batch_err:
+    logger.warning(f"[startup] Batch tool registration failed (non-fatal): {_batch_err}")
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output

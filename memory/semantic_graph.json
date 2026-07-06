@@ -4,7 +4,7 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-03T07:06:44.805176+00:00",
-      "last_seen": "2026-07-05T07:42:46.066470+00:00"
+      "last_seen": "2026-07-05T08:35:56.799249+00:00"
     },
     "search": {
       "type": "concept",
@@ -76,7 +76,7 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-04T17:35:17.758747+00:00",
-      "last_seen": "2026-07-04T17:35:17.758747+00:00"
+      "last_seen": "2026-07-05T08:35:57.326159+00:00"
     },
     "connected": {
       "type": "concept",
@@ -148,13 +148,55 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-05T07:42:45.896728+00:00",
-      "last_seen": "2026-07-05T07:42:45.896728+00:00"
+      "last_seen": "2026-07-05T08:35:56.973637+00:00"
     },
     "timeline": {
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-05T07:49:33.509318+00:00",
       "last_seen": "2026-07-05T07:49:33.509318+00:00"
+    },
+    "fetch_page": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:56.652927+00:00",
+      "last_seen": "2026-07-05T08:35:56.652927+00:00"
+    },
+    "practices": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:56.682548+00:00",
+      "last_seen": "2026-07-05T08:35:57.357703+00:00"
+    },
+    "building": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:56.706519+00:00",
+      "last_seen": "2026-07-05T08:35:57.401476+00:00"
+    },
+    "autonomous": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:56.741860+00:00",
+      "last_seen": "2026-07-05T08:35:57.423507+00:00"
+    },
+    "agents": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:56.768182+00:00",
+      "last_seen": "2026-07-05T08:35:57.457576+00:00"
+    },
+    "log_research": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:57.147716+00:00",
+      "last_seen": "2026-07-05T08:35:57.147716+00:00"
+    },
+    "deep_research": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-05T08:35:57.308021+00:00",
+      "last_seen": "2026-07-05T08:35:57.308021+00:00"
     }
   },
   "edges": [
@@ -499,7 +541,322 @@
       "sources": [],
       "first_seen": "2026-07-05T07:49:33.526759+00:00",
       "last_seen": "2026-07-05T07:49:33.526759+00:00"
+    },
+    {
+      "from": "research",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.672486+00:00",
+      "last_seen": "2026-07-05T08:35:56.672486+00:00"
+    },
+    {
+      "from": "practices",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.689598+00:00",
+      "last_seen": "2026-07-05T08:35:56.689598+00:00"
+    },
+    {
+      "from": "building",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.725593+00:00",
+      "last_seen": "2026-07-05T08:35:56.725593+00:00"
+    },
+    {
+      "from": "autonomous",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.755658+00:00",
+      "last_seen": "2026-07-05T08:35:56.755658+00:00"
+    },
+    {
+      "from": "agents",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.783389+00:00",
+      "last_seen": "2026-07-05T08:35:56.783389+00:00"
+    },
+    {
+      "from": "research",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.829359+00:00",
+      "last_seen": "2026-07-05T08:35:56.829359+00:00"
+    },
+    {
+      "from": "practices",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.862619+00:00",
+      "last_seen": "2026-07-05T08:35:56.862619+00:00"
+    },
+    {
+      "from": "building",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.897185+00:00",
+      "last_seen": "2026-07-05T08:35:56.897185+00:00"
+    },
+    {
+      "from": "autonomous",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.920351+00:00",
+      "last_seen": "2026-07-05T08:35:56.920351+00:00"
+    },
+    {
+      "from": "agents",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:56.957181+00:00",
+      "last_seen": "2026-07-05T08:35:56.957181+00:00"
+    },
+    {
+      "from": "research",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.006403+00:00",
+      "last_seen": "2026-07-05T08:35:57.006403+00:00"
+    },
+    {
+      "from": "practices",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.039086+00:00",
+      "last_seen": "2026-07-05T08:35:57.039086+00:00"
+    },
+    {
+      "from": "building",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.068265+00:00",
+      "last_seen": "2026-07-05T08:35:57.068265+00:00"
+    },
+    {
+      "from": "autonomous",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.099993+00:00",
+      "last_seen": "2026-07-05T08:35:57.099993+00:00"
+    },
+    {
+      "from": "agents",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.132193+00:00",
+      "last_seen": "2026-07-05T08:35:57.132193+00:00"
+    },
+    {
+      "from": "research",
+      "to": "log_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.173444+00:00",
+      "last_seen": "2026-07-05T08:35:57.173444+00:00"
+    },
+    {
+      "from": "practices",
+      "to": "log_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.198822+00:00",
+      "last_seen": "2026-07-05T08:35:57.198822+00:00"
+    },
+    {
+      "from": "building",
+      "to": "log_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.243291+00:00",
+      "last_seen": "2026-07-05T08:35:57.243291+00:00"
+    },
+    {
+      "from": "autonomous",
+      "to": "log_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.274508+00:00",
+      "last_seen": "2026-07-05T08:35:57.274508+00:00"
+    },
+    {
+      "from": "agents",
+      "to": "log_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.306008+00:00",
+      "last_seen": "2026-07-05T08:35:57.306008+00:00"
+    },
+    {
+      "from": "research",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.346812+00:00",
+      "last_seen": "2026-07-05T08:35:57.346812+00:00"
+    },
+    {
+      "from": "practices",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.374030+00:00",
+      "last_seen": "2026-07-05T08:35:57.374030+00:00"
+    },
+    {
+      "from": "building",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.417147+00:00",
+      "last_seen": "2026-07-05T08:35:57.417147+00:00"
+    },
+    {
+      "from": "autonomous",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.436050+00:00",
+      "last_seen": "2026-07-05T08:35:57.436050+00:00"
+    },
+    {
+      "from": "agents",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.480567+00:00",
+      "last_seen": "2026-07-05T08:35:57.480567+00:00"
+    },
+    {
+      "from": "fetch_page",
+      "to": "search_web",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.496206+00:00",
+      "last_seen": "2026-07-05T08:35:57.496206+00:00"
+    },
+    {
+      "from": "fetch_page",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.512212+00:00",
+      "last_seen": "2026-07-05T08:35:57.512212+00:00"
+    },
+    {
+      "from": "fetch_page",
+      "to": "log_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.530542+00:00",
+      "last_seen": "2026-07-05T08:35:57.530542+00:00"
+    },
+    {
+      "from": "fetch_page",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.545391+00:00",
+      "last_seen": "2026-07-05T08:35:57.545391+00:00"
+    },
+    {
+      "from": "search_web",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.561596+00:00",
+      "last_seen": "2026-07-05T08:35:57.561596+00:00"
+    },
+    {
+      "from": "search_web",
+      "to": "log_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.576345+00:00",
+      "last_seen": "2026-07-05T08:35:57.576345+00:00"
+    },
+    {
+      "from": "search_web",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.591439+00:00",
+      "last_seen": "2026-07-05T08:35:57.591439+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "log_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.607467+00:00",
+      "last_seen": "2026-07-05T08:35:57.607467+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.624689+00:00",
+      "last_seen": "2026-07-05T08:35:57.624689+00:00"
+    },
+    {
+      "from": "log_research",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-05T08:35:57.628704+00:00",
+      "last_seen": "2026-07-05T08:35:57.628704+00:00"
     }
   ],
-  "last_updated": "2026-07-05T07:49:33.542015+00:00"
+  "last_updated": "2026-07-05T08:35:57.628704+00:00"
 }
