@@ -462,6 +462,7 @@ def log_task(
     tools_used: list,
     duration_seconds: int,
     reflection: str = "",
+    goal_id: str = "",
 ) -> str:
     """
     Append a completed (or failed/cancelled) task to the tasks list.
@@ -473,6 +474,9 @@ def log_task(
         tools_used:       List of tool names that were called during the task.
         duration_seconds: Wall-clock seconds the task ran for.
         reflection:       Optional pre-generated reflection (Phase 12a).
+        goal_id:          Optional Phase 13a goal UUID this task advances.
+                           When provided, the task is tagged and linked into
+                           the goal's related_tasks list.
 
     Returns:
         The UUID of the newly created task entry (used by the background
@@ -496,6 +500,15 @@ def log_task(
         # making analyze_performance() more useful for identifying failure patterns.
         "failed_at_tool":   tools_used[-1] if outcome != "success" and tools_used else "",
     }
+    if goal_id:
+        entry["goal_id"] = goal_id
+        # Phase 13a: link this task into the goal's related_tasks list.
+        # Non-fatal if goal_tracker is unavailable for any reason.
+        try:
+            from agent_tools.goal_tracker import _link_task_to_goal
+            _link_task_to_goal(goal_id, entry["id"])
+        except Exception:
+            pass
     data["tasks"].append(entry)
     # Keep only the most recent _MAX_TASKS entries (trim oldest)
     if len(data["tasks"]) > _MAX_TASKS:

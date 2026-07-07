@@ -1038,6 +1038,26 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
 }
 .sched-submit-btn:hover { background: rgba(203,166,247,0.22); }
 
+/* ---- Goal cards (Phase 13a — Goals tab) ---- */
+.goal-card {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-left: 3px solid var(--accent-blue);
+}
+.goal-card.priority-1 { border-left-color: var(--accent-red); }
+.goal-card.priority-2 { border-left-color: var(--accent-amber); }
+.goal-card.priority-3 { border-left-color: var(--accent-blue); }
+.goal-card.priority-4, .goal-card.priority-5 { border-left-color: var(--text-muted); }
+.goal-header { display: flex; justify-content: space-between; align-items: center; }
+.goal-title { font-weight: 600; font-size: 0.9em; }
+.goal-status { font-size: 0.75em; padding: 2px 6px; border-radius: 10px;
+               background: var(--bg-secondary); color: var(--text-muted); }
+.goal-status.active { color: var(--accent-green); }
+.goal-meta { font-size: 0.75em; color: var(--text-muted); margin-top: 3px; }
+.goal-desc { font-size: 0.82em; color: var(--text-muted); margin-top:4px; font-style:italic; }
+
 /* ---- Analytics panel (Memory tab) ---- */
 .analytics-panel {
   padding: 6px 0;

@@ -357,6 +357,14 @@ function handleServerEvent(type, data) {
       );
       break;
 
+    // Phase 13a — goal tab feedback events
+    case 'goals_updated':
+      if (!document.getElementById('tab-goals').classList.contains('hidden')) {
+        loadGoals();
+      }
+      setStatusBar('Goal created successfully', 'done');
+      break;
+
     // Phase 9 — LOCAL_SUFFICIENT tier choice banner
     case 'tier_choice':
       showTierBanner(data.message_id, data.message_preview, data.timeout_seconds);
@@ -1236,6 +1244,7 @@ window.switchTab = function(tabName) {
   if (tabName === 'processes') loadProcesses();
   if (tabName === 'schedule')  loadSchedule();
   if (tabName === 'memory')    loadCredentials();
+  if (tabName === 'goals')     loadGoals();
 };
 
 window.expandAndTab = function(tabName) {
@@ -1969,6 +1978,9 @@ async function init() {
 
   // Populate local model dropdowns from live Ollama model list
   loadOllamaModels();
+
+  // Phase 13a — load goals once on startup
+  setTimeout(loadGoals, 800);
 }
 
 init();
@@ -2220,6 +2232,89 @@ function _humanizeNextRun(nextRun) {
   } catch (e) {
     return String(nextRun);
   }
+}
+
+// ============================================================
+// PHASE 13a — Goals Tab
+// ============================================================
+
+let _goalFormOpen = false;
+
+window.toggleAddGoalForm = function() {
+  _goalFormOpen = !_goalFormOpen;
+  const form = document.getElementById('goal-add-form');
+  if (form) form.classList.toggle('hidden', !_goalFormOpen);
+  if (_goalFormOpen) {
+    setTimeout(() => {
+      const el = document.getElementById('goal-title-input');
+      if (el) el.focus();
+    }, 80);
+  }
+};
+
+window.submitGoal = function() {
+  const title    = (document.getElementById('goal-title-input')?.value || '').trim();
+  const desc     = (document.getElementById('goal-desc-input')?.value  || '').trim();
+  const priority = parseInt(document.getElementById('goal-priority-input')?.value || '3', 10);
+
+  if (!title) {
+    setStatusBar('Give the goal a title first.', 'error');
+    return;
+  }
+
+  sendWS({ type: 'create_goal', data: { title, description: desc, priority } });
+  setStatusBar('Creating goal…', 'active');
+
+  // Clear + hide form
+  const titleEl = document.getElementById('goal-title-input');
+  const descEl  = document.getElementById('goal-desc-input');
+  if (titleEl) titleEl.value = '';
+  if (descEl)  descEl.value  = '';
+  toggleAddGoalForm();
+};
+
+/**
+ * Load active goals from GET /goals and render cards.
+ */
+async function loadGoals() {
+  const list = document.getElementById('goals-list');
+  if (!list) return;
+
+  try {
+    const res  = await authFetch('/goals');
+    const data = await res.json();
+    renderGoals(data.goals || []);
+  } catch (e) {
+    console.warn('[goals] Failed to load:', e);
+  }
+}
+
+function renderGoals(goals) {
+  const list = document.getElementById('goals-list');
+  if (!list) return;
+
+  if (!goals.length) {
+    list.innerHTML = '<div class="tab-placeholder">No active goals. Click ＋ Add to create one.</div>';
+    return;
+  }
+
+  list.innerHTML = goals.map(g => {
+    const milestones = g.milestones || [];
+    const done  = milestones.filter(m => m.done).length;
+    const total = milestones.length;
+    const days  = g.days_since_progress;
+    const daysText = (days === null || days === undefined) ? '?' : days;
+    return `
+      <div class="goal-card priority-${g.priority}">
+        <div class="goal-header">
+          <span class="goal-title">${escapeHtml(g.title || '')}</span>
+          <span class="goal-status ${g.status}">${escapeHtml(g.status || '')}</span>
+        </div>
+        <div class="goal-meta">P${g.priority} · ${done}/${total} milestones · ${daysText}d ago</div>
+        ${g.description ? `<div class="goal-desc">${escapeHtml(String(g.description).slice(0, 100))}</div>` : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 // ============================================================

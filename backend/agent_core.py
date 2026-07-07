@@ -167,6 +167,19 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "(e.g. '2026-06-01' to '2026-07-01')."
         ),
     },
+    "goals": {
+        "keywords": [
+            r"goal", r"objective", r"target", r"milestone", r"progress",
+            r"plan.*long", r"working toward",
+        ],
+        "content": (
+            "\n\nGOALS: Use list_goals() to see your active goals before starting any long "
+            "task. Use create_goal(title, description, priority) to register a new goal. "
+            "Use log_goal_progress(goal_id, note) after completing work that advances a "
+            "goal. Use get_goal(goal_id) for full detail. Goals give your work direction — "
+            "always check if a task relates to an existing goal."
+        ),
+    },
     "episode_memory": {
         "keywords": [
             r"reflect", r"reflection", r"episode", r"what.*worked", r"past.*task",

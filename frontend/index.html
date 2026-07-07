@@ -312,6 +312,7 @@
         <!-- Tab bar — 5 tabs now -->
         <div id="tab-bar">
           <button class="tab-btn active" data-tab="tasks"     onclick="switchTab('tasks')">Tasks</button>
+          <button class="tab-btn"        data-tab="goals"     onclick="switchTab('goals')">Goals</button>
           <button class="tab-btn"        data-tab="files"     onclick="switchTab('files')">Files</button>
           <button class="tab-btn"        data-tab="memory"    onclick="switchTab('memory')">Memory</button>
           <button class="tab-btn"        data-tab="processes" onclick="switchTab('processes')">Procs</button>
@@ -327,6 +328,32 @@
           <div class="tab-section-label" style="margin-top:18px">Task History</div>
           <div id="task-history-list" class="task-history-list">
             <div class="tab-placeholder" id="task-history-placeholder">Loading…</div>
+          </div>
+        </div>
+
+        <!-- GOALS TAB (Phase 13a) -->
+        <div id="tab-goals" class="tab-content hidden">
+          <div class="proc-header">
+            <span class="tab-section-label" style="margin:0">Active Goals</span>
+            <button class="icon-btn" id="btn-add-goal" title="Add goal" onclick="toggleAddGoalForm()">＋ Add</button>
+          </div>
+
+          <!-- Inline add-goal form (hidden by default) -->
+          <div id="goal-add-form" class="hidden" style="padding:8px">
+            <input id="goal-title-input" class="sched-input" placeholder="Goal title..." style="width:100%;margin-bottom:4px">
+            <textarea id="goal-desc-input" class="sched-input" placeholder="Description..." rows="2" style="width:100%;margin-bottom:4px"></textarea>
+            <select id="goal-priority-input" class="sched-input" style="margin-bottom:4px">
+                <option value="1">Priority 1 — Critical</option>
+                <option value="2">Priority 2 — High</option>
+                <option value="3" selected>Priority 3 — Normal</option>
+                <option value="4">Priority 4 — Low</option>
+                <option value="5">Priority 5 — Someday</option>
+            </select>
+            <button class="sched-submit-btn" id="btn-goal-submit" onclick="submitGoal()">Create Goal</button>
+          </div>
+
+          <div id="goals-list">
+            <div class="tab-placeholder">No active goals.</div>
           </div>
         </div>
 
@@ -410,6 +437,7 @@
       <!-- Rail for collapsed state — now 5 icons -->
       <div id="right-panel-rail">
         <button class="rail-icon" title="Tasks"     onclick="expandAndTab('tasks')">◈</button>
+        <button class="rail-icon" title="Goals"     onclick="expandAndTab('goals')">◆</button>
         <button class="rail-icon" title="Files"     onclick="expandAndTab('files')">⊞</button>
         <button class="rail-icon" title="Memory"    onclick="expandAndTab('memory')">◎</button>
         <button class="rail-icon" title="Processes" onclick="expandAndTab('processes')">⚡</button>

@@ -87,6 +87,7 @@ from agent_tools.interaction import (                                        # P
 )
 from agent_tools.episode_memory import register_episode_memory_tools         # Phase 12a
 from agent_tools.knowledge_graph import register_knowledge_graph_tools       # Phase 12c
+from agent_tools.goal_tracker import register_goal_tools                    # Phase 13a
 from agent_tools.batch_tools import register_batch_tools, set_scheduler as set_batch_scheduler  # Phase 11.5b/c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
@@ -342,6 +343,7 @@ register_interaction_tools()            # Phase 6a
 
 register_episode_memory_tools()         # Phase 12a
 register_knowledge_graph_tools()        # Phase 12c
+register_goal_tools()                   # Phase 13a
 
 # Phase 11.5b/11.5c — batch processing tools need the scheduler reference
 # (same injection pattern as scheduler_tool.py) so backfill_reflections()
@@ -619,6 +621,24 @@ async def get_memory():
     except Exception as e:
         logger.warning(f"[memory] Could not load long-term store: {e}")
         return JSONResponse({"tasks": [], "facts": [], "research": []})
+
+
+@app.get("/goals")
+async def get_goals():
+    """
+    Phase 13a: Return active goals for the frontend Goals tab.
+
+    Sorted by priority ascending (1=critical first), then created_date.
+    """
+    from agent_tools.goal_tracker import _load as load_goals
+    try:
+        data = load_goals()
+        goals = [g for g in data.get("goals", []) if g.get("status") == "active"]
+        goals.sort(key=lambda g: (g.get("priority", 3), g.get("created_date", "")))
+        return JSONResponse({"goals": goals, "count": len(goals)})
+    except Exception as e:
+        logger.warning(f"[goals] Could not load goals: {e}")
+        return JSONResponse({"goals": [], "count": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -1068,6 +1088,24 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
                     logger.info(f"[ws] Scheduled task '{task_id}': {schedule_str!r}")
                 except Exception as e:
                     await send_event("error", {"text": f"Could not schedule task: {e}"})
+
+        elif msg_type == "create_goal":
+            # Phase 13a: create a goal directly from the Goals tab form
+            d = raw.get("data", {})
+            title       = d.get("title", "")
+            description = d.get("description", "")
+            priority    = d.get("priority", 3)
+            if title:
+                try:
+                    from agent_tools.goal_tracker import _load as _load_goals, _new_goal, _save as _save_goals
+                    data = _load_goals()
+                    goal = _new_goal(title, description, int(priority) if str(priority).strip() else 3)
+                    data.setdefault("goals", []).append(goal)
+                    _save_goals(data)
+                    await send_event("goals_updated", {"action": "created", "goal_id": goal["goal_id"]})
+                    logger.info(f"[ws] Goal created: {goal['goal_id'][:8]} — {title!r}")
+                except Exception as e:
+                    await send_event("error", {"text": f"Could not create goal: {e}"})
 
         else:
             logger.warning(f"[ws] Unknown message type: {msg_type!r}")
