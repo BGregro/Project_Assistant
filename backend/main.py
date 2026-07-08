@@ -88,6 +88,8 @@ from agent_tools.interaction import (                                        # P
 from agent_tools.episode_memory import register_episode_memory_tools         # Phase 12a
 from agent_tools.knowledge_graph import register_knowledge_graph_tools       # Phase 12c
 from agent_tools.goal_tracker import register_goal_tools                    # Phase 13a
+from agent_tools.reflection_engine import register_reflection_engine_tools   # Phase 14b/14c
+from agent_tools.memory_maintenance import register_maintenance_tools        # Phase 16a
 from agent_tools.batch_tools import register_batch_tools, set_scheduler as set_batch_scheduler  # Phase 11.5b/c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
@@ -302,6 +304,12 @@ logger.info(
     f"interaction (ask_user), "
     f"project_manager (get_project_status, mark_file_complete, read_project_state), "
     f"knowledge_graph (query_knowledge_graph, add_graph_edge), "
+    f"goals (create_goal, update_goal, list_goals, get_goal, log_goal_progress, "
+    f"add_goal_milestone, get_goal_progress, decompose_goal, detect_goal_blocker, "
+    f"schedule_goal_work, generate_goal_report), "
+    f"reflection_engine (classify_failure, get_improvement_proposals, "
+    f"apply_improvement_proposal, retire_rule), "
+    f"memory_maintenance (run_memory_maintenance, get_maintenance_report), "
     f"batches (backfill_reflections, list_batch_jobs)"
     f"{_browser_log}"
 )
@@ -344,6 +352,16 @@ register_interaction_tools()            # Phase 6a
 register_episode_memory_tools()         # Phase 12a
 register_knowledge_graph_tools()        # Phase 12c
 register_goal_tools()                   # Phase 13a
+
+try:
+    register_reflection_engine_tools()  # Phase 14b/14c
+except Exception as _refl_err:
+    logger.warning(f"[startup] Reflection engine tool registration failed (non-fatal): {_refl_err}")
+
+try:
+    register_maintenance_tools()        # Phase 16a
+except Exception as _maint_err:
+    logger.warning(f"[startup] Memory maintenance tool registration failed (non-fatal): {_maint_err}")
 
 # Phase 11.5b/11.5c — batch processing tools need the scheduler reference
 # (same injection pattern as scheduler_tool.py) so backfill_reflections()
@@ -483,6 +501,42 @@ if (t) window.location.href = '/?token=' + encodeURIComponent(t);
 """)
 
 
+# ---------------------------------------------------------------------------
+# Phase 13d — weekly goal report job
+# Phase 16a — nightly memory maintenance job
+# Both call their respective tool handlers directly rather than going through
+# the agent's tool-call dispatch, since these are internal maintenance jobs
+# with no user-facing conversation turn.
+# ---------------------------------------------------------------------------
+
+async def _run_weekly_goal_report() -> None:
+    """APScheduler job: generate the weekly goal progress report."""
+    try:
+        from agent_tools import get_handler
+        handler = get_handler("generate_goal_report")
+        if handler is None:
+            logger.warning("[main] Weekly goal report job: generate_goal_report tool not registered.")
+            return
+        result = await handler()
+        logger.info(f"[main] Weekly goal report generated: {result}")
+    except Exception as e:
+        logger.warning(f"[main] Weekly goal report job failed (non-fatal): {e}")
+
+
+async def _run_nightly_maintenance() -> None:
+    """APScheduler job: run the nightly memory maintenance sweep."""
+    try:
+        from agent_tools import get_handler
+        handler = get_handler("run_memory_maintenance")
+        if handler is None:
+            logger.warning("[main] Nightly maintenance job: run_memory_maintenance tool not registered.")
+            return
+        result = await handler()
+        logger.info(f"[main] Nightly memory maintenance complete: {result}")
+    except Exception as e:
+        logger.warning(f"[main] Nightly memory maintenance job failed (non-fatal): {e}")
+
+
 @app.on_event("startup")
 async def _on_startup() -> None:
     await _autoload_generated_tools()
@@ -494,6 +548,30 @@ async def _on_startup() -> None:
     )
     task_scheduler.start()
     logger.info("[startup] Task scheduler started.")
+
+    # Phase 13d: weekly goal report every Sunday at 20:00
+    task_scheduler._scheduler.add_job(
+        _run_weekly_goal_report,
+        trigger="cron",
+        day_of_week="sun",
+        hour=20,
+        minute=0,
+        id="weekly_goal_report",
+        replace_existing=True,
+    )
+    logger.info("[startup] Weekly goal report job scheduled (Sundays 20:00).")
+
+    # Phase 16a: nightly memory maintenance sweep at 03:00
+    task_scheduler._scheduler.add_job(
+        _run_nightly_maintenance,
+        trigger="cron",
+        hour=3,
+        minute=0,
+        id="nightly_memory_maintenance",
+        replace_existing=True,
+    )
+    logger.info("[startup] Nightly memory maintenance job scheduled (03:00).")
+
     # Phase 9c: wire file watcher refs
     if file_watcher_manager is not None:
         file_watcher_manager.set_refs(

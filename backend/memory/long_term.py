@@ -100,8 +100,9 @@ _STORE_FILE = Path(__file__).parent.parent.parent / "memory" / "long_term.json"
 _VECTOR_DIR = Path(__file__).parent.parent.parent / "memory" / "vectors"
 
 # Maximum number of entries kept per collection.
-_MAX_TASKS    = 100
-_MAX_RESEARCH = 200
+_MAX_TASKS    = 500   # was 100
+_MAX_RESEARCH = 1000  # was 200
+_MAX_FACTS    = 500
 
 # Ollama embedding constants (same as embeddings.py)
 _EMBED_MODEL   = "nomic-embed-text"
@@ -509,6 +510,15 @@ def log_task(
             _link_task_to_goal(goal_id, entry["id"])
         except Exception:
             pass
+        # Phase 13b: auto-log progress on the goal when a linked task succeeds.
+        # Lazy import avoids a circular dependency (goal_tracker.py only
+        # imports long_term.py inside functions, never at module load time).
+        if outcome == "success":
+            try:
+                from agent_tools.goal_tracker import log_goal_progress_helper
+                log_goal_progress_helper(goal_id, f"Task completed: {goal[:60]}")
+            except Exception:
+                pass
     data["tasks"].append(entry)
     # Keep only the most recent _MAX_TASKS entries (trim oldest)
     if len(data["tasks"]) > _MAX_TASKS:
@@ -525,6 +535,20 @@ def log_task(
         # If no running loop (sync test context), skip silently
     except RuntimeError:
         pass
+
+    # Phase 14c: fire-and-forget pattern-detection sweep. Cheap to call after
+    # every task — generate_rule_if_pattern only does real work once its own
+    # internal counter reaches _TASKS_BETWEEN_CHECKS, so this call is a no-op
+    # most of the time.
+    try:
+        loop = _asyncio.get_event_loop()
+        if loop.is_running():
+            from agent_tools.reflection_engine import generate_rule_if_pattern
+            loop.create_task(generate_rule_if_pattern(_get_ollama_base_url()))
+    except RuntimeError:
+        pass
+    except Exception as _re_e:
+        logger.debug(f"[long_term] Phase 14c pattern sweep scheduling skipped (non-fatal): {_re_e}")
 
     return task_id
 
@@ -565,6 +589,30 @@ def get_episode(task_id: str) -> dict | None:
         if task.get("id") == task_id:
             return task
     return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 14b: failure classification
+# ---------------------------------------------------------------------------
+
+def update_task_failure_type(task_id: str, failure_type: str) -> bool:
+    """
+    Set the failure_type field on an existing task entry.
+
+    Called by reflection_engine.py's classify_failure_background() after the
+    local LLM classifies a failed task into one of the FAILURE_TYPES buckets.
+
+    Returns True if the task was found and updated, False otherwise.
+    """
+    data = load()
+    for task in data.get("tasks", []):
+        if task.get("id") == task_id:
+            task["failure_type"] = failure_type
+            save(data)
+            logger.info(f"[long_term] failure_type set for task {task_id[:8]}...: {failure_type!r}")
+            return True
+    logger.warning(f"[long_term] Task {task_id} not found for failure_type update")
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +665,9 @@ def log_fact(
         "expires":   expires_iso,
     }
     data["facts"].append(entry)
+    # Keep only the most recent _MAX_FACTS entries (trim oldest)
+    if len(data["facts"]) > _MAX_FACTS:
+        data["facts"] = data["facts"][-_MAX_FACTS:]
     save(data)
     logger.info(f"[long_term] Fact stored: key={key!r}")
 

@@ -818,6 +818,7 @@ class TaskRunner:
                 _failed_tools_used = list({s["tool"] for s in self._current_task.get("steps", [])})
                 _failed_at_tool = self._current_task.get("steps", [])[-1]["tool"] if self._current_task.get("steps") else ""
                 try:
+                    from agent_tools.reflection_engine import classify_failure_background as _classify_failure_background
                     asyncio.get_running_loop().create_task(
                         self._generate_reflection(
                             task_id=_failed_task_id,
@@ -836,6 +837,19 @@ class TaskRunner:
                             tools_used=_failed_tools_used,
                             outcome="failure",
                             failed_at_tool=_failed_at_tool,
+                        )
+                    )
+                    # Phase 14b: fire-and-forget failure classification —
+                    # never blocks the caller, classification result is
+                    # written back onto the task entry via
+                    # memory.long_term.update_task_failure_type().
+                    asyncio.get_running_loop().create_task(
+                        _classify_failure_background(
+                            task_id=_failed_task_id,
+                            goal=initial_message,
+                            failed_at_tool=_failed_at_tool,
+                            error_summary=str(self._current_task.get("steps", [])),
+                            ollama_url=getattr(self._agent_ref, "ollama_url", "http://localhost:11434"),
                         )
                     )
                 except RuntimeError:

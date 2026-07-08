@@ -177,7 +177,11 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "task. Use create_goal(title, description, priority) to register a new goal. "
             "Use log_goal_progress(goal_id, note) after completing work that advances a "
             "goal. Use get_goal(goal_id) for full detail. Goals give your work direction — "
-            "always check if a task relates to an existing goal."
+            "always check if a task relates to an existing goal. "
+            "Use log_goal_progress(goal_id, note, milestone_title) after completing work "
+            "that advances a goal. Use decompose_goal(goal_id) to break a large goal into "
+            "milestones automatically. Use detect_goal_blocker(goal_id) if a goal feels "
+            "stuck. Use generate_goal_report() for a weekly summary of all goals."
         ),
     },
     "episode_memory": {
@@ -359,6 +363,20 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "first to verify ffmpeg is available."
         ),
     },
+    "self_improve": {
+        "keywords": [
+            r"improve yourself", r"learn from", r"failure analysis",
+            r"what went wrong", r"rules", r"patterns", r"reflection",
+        ],
+        "content": (
+            "\n\nSELF-IMPROVEMENT: Use classify_failure(task_id) to analyze why a task "
+            "failed. Use get_improvement_proposals() to see AI-generated rules from "
+            "failure patterns. Use apply_improvement_proposal(rule_id) to activate a "
+            "rule — active rules are automatically injected into every future prompt. "
+            "Use retire_rule(rule_id) if a rule is no longer helpful. Use "
+            "run_memory_maintenance() to check memory health."
+        ),
+    },
 }
 
 
@@ -523,6 +541,23 @@ class AgentCore:
             selected.append(section_name)
 
         logger.debug(f"[agent] System prompt sections: {selected} ({used_tokens} est. tokens)")
+
+        # Phase 14c: append active, AI-generated improvement rules (if any).
+        # Non-fatal — a missing/corrupt active_rules.json just means no rules yet.
+        # Uses an absolute path (matches the Path(__file__)-based convention used
+        # everywhere else in this codebase) rather than a bare relative path,
+        # since server cwd can vary depending on how it's launched.
+        try:
+            from pathlib import Path as _Path
+            rules_path = _Path(__file__).resolve().parent.parent / "memory" / "active_rules.json"
+            if rules_path.exists():
+                rules = json.loads(rules_path.read_text(encoding="utf-8"))
+                if rules:
+                    rules_text = "\n".join(f"- IF {r['if']}: THEN {r['then']}" for r in rules[:10])
+                    prompt += f"\n\n[LEARNED RULES]\n{rules_text}"
+        except Exception:
+            pass
+
         return prompt
 
     # ------------------------------------------------------------------
