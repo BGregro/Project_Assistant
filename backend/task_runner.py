@@ -636,6 +636,21 @@ class TaskRunner:
                         except Exception as _perf_e:
                             logger.debug(f"[task_runner] Metrics record_tool_call failed (non-fatal): {_perf_e}")
 
+                        # Phase 15c: update registry-level call_count/success_count/last_used
+                        # for this tool (fire-and-forget, non-fatal — never blocks dispatch).
+                        try:
+                            from agent_tools import update_tool_stats
+                            update_tool_stats(block.name, success)
+                        except Exception as _stats_e:
+                            logger.debug(f"[task_runner] update_tool_stats failed (non-fatal): {_stats_e}")
+
+                        # Phase 15c: update per-tool registry metadata (fire-and-forget, non-fatal)
+                        try:
+                            from agent_tools import update_tool_stats
+                            update_tool_stats(block.name, success)
+                        except Exception as _stats_e:
+                            logger.debug(f"[task_runner] update_tool_stats failed (non-fatal): {_stats_e}")
+
                         await send_event("task_progress", {
                             "step":       assigned_step,
                             "label":      block.name,

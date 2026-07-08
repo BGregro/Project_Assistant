@@ -295,6 +295,7 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             r"add.*capability", r"extend yourself",
             r"context.*usage", r"context.*window", r"analyze.*performance",
             r"improvement.*suggestion", r"how.*performing", r"performance.*analysis",
+            r"capability.*gap", r"design.*tool", r"tool.*metadata", r"prune.*tool",
         ],
         "content": (
             "\n\nSELF-EXTENSION: Use write_tool(filename, code) to create new tools — "
@@ -305,6 +306,18 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "for important tasks. "
             "The control tools auto-generated for your projects "
             "(like start_youtube_automation) follow this same pattern.\n\n"
+            "CAPABILITY CHECK: Before starting any complex multi-step task, call "
+            "analyze_capability_gap(task_goal) to check if you have all needed tools. "
+            "If gaps are found, use design_tool() to specify and write the missing "
+            "capability first.\n\n"
+            "DESIGN-FIRST PIPELINE: Use design_tool(gap_description) to specify a new tool, "
+            "then implement_tool_from_design(spec_path) to write and register it automatically. "
+            "This two-step design-first approach produces better tools than write_tool alone.\n\n"
+            "TOOL PERFORMANCE: Use get_tool_metadata(tool_name?) to see call counts, success "
+            "rates, and who created each tool (system vs agent-written). "
+            "Use prune_unused_tools() to find agent-written tools that look abandoned "
+            "(never used and old, or unused for 30+ days) — it only returns candidates, "
+            "it never deletes anything.\n\n"
             "REGISTER_TOOL — ALWAYS use keyword arguments, never positional:\n\n"
             "register_tool(\n"
             "    name=\"tool_name\",\n"

@@ -1,7 +1,7 @@
 """
 agent_tools/tool_writer.py  —  Agent Self-Modification Tools
 
-Provides two tools that let the agent create and register its own tools:
+Provides four tools that let the agent create and register its own tools:
 
   write_tool(filename, code)   — Validate a filename, write code to
                                   agent_tools/generated/{filename}, then run the
@@ -11,9 +11,20 @@ Provides two tools that let the agent create and register its own tools:
                                   agent_tools/generated/{filename} and register its
                                   tools into the live registry.
 
+  design_tool(gap_description) — Phase 15b: use the local qwen3:14b model to turn
+                                  a capability gap into a structured tool spec,
+                                  saved to outputs/tool_designs/.
+
+  implement_tool_from_design(spec_path) — Phase 15b: use the local model to write
+                                  the full implementation from a saved spec, then
+                                  validate and hot-reload it automatically.
+
 Security:
   - write_tool is marked destructive (requires user approval before writing).
   - reload_tool is marked destructive (registering arbitrary code is high-risk).
+  - implement_tool_from_design is marked destructive (writes a file and
+    registers code, same as write_tool + reload_tool combined).
+  - design_tool is non-destructive — it only writes a JSON spec to outputs/.
   - Filename validation prevents path traversal: only plain alphanumeric + underscore
     names ending in .py are accepted.  No slashes, backslashes, or ".." allowed.
   - The agent can ONLY write to agent_tools/generated/.  Built-in tools in
@@ -24,12 +35,18 @@ Workflow the agent should follow:
   2. reload_tool("my_tool.py")        → imports file, calls register_* function
   3. The new tool is now live in the registry for this session and all future
      sessions (it is auto-loaded on startup).
+
+Design-first alternative (Phase 15b, produces better tools for non-trivial gaps):
+  1. design_tool(gap_description)              → generates + saves a spec
+  2. implement_tool_from_design(spec_path)      → writes, validates, hot-reloads
 """
 
+import json
 import logging
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +54,25 @@ from . import register_tool
 from .hot_reload import validate_tool_file, hot_reload_tool, GENERATED_DIR
 
 logger = logging.getLogger(__name__)
+
+# backend/agent_tools/tool_writer.py -> parents: agent_tools, backend, <project root>
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_TOOL_DESIGNS_DIR = _PROJECT_ROOT / "outputs" / "tool_designs"
+
+
+def _now_iso() -> str:
+    """Current UTC timestamp in ISO-8601 format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_ollama_url() -> str:
+    """Read ollama_base_url from config.json, fall back to default. Never raises."""
+    config_path = _PROJECT_ROOT / "config.json"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return json.load(f).get("ollama_base_url", "http://localhost:11434")
+    except Exception:
+        return "http://localhost:11434"
 
 # Only allow plain identifiers as filenames — no path components, no special chars.
 _SAFE_FILENAME_RE = re.compile(r"^[a-zA-Z0-9_]+\.py$")
@@ -300,11 +336,226 @@ async def reload_tool(filename: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Phase 15b — Design-first tool pipeline
+# ---------------------------------------------------------------------------
+
+async def design_tool(gap_description: str) -> dict[str, Any]:
+    """
+    Use the local qwen3:14b model to turn a capability gap description into a
+    structured tool specification, saved to outputs/tool_designs/.
+
+    This is the first step of the design-first pipeline. It never writes or
+    registers executable code — only a JSON spec describing what the tool
+    should do, so the agent (or the user) can review the plan before any
+    code is generated.
+
+    Args:
+        gap_description: Free-text description of the missing capability,
+                          typically taken from analyze_capability_gap()'s
+                          "gaps" list.
+
+    Returns:
+        {"success": bool, "spec": {...}, "spec_path": str} on success,
+        {"success": False, "error": str} on failure.
+    """
+    from .local_llm import local_llm_call, strip_think_tags
+
+    prompt = (
+        f'Design a Python tool to fill this capability gap: "{gap_description}"\n\n'
+        "Return ONLY a JSON object:\n"
+        "{\n"
+        '  "filename": "descriptive_tool_name.py",\n'
+        '  "function_name": "snake_case_name",\n'
+        '  "description": "one sentence describing what it does",\n'
+        '  "parameters": [{"name": "param", "type": "str", "description": "..."}],\n'
+        '  "returns": "description of return dict",\n'
+        '  "implementation_notes": "key logic to implement",\n'
+        '  "test_input": {"param": "test_value"}\n'
+        "}"
+    )
+
+    try:
+        response = await local_llm_call(
+            prompt, model="qwen3:14b", base_url=_get_ollama_url()
+        )
+        if not response:
+            return {
+                "success": False,
+                "error": "Local LLM unavailable — cannot design tool. Is Ollama running?",
+            }
+
+        cleaned = strip_think_tags(response).strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if "\n" in cleaned:
+                cleaned = cleaned.split("\n", 1)[1]
+
+        try:
+            spec = json.loads(cleaned)
+        except Exception as e:
+            logger.warning(f"[tool_writer] design_tool: could not parse spec JSON: {e}")
+            return {
+                "success": False,
+                "error": f"Could not parse tool spec from local LLM output: {e}",
+                "raw_response": cleaned[:500],
+            }
+
+        filename = str(spec.get("filename", "")).strip()
+        if not filename:
+            return {"success": False, "error": "Spec is missing a 'filename' field."}
+        # Reuse the same filename-safety guard used by write_tool.
+        ok, reason = _check_filename(filename)
+        if not ok:
+            return {"success": False, "error": f"Spec has an invalid filename: {reason}"}
+
+        # ── Save the spec to outputs/tool_designs/ ─────────────────────────
+        _TOOL_DESIGNS_DIR.mkdir(parents=True, exist_ok=True)
+        spec_path = _TOOL_DESIGNS_DIR / f"{filename}_spec.json"
+        try:
+            with open(spec_path, "w", encoding="utf-8") as f:
+                json.dump(spec, f, ensure_ascii=False, indent=2)
+            logger.info(f"[tool_writer] design_tool: spec saved to {spec_path}")
+        except OSError as e:
+            return {"success": False, "error": f"Could not save spec: {e}"}
+
+        return {"success": True, "spec": spec, "spec_path": str(spec_path)}
+
+    except Exception as e:
+        logger.warning(f"[tool_writer] design_tool failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def implement_tool_from_design(spec_path: str) -> dict[str, Any]:
+    """
+    Read a tool spec saved by design_tool() and use the local qwen3:14b model
+    to write the full implementation, then validate and hot-reload it.
+
+    Steps:
+      1. Load the spec JSON from spec_path.
+      2. Ask qwen3:14b for the complete Python file content.
+      3. Write it to agent_tools/generated/{filename}.
+      4. Run validate_tool_file() (syntax, async def, register_ function).
+      5. If valid: call hot_reload_tool() to register it immediately.
+
+    Args:
+        spec_path: Path to the *_spec.json file produced by design_tool().
+
+    Returns:
+        {"success": bool, "filename": str, "validation": str, "registered": bool}
+    """
+    from .local_llm import local_llm_call, strip_think_tags
+
+    # ── Load the spec ───────────────────────────────────────────────────────
+    path = Path(spec_path)
+    try:
+        spec = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        return {"success": False, "filename": "", "validation": f"Could not read spec: {e}", "registered": False}
+    except json.JSONDecodeError as e:
+        return {"success": False, "filename": "", "validation": f"Spec is not valid JSON: {e}", "registered": False}
+
+    filename = str(spec.get("filename", "")).strip()
+    function_name = str(spec.get("function_name", "")).strip()
+
+    ok, reason = _check_filename(filename)
+    if not ok:
+        return {"success": False, "filename": filename, "validation": f"Invalid filename in spec: {reason}", "registered": False}
+    if not function_name:
+        return {"success": False, "filename": filename, "validation": "Spec is missing 'function_name'.", "registered": False}
+
+    params = spec.get("parameters", [])
+    params_str = ", ".join(
+        f"{p.get('name', 'arg')}: {p.get('type', 'str')}" for p in params if isinstance(p, dict)
+    )
+
+    prompt = (
+        "Write a Python tool file based on this spec:\n"
+        f"{json.dumps(spec, ensure_ascii=False, indent=2)}\n\n"
+        "Requirements:\n"
+        f"- Async function: async def {function_name}({params_str}) -> dict\n"
+        "- Always return a dict with at least \"success\" key\n"
+        "- Import register_tool from agent_tools at the top\n"
+        f"- Include a register_{function_name}_tools() function that calls register_tool()\n"
+        "- Use is_destructive=False unless the tool writes files or makes external changes\n"
+        "- Add a module docstring explaining the tool\n\n"
+        "Return ONLY the complete Python file content, no markdown fences."
+    )
+
+    try:
+        response = await local_llm_call(
+            prompt, model="qwen3:14b", base_url=_get_ollama_url()
+        )
+        if not response:
+            return {
+                "success": False,
+                "filename": filename,
+                "validation": "Local LLM unavailable — cannot implement tool. Is Ollama running?",
+                "registered": False,
+            }
+
+        code = strip_think_tags(response).strip()
+        if code.startswith("```"):
+            code = code.strip("`")
+            if code.startswith("python\n"):
+                code = code[len("python\n"):]
+            elif "\n" in code:
+                code = code.split("\n", 1)[1]
+
+        # ── Write to agent_tools/generated/ ─────────────────────────────────
+        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        dest = GENERATED_DIR / filename
+        try:
+            dest.write_text(code, encoding="utf-8")
+            logger.info(f"[tool_writer] implement_tool_from_design: wrote {dest}")
+        except OSError as e:
+            return {"success": False, "filename": filename, "validation": f"Write error: {e}", "registered": False}
+
+        # ── Static validation ────────────────────────────────────────────────
+        valid, msg = validate_tool_file(dest)
+        if not valid:
+            logger.warning(f"[tool_writer] implement_tool_from_design: validation failed — {msg}")
+            return {"success": False, "filename": filename, "validation": msg, "registered": False}
+
+        # ── Hot-reload (validate + import + call register_*) ───────────────
+        registered, reload_msg = await hot_reload_tool(dest, send_event=None)
+        if registered:
+            logger.info(f"[tool_writer] implement_tool_from_design: {filename} registered successfully.")
+        else:
+            logger.warning(f"[tool_writer] implement_tool_from_design: hot-reload failed — {reload_msg}")
+
+        return {
+            "success": registered,
+            "filename": filename,
+            "validation": "OK" if valid else msg,
+            "registered": registered,
+            "reload_message": reload_msg,
+        }
+
+    except TypeError as e:
+        return {
+            "success": False,
+            "filename": filename,
+            "validation": f"Serialization error: {e}",
+            "registered": False,
+            "hint": (
+                "The generated tool code likely passed a Python function or non-serializable "
+                "object as a return value or to register_tool(). Ensure all return values are "
+                "plain dicts/lists/strings/numbers, and register_tool() receives description as "
+                "a string (second argument), not the handler function."
+            ),
+        }
+    except Exception as e:
+        logger.warning(f"[tool_writer] implement_tool_from_design failed: {e}")
+        return {"success": False, "filename": filename, "validation": str(e), "registered": False}
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
 def register_tool_writer_tools() -> None:
-    """Register write_tool and reload_tool. Call once at startup from main.py."""
+    """Register write_tool, reload_tool, design_tool, implement_tool_from_design.
+    Call once at startup from main.py."""
 
     register_tool(
         name="write_tool",
@@ -358,4 +609,55 @@ def register_tool_writer_tools() -> None:
         },
         handler=reload_tool,
         is_destructive=True,   # Registers executable code into the live runtime — user approval required
+    )
+
+    register_tool(
+        name="design_tool",
+        description=(
+            "Design a new tool from a capability gap description, without writing any code. "
+            "Uses the local model to produce a structured spec (filename, function_name, "
+            "description, parameters, returns, implementation_notes, test_input) and saves it "
+            "to outputs/tool_designs/{filename}_spec.json. "
+            "Follow with implement_tool_from_design(spec_path) to write and register the tool. "
+            "This design-first approach produces better tools than write_tool alone for "
+            "non-trivial capability gaps. Returns: {success, spec, spec_path}."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "gap_description": {
+                    "type": "string",
+                    "description": (
+                        "Description of the missing capability, e.g. from "
+                        "analyze_capability_gap()'s 'gaps' list."
+                    ),
+                },
+            },
+            "required": ["gap_description"],
+        },
+        handler=design_tool,
+        is_destructive=False,  # Only writes a JSON spec, no executable code
+    )
+
+    register_tool(
+        name="implement_tool_from_design",
+        description=(
+            "Write and register a tool from a spec previously saved by design_tool(). "
+            "Reads the spec JSON, uses the local model to generate the full Python "
+            "implementation, writes it to agent_tools/generated/{filename}, validates it, "
+            "and hot-reloads it into the live registry automatically. "
+            "Returns: {success, filename, validation, registered}."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "spec_path": {
+                    "type": "string",
+                    "description": "Path to the *_spec.json file returned by design_tool().",
+                },
+            },
+            "required": ["spec_path"],
+        },
+        handler=implement_tool_from_design,
+        is_destructive=True,   # Writes a file and registers code — same risk as write_tool + reload_tool
     )

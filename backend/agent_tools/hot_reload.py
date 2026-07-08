@@ -20,6 +20,8 @@ import logging
 from pathlib import Path
 from typing import Callable, Awaitable, Optional
 
+from . import list_tools, mark_tool_created_by
+
 logger = logging.getLogger(__name__)
 
 # The one directory the agent is allowed to populate.
@@ -139,12 +141,21 @@ async def hot_reload_tool(
             # Shouldn't happen after validation, but be safe.
             return False, "register_ function disappeared after import — this is a bug."
 
+        # Phase 15c: snapshot registered tool names before calling register_fn()
+        # so we can tell which ones this file just added, and tag them as
+        # agent-created (register_tool() itself defaults created_by="system").
+        before_names = set(list_tools())
+
         # Call the registration function (sync or async).
         import asyncio, inspect
         if inspect.iscoroutinefunction(register_fn):
             await register_fn()
         else:
             register_fn()
+
+        after_names = set(list_tools())
+        for new_name in after_names - before_names:
+            mark_tool_created_by(new_name, created_by="agent", source_file=path.name)
 
         logger.info(f"[hot_reload] Successfully registered tools from: {path.name}")
 

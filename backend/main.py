@@ -65,8 +65,10 @@ from agent_tools.web import register_web_tools
 from agent_tools.system_info import register_system_tools
 from agent_tools.file_analysis import register_file_analysis_tools
 from agent_tools.code_executor import register_code_executor_tools, set_send_event_callback
-from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c
+from agent_tools.tool_writer import register_tool_writer_tools          # Phase 3c / 15b
 from agent_tools.hot_reload import hot_reload_tool, list_generated_tools  # Phase 3c
+from agent_tools.capability_tools import register_capability_tools        # Phase 15a
+from agent_tools import register_tool_management_tools                   # Phase 15c
 from agent_tools.memory_tool import register_memory_tools                 # Phase 3f
 from agent_tools.self_knowledge import register_self_knowledge_tools      # Phase 3g
 from agent_tools.profile_updater import register_profile_updater_tools    # Phase 3g
@@ -91,6 +93,8 @@ from agent_tools.goal_tracker import register_goal_tools                    # Ph
 from agent_tools.reflection_engine import register_reflection_engine_tools   # Phase 14b/14c
 from agent_tools.memory_maintenance import register_maintenance_tools        # Phase 16a
 from agent_tools.batch_tools import register_batch_tools, set_scheduler as set_batch_scheduler  # Phase 11.5b/c
+from agent_tools.capability_tools import register_capability_tools           # Phase 15a
+from agent_tools import register_tool_management_tools                       # Phase 15c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
 try:
@@ -187,7 +191,9 @@ register_web_tools()
 register_system_tools()
 register_file_analysis_tools()
 register_code_executor_tools()
-register_tool_writer_tools()                                             # Phase 3c
+register_tool_writer_tools()                                             # Phase 3c / 15b
+register_capability_tools()                                              # Phase 15a
+register_tool_management_tools()                                         # Phase 15c
 register_memory_tools()                                                  # Phase 3f
 register_self_knowledge_tools()                                          # Phase 3g
 register_profile_updater_tools()                                         # Phase 3g
@@ -371,6 +377,16 @@ try:
     register_batch_tools()
 except Exception as _batch_err:
     logger.warning(f"[startup] Batch tool registration failed (non-fatal): {_batch_err}")
+
+try:
+    register_capability_tools()         # Phase 15a
+except Exception as _cap_err:
+    logger.warning(f"[startup] Capability gap tool registration failed (non-fatal): {_cap_err}")
+
+try:
+    register_tool_management_tools()    # Phase 15c
+except Exception as _toolmgmt_err:
+    logger.warning(f"[startup] Tool management tool registration failed (non-fatal): {_toolmgmt_err}")
 
 # ---------------------------------------------------------------------------
 # Phase 4.5 — Streaming execution output
