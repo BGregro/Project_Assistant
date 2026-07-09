@@ -1057,6 +1057,19 @@ details.tool-block[data-cat="other"]      .tb-cat-dot { background: var(--border
 .goal-status.active { color: var(--accent-green); }
 .goal-meta { font-size: 0.75em; color: var(--text-muted); margin-top: 3px; }
 .goal-desc { font-size: 0.82em; color: var(--text-muted); margin-top:4px; font-style:italic; }
+.goal-progress-bar {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    height: 4px;
+    margin: 6px 0 2px;
+    overflow: hidden;
+}
+.goal-progress-fill {
+    background: var(--accent-green);
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
 
 /* ---- Analytics panel (Memory tab) ---- */
 .analytics-panel {

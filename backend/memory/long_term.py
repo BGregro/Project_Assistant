@@ -968,6 +968,54 @@ def semantic_query_research(query: str, n_results: int = 3) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Phase 16b — Research summarization via local model
+# ---------------------------------------------------------------------------
+
+async def summarize_old_research(ollama_url: str, local_agent_model: str, max_entries: int = 10) -> int:
+    """
+    Phase 16b: For research entries older than 30 days with >500 word findings,
+    generate a compact 100-word summary using the local model.
+    Stores summary as 'compressed_findings' alongside the full 'findings'.
+    Returns count of entries summarized.
+    """
+    from agent_tools.local_llm import local_llm_call, strip_think_tags
+
+    data = load()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    summarized = 0
+    for r in data.get("research", []):
+        if summarized >= max_entries:
+            break
+        if r.get("compressed_findings"):
+            continue  # already compressed
+        ts = _parse_ts(r.get("timestamp", ""))
+        if ts and ts > cutoff:
+            continue  # too recent
+        if len(r.get("findings", "")) < 500:
+            continue  # too short to bother
+        try:
+            prompt = (
+                f"Summarize these research findings in under 100 words. "
+                f"Be dense and specific — preserve key facts.\n\n"
+                f"Topic: {r['topic']}\n\nFindings:\n{r['findings'][:2000]}"
+            )
+            # NOTE: local_llm_call's signature is (prompt, model, system, base_url) —
+            # ollama_url must be passed as the base_url keyword, not positionally,
+            # or it would be sent as the `system` prompt instead.
+            raw = await local_llm_call(prompt, local_agent_model, base_url=ollama_url)
+            summary = strip_think_tags(raw or "").strip()
+            if summary and len(summary) > 20:
+                r["compressed_findings"] = summary
+                summarized += 1
+        except Exception as e:
+            logger.debug(f"[long_term] Research summarization failed for '{r.get('topic', '?')}': {e}")
+    if summarized:
+        save(data)
+        logger.info(f"[long_term] Compressed {summarized} research entries (16b)")
+    return summarized
+
+
+# ---------------------------------------------------------------------------
 # Context summary (called before every task run)
 # ---------------------------------------------------------------------------
 
@@ -1027,8 +1075,12 @@ def get_context_summary(current_goal: str) -> str:
         research_lines = []
         for r in matching_research[-2:]:  # at most 2 research snippets in summary
             age = _age_label(r.get("timestamp", ""))
+            # Phase 16b: prefer the compact compressed_findings (if the entry
+            # has been summarized) over the full findings text, to keep the
+            # context injection compact.
+            findings_text = r.get("compressed_findings") or r.get("findings", "")
             research_lines.append(
-                f"Research ({age}): {r['topic'][:40]}: {r['findings'][:80]}"
+                f"Research ({age}): {r['topic'][:40]}: {findings_text[:80]}"
             )
         parts.append(" | ".join(research_lines))
 

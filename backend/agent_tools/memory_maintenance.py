@@ -235,13 +235,48 @@ async def run_maintenance(ollama_url: str, config: dict) -> dict:
             "duplicate_pairs": duplicates,
         }
 
+        # ── Step 5 (Phase 16b): summarize old verbose research entries ─────
+        try:
+            from memory.long_term import summarize_old_research
+            compressed_count = await summarize_old_research(
+                ollama_url=ollama_url,
+                local_agent_model=config.get("llm", {}).get("local_agent", "qwen3:14b"),
+            )
+        except Exception as e:
+            logger.debug(f"[memory_maintenance] Research summarization step failed (non-fatal): {e}")
+            compressed_count = 0
+        report["research_entries_compressed"] = compressed_count
+
+        # ── Step 6 (Phase 16d): monthly memory health score ─────────────────
+        failed = sum(1 for t in tasks if t.get("outcome") != "success")
+        health_score = round(
+            (tasks_with_reflection / max(tasks_total, 1)) * 40 +           # reflection coverage (max 40)
+            max(0, 30 - (failed / max(tasks_total, 1) * 100)) +            # low failure rate (max 30)
+            min(30, len(data.get("research", [])) * 2),                    # research depth (max 30)
+            1,
+        )
+        report["health_score"] = health_score
+        report["health_label"] = (
+            "excellent" if health_score >= 80 else
+            "good" if health_score >= 60 else
+            "fair" if health_score >= 40 else "needs attention"
+        )
+
         _MAINTENANCE_DIR.mkdir(parents=True, exist_ok=True)
         report_path = _MAINTENANCE_DIR / f"maintenance_{now.strftime('%Y%m%d')}.json"
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
+        # Save a dedicated monthly health snapshot on the 1st of the month.
+        if now.day == 1:
+            monthly_path = _MAINTENANCE_DIR / f"health_{now.strftime('%Y%m')}.json"
+            monthly_path.parent.mkdir(parents=True, exist_ok=True)
+            monthly_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.info(f"[memory_maintenance] Monthly health report saved: {monthly_path.name}")
+
         logger.info(
             f"[memory_maintenance] Sweep complete: {facts_flagged_stale} stale facts, "
-            f"{facts_flagged_duplicate} duplicate pairs, {research_flagged_stale} stale research entries."
+            f"{facts_flagged_duplicate} duplicate pairs, {research_flagged_stale} stale research entries, "
+            f"{compressed_count} research entries compressed, health score {health_score} ({report['health_label']})."
         )
         return report
 

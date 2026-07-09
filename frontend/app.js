@@ -1807,6 +1807,38 @@ async function fetchMemoryCounts() {
     if (tasksEl)    tasksEl.textContent    = `Tasks logged: ${(data.tasks    || []).length}`;
     if (factsEl)    factsEl.textContent    = `Facts stored: ${(data.facts    || []).length}`;
     if (researchEl) researchEl.textContent = `Research entries: ${(data.research || []).length}`;
+
+    // Distillation status (Phase 16e)
+    const distEl = document.getElementById('mem-distillation-status');
+    if (distEl) {
+      distEl.textContent = data.last_distillation
+        ? `Last distillation: ${new Date(data.last_distillation).toLocaleString()}`
+        : 'Last distillation: never';
+    }
+
+    // Goals count (Phase 13)
+    try {
+      const goalsRes  = await authFetch('/goals');
+      const goalsData = await goalsRes.json();
+      const goalsEl = document.getElementById('mem-goals-count');
+      if (goalsEl) goalsEl.textContent = `Goals: ${goalsData.count || 0} active`;
+    } catch (e) {
+      console.warn('[memory] Could not fetch /goals:', e);
+    }
+
+    // Memory health score (Phase 16d) — read from the latest maintenance report
+    try {
+      const maintRes  = await authFetch('/maintenance/report');
+      if (maintRes.ok) {
+        const maintData = await maintRes.json();
+        const healthEl = document.getElementById('mem-health-score');
+        if (healthEl && maintData.success !== false && maintData.health_score !== undefined) {
+          healthEl.textContent = `Memory health: ${maintData.health_score} (${maintData.health_label})`;
+        }
+      }
+    } catch (e) {
+      console.warn('[memory] Could not fetch maintenance report:', e);
+    }
   } catch (e) {
     console.warn('[memory] Could not fetch /memory:', e);
   }
@@ -2300,17 +2332,25 @@ function renderGoals(goals) {
 
   list.innerHTML = goals.map(g => {
     const milestones = g.milestones || [];
-    const done  = milestones.filter(m => m.done).length;
-    const total = milestones.length;
+    const totalM = milestones.length;
+    const doneM  = milestones.filter(m => m.done).length;
+    const pct    = totalM > 0 ? Math.round(doneM / totalM * 100) : 0;
     const days  = g.days_since_progress;
     const daysText = (days === null || days === undefined) ? '?' : days;
+    const progressBar = totalM > 0 ? `
+        <div class="goal-progress-bar">
+            <div class="goal-progress-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="goal-meta">${doneM}/${totalM} milestones · ${pct}%</div>
+    ` : '<div class="goal-meta">No milestones yet</div>';
     return `
       <div class="goal-card priority-${g.priority}">
         <div class="goal-header">
           <span class="goal-title">${escapeHtml(g.title || '')}</span>
           <span class="goal-status ${g.status}">${escapeHtml(g.status || '')}</span>
         </div>
-        <div class="goal-meta">P${g.priority} · ${done}/${total} milestones · ${daysText}d ago</div>
+        <div class="goal-meta">P${g.priority} · ${daysText}d ago</div>
+        ${progressBar}
         ${g.description ? `<div class="goal-desc">${escapeHtml(String(g.description).slice(0, 100))}</div>` : ''}
       </div>
     `;

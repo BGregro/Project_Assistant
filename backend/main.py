@@ -93,8 +93,6 @@ from agent_tools.goal_tracker import register_goal_tools                    # Ph
 from agent_tools.reflection_engine import register_reflection_engine_tools   # Phase 14b/14c
 from agent_tools.memory_maintenance import register_maintenance_tools        # Phase 16a
 from agent_tools.batch_tools import register_batch_tools, set_scheduler as set_batch_scheduler  # Phase 11.5b/c
-from agent_tools.capability_tools import register_capability_tools           # Phase 15a
-from agent_tools import register_tool_management_tools                       # Phase 15c
 
 # Phase 9 — Media, notifications, file watching, email inbox tools
 try:
@@ -192,8 +190,6 @@ register_system_tools()
 register_file_analysis_tools()
 register_code_executor_tools()
 register_tool_writer_tools()                                             # Phase 3c / 15b
-register_capability_tools()                                              # Phase 15a
-register_tool_management_tools()                                         # Phase 15c
 register_memory_tools()                                                  # Phase 3f
 register_self_knowledge_tools()                                          # Phase 3g
 register_profile_updater_tools()                                         # Phase 3g
@@ -707,14 +703,27 @@ async def get_memory():
     from memory.long_term import load as load_long_term
     try:
         data = load_long_term()
+
+        # Phase 16e: include the most recent session distillation timestamp,
+        # if any, so the Memory tab can show "Last distillation: ...".
+        last_distillation = None
+        if _DISTILLATIONS_FILE.exists():
+            try:
+                dists = json.loads(_DISTILLATIONS_FILE.read_text(encoding="utf-8"))
+                if dists:
+                    last_distillation = dists[0].get("timestamp")
+            except Exception:
+                pass
+
         return JSONResponse({
             "tasks":    data.get("tasks",    []),
             "facts":    data.get("facts",    []),
             "research": data.get("research", []),
+            "last_distillation": last_distillation,
         })
     except Exception as e:
         logger.warning(f"[memory] Could not load long-term store: {e}")
-        return JSONResponse({"tasks": [], "facts": [], "research": []})
+        return JSONResponse({"tasks": [], "facts": [], "research": [], "last_distillation": None})
 
 
 @app.get("/goals")
@@ -733,6 +742,32 @@ async def get_goals():
     except Exception as e:
         logger.warning(f"[goals] Could not load goals: {e}")
         return JSONResponse({"goals": [], "count": 0})
+
+
+@app.get("/maintenance/report")
+async def get_maintenance_report_endpoint():
+    """
+    Phase 16d: Return the most recently saved memory maintenance report
+    (read-only, does not re-run the sweep). Backs the "Memory health" line
+    in the frontend Memory tab.
+
+    Not part of the original tool-only interface (get_maintenance_report is
+    a chat tool, invoked by the agent) — added as a thin REST wrapper so the
+    UI can poll it directly without going through the agent loop.
+    """
+    from agent_tools.memory_maintenance import _MAINTENANCE_DIR
+    try:
+        if not _MAINTENANCE_DIR.exists():
+            return JSONResponse({"success": False, "error": "No maintenance reports found yet."})
+        report_files = sorted(_MAINTENANCE_DIR.glob("maintenance_*.json"), reverse=True)
+        if not report_files:
+            return JSONResponse({"success": False, "error": "No maintenance reports found yet."})
+        report = json.loads(report_files[0].read_text(encoding="utf-8"))
+        report.setdefault("success", True)
+        return JSONResponse(report)
+    except Exception as e:
+        logger.warning(f"[maintenance] Could not load maintenance report: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
 
 
 # ---------------------------------------------------------------------------
@@ -977,6 +1012,117 @@ async def _embed_turn_bg(
             logger.debug("[main] Background embed complete.")
     except Exception as e:
         logger.warning(f"[main] Background embed failed (non-fatal): {e}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 16e — Session distillation (MiMoCode pattern)
+# ---------------------------------------------------------------------------
+# Path anchored via Path(__file__), matching every other memory file path in
+# this codebase (see CONFIG_PATH above) — never a bare relative path.
+_DISTILLATIONS_FILE = Path(__file__).parent.parent / "memory" / "session_distillations.json"
+
+
+async def _distill_session(session_tasks: list, ollama_url: str, local_agent_model: str) -> None:
+    """
+    Phase 16e: extract 3-5 key learnings from the just-ended session and store
+    them so the next session can be seeded with continuity, without re-reading
+    full task history.
+
+    Fire-and-forget — called from a background task on WebSocket disconnect.
+    Any failure is logged at debug level and swallowed; this must never raise
+    into the disconnect handler.
+
+    Args:
+        session_tasks:     Recent task entries (dicts with goal/outcome/reflection).
+        ollama_url:         Base URL for the local Ollama instance.
+        local_agent_model:  Model to use for distillation — the agent tier
+                             (qwen3:14b), matching every other background
+                             reflection/summarization job in this codebase.
+    """
+    if len(session_tasks) < 2:
+        return
+
+    import json as _json
+    import re as _re
+
+    try:
+        from agent_tools.local_llm import strip_think_tags as _strip
+
+        # query_tasks() returns results sorted newest-first, so re-sort
+        # chronologically (oldest → newest) before slicing to the most
+        # recent 10 — slicing the newest-first list directly would grab
+        # the *oldest* entries instead.
+        chrono = sorted(session_tasks, key=lambda t: t.get("timestamp", ""))
+        recent = chrono[-10:]
+
+        summaries = [
+            f"- {t.get('goal', '')[:60]} → {t.get('outcome', '')}"
+            + (f" | {t['reflection'][:80]}" if t.get("reflection") else "")
+            for t in recent
+        ]
+        prompt = (
+            "A working session with an autonomous AI agent just ended. "
+            "Extract 3-5 key learnings from the tasks below. "
+            "Each should be a specific, memorable insight — not a summary of "
+            "what happened, but something worth remembering for next time.\n\n"
+            "Tasks:\n" + "\n".join(summaries) + "\n\n"
+            "Respond with ONLY a JSON array of strings, no preamble, no code fences."
+        )
+
+        # Direct Ollama call with an output token cap, matching the pattern
+        # used by TaskRunner._generate_reflection(): thinking stays enabled
+        # (no /no_think — Gergo prefers full reasoning depth from local
+        # models) but num_predict caps total output tokens so a long
+        # thinking chain can't saturate the iGPU and freeze the UI.
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            resp = await client.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": local_agent_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"num_predict": 512},
+                },
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("response", "")
+
+        cleaned = _strip(raw).strip()
+        # Defensive: strip any markdown code fences the model may add despite
+        # being told not to, before attempting JSON parsing.
+        cleaned = _re.sub(r"^```(?:json)?|```$", "", cleaned.strip(), flags=_re.MULTILINE).strip()
+
+        learnings = _json.loads(cleaned)
+        if not isinstance(learnings, list) or not learnings:
+            logger.debug("[16e] Distillation produced no usable learnings — skipping.")
+            return
+
+        existing = []
+        if _DISTILLATIONS_FILE.exists():
+            try:
+                existing = _json.loads(_DISTILLATIONS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                existing = []
+
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task_count": len(session_tasks),
+            "learnings": [str(l) for l in learnings[:5]],
+        }
+        updated = [entry] + existing
+
+        # Atomic write: .tmp then os.replace(), matching every other memory
+        # file writer in this codebase (goal_tracker.py, reflection_engine.py).
+        _DISTILLATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = _DISTILLATIONS_FILE.with_suffix(".tmp")
+        tmp_path.write_text(_json.dumps(updated[:30], indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp_path.replace(_DISTILLATIONS_FILE)
+
+        logger.info(f"[16e] Distilled {len(learnings)} learnings from {len(session_tasks)} tasks")
+
+    except Exception as e:
+        logger.debug(f"[16e] Session distillation failed (non-fatal): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1264,6 +1410,25 @@ async def websocket_endpoint(websocket: WebSocket, token: str = ""):
         _active_connections.discard(websocket)
         _active_send_event[0] = None
         await unload_model(agent.local_model, agent.ollama_url)
+
+        # Phase 16e: distill session learnings in the background. Note this
+        # queries the last N tasks globally (long_term.json is not currently
+        # session-scoped), which approximates "this session's tasks" rather
+        # than exactly matching them — acceptable for a best-effort continuity
+        # signal, but worth knowing if session boundaries ever matter more.
+        try:
+            from memory.long_term import query_tasks as _qt
+            recent = _qt(last_n=20)
+            if recent:
+                asyncio.get_running_loop().create_task(
+                    _distill_session(
+                        session_tasks=recent,
+                        ollama_url=agent.ollama_url,
+                        local_agent_model=getattr(agent, "local_agent_model", "qwen3:14b"),
+                    )
+                )
+        except Exception as _de:
+            logger.debug(f"[16e] Distillation trigger failed (non-fatal): {_de}")
     except Exception as e:
         logger.exception("[ws] Unhandled error in WebSocket handler")
         try:

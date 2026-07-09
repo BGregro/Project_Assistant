@@ -170,7 +170,7 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
     "goals": {
         "keywords": [
             r"goal", r"objective", r"target", r"milestone", r"progress",
-            r"plan.*long", r"working toward",
+            r"plan.*long", r"working toward", r"achieve", r"blocker",
         ],
         "content": (
             "\n\nGOALS: Use list_goals() to see your active goals before starting any long "
@@ -295,7 +295,8 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             r"add.*capability", r"extend yourself",
             r"context.*usage", r"context.*window", r"analyze.*performance",
             r"improvement.*suggestion", r"how.*performing", r"performance.*analysis",
-            r"capability.*gap", r"design.*tool", r"tool.*metadata", r"prune.*tool",
+            r"capability", r"missing", r"design.*tool", r"tool.*metadata",
+            r"prune.*tool", r"implement.*tool",
         ],
         "content": (
             "\n\nSELF-EXTENSION: Use write_tool(filename, code) to create new tools — "
@@ -378,8 +379,9 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
     },
     "self_improve": {
         "keywords": [
-            r"improve yourself", r"learn from", r"failure analysis",
-            r"what went wrong", r"rules", r"patterns", r"reflection",
+            r"improve", r"learn from", r"failure analysis",
+            r"what went wrong", r"rule", r"pattern", r"reflect",
+            r"maintenance", r"memory health",
         ],
         "content": (
             "\n\nSELF-IMPROVEMENT: Use classify_failure(task_id) to analyze why a task "
@@ -387,7 +389,10 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "failure patterns. Use apply_improvement_proposal(rule_id) to activate a "
             "rule — active rules are automatically injected into every future prompt. "
             "Use retire_rule(rule_id) if a rule is no longer helpful. Use "
-            "run_memory_maintenance() to check memory health."
+            "run_memory_maintenance() to check memory health and compress old research "
+            "findings (Phase 16b) — it returns a health_score and never deletes anything, "
+            "only flags. Use get_maintenance_report() to read back the latest maintenance "
+            "results without re-running the sweep."
         ),
     },
 }
@@ -568,6 +573,21 @@ class AgentCore:
                 if rules:
                     rules_text = "\n".join(f"- IF {r['if']}: THEN {r['then']}" for r in rules[:10])
                     prompt += f"\n\n[LEARNED RULES]\n{rules_text}"
+        except Exception:
+            pass
+
+        # Phase 16e: inject compressed learnings from recent sessions so the
+        # agent has continuity without re-reading full task history.
+        # Same non-fatal, absolute-path pattern as the active_rules block above.
+        try:
+            dist_path = _Path(__file__).resolve().parent.parent / "memory" / "session_distillations.json"
+            if dist_path.exists():
+                dists = json.loads(dist_path.read_text(encoding="utf-8"))[:3]
+                snippets: list[str] = []
+                for d in dists:
+                    snippets.extend(d.get("learnings", [])[:2])
+                if snippets:
+                    prompt += "\n\n[RECENT SESSION LEARNINGS]\n" + "\n".join(f"- {s}" for s in snippets[:6])
         except Exception:
             pass
 

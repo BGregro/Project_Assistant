@@ -636,20 +636,12 @@ class TaskRunner:
                         except Exception as _perf_e:
                             logger.debug(f"[task_runner] Metrics record_tool_call failed (non-fatal): {_perf_e}")
 
-                        # Phase 15c: update registry-level call_count/success_count/last_used
-                        # for this tool (fire-and-forget, non-fatal — never blocks dispatch).
+                        # Phase 15c: update per-tool call statistics
                         try:
                             from agent_tools import update_tool_stats
                             update_tool_stats(block.name, success)
-                        except Exception as _stats_e:
-                            logger.debug(f"[task_runner] update_tool_stats failed (non-fatal): {_stats_e}")
-
-                        # Phase 15c: update per-tool registry metadata (fire-and-forget, non-fatal)
-                        try:
-                            from agent_tools import update_tool_stats
-                            update_tool_stats(block.name, success)
-                        except Exception as _stats_e:
-                            logger.debug(f"[task_runner] update_tool_stats failed (non-fatal): {_stats_e}")
+                        except Exception:
+                            pass
 
                         await send_event("task_progress", {
                             "step":       assigned_step,
@@ -1135,6 +1127,47 @@ class TaskRunner:
                     add_edge(failed_tool, failure_concept, "leads_to", strength=1.0)
                     add_edge(failure_concept, failed_tool, "caused_by", strength=1.0)
                     logger.debug(f"[task_runner] Causal edges: {failed_tool} leads_to {failure_concept}")
+
+            # Phase 16c: extract behavioral patterns every 10 tasks
+            try:
+                from memory.long_term import load as _lt_load
+                tasks_total = len(_lt_load().get("tasks", []))
+                if tasks_total % 10 == 0 and tasks_total > 0:
+                    from agent_tools.local_llm import local_llm_call as _llm, strip_think_tags as _strip
+                    import json as _json
+
+                    recent_reflections = [
+                        t.get("reflection", "") for t in _lt_load().get("tasks", [])[-20:]
+                        if t.get("reflection", "").strip() and "<think>" not in t.get("reflection", "")
+                    ]
+                    if len(recent_reflections) >= 5:
+                        snippets = "\n".join(f"- {r[:100]}" for r in recent_reflections[:10])
+                        prompt = (
+                            "Identify 2-3 recurring behavioral patterns from these task reflections. "
+                            "Each pattern: one specific sentence.\n\n"
+                            f"Reflections:\n{snippets}\n\n"
+                            "Return ONLY a JSON array of strings."
+                        )
+                        # Read model config from agent reference (set by main.py), same
+                        # fallback pattern used by _generate_reflection() above.
+                        local_agent_model = (
+                            getattr(self._agent_ref, "local_agent_model", "qwen3:14b")
+                            if self._agent_ref else "qwen3:14b"
+                        )
+                        ollama_url_local = (
+                            getattr(self._agent_ref, "ollama_url", "http://localhost:11434")
+                            if self._agent_ref else "http://localhost:11434"
+                        )
+                        raw = await _llm(prompt, local_agent_model, base_url=ollama_url_local)
+                        patterns = _json.loads(_strip(raw or "").strip())
+                        if isinstance(patterns, list):
+                            for p in patterns[:3]:
+                                if isinstance(p, str) and len(p) > 10:
+                                    add_node(p, "pattern")
+                                    add_edge("agent_behavior", p, "exhibits", strength=1.0)
+                                    logger.info(f"[16c] Pattern extracted: {p[:60]}")
+            except Exception as _pe:
+                logger.debug(f"[task_runner] Pattern extraction failed (non-fatal): {_pe}")
 
         except Exception as e:
             logger.debug(f"[task_runner] Phase 12c: knowledge graph update failed (non-fatal): {e}")
