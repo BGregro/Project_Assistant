@@ -181,7 +181,10 @@ SYSTEM_PROMPT_SECTIONS: dict[str, dict] = {
             "Use log_goal_progress(goal_id, note, milestone_title) after completing work "
             "that advances a goal. Use decompose_goal(goal_id) to break a large goal into "
             "milestones automatically. Use detect_goal_blocker(goal_id) if a goal feels "
-            "stuck. Use generate_goal_report() for a weekly summary of all goals."
+            "stuck. Use generate_goal_report() for a weekly summary of all goals. "
+            "Use delete_goal(goal_id, reason) to permanently remove a goal — use this to "
+            "clean up duplicates, abandoned goals, or goals that are no longer relevant. "
+            "Always use list_goals(status='all') first to find the goal_id before deleting."
         ),
     },
     "episode_memory": {

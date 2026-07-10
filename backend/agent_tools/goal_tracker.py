@@ -1012,9 +1012,60 @@ def register_goal_tools() -> None:
         is_destructive=False,
     )
 
+    # ── delete_goal ─────────────────────────────────────────────────────────
+    async def _delete_goal(goal_id: str, reason: str = "") -> dict[str, Any]:
+        """
+        Permanently delete a goal by ID. Use this to remove duplicate goals,
+        abandoned goals, or goals that are no longer relevant.
+        Logs a note before deletion so there is an audit trail.
+
+        Args:
+            goal_id: The goal_id of the goal to delete
+            reason: Why the goal is being deleted (optional but recommended)
+        """
+        try:
+            data = _load()
+            goals = data.get("goals", [])
+            target = next((g for g in goals if g["goal_id"] == goal_id), None)
+            if not target:
+                return {"success": False, "error": f"Goal '{goal_id}' not found."}
+            title = target.get("title", "unknown")
+            data["goals"] = [g for g in goals if g["goal_id"] != goal_id]
+            data["last_updated"] = _now_iso()
+            _save(data)
+            logger.info(f"[goal_tracker] Deleted goal '{title}' ({goal_id}). Reason: {reason or 'not specified'}")
+            return {"success": True, "deleted_goal_id": goal_id, "deleted_title": title, "reason": reason}
+        except Exception as e:
+            logger.error(f"[goal_tracker] delete_goal failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    register_tool(
+        name="delete_goal",
+        description=(
+            "Permanently delete a goal by ID. Use this to remove duplicate goals, "
+            "abandoned goals, or goals that are no longer relevant. Always call "
+            "list_goals(status='all') first to find the correct goal_id — this "
+            "action is irreversible."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "string", "description": "The goal_id of the goal to delete."},
+                "reason": {
+                    "type": "string",
+                    "description": "Why the goal is being deleted (optional but recommended).",
+                    "default": "",
+                },
+            },
+            "required": ["goal_id"],
+        },
+        handler=_delete_goal,
+        is_destructive=True,
+    )
+
     logger.info(
         "[goal_tracker] Phase 13a-13d: goal tracking tools registered "
         "(create_goal, update_goal, list_goals, get_goal, log_goal_progress, "
         "add_goal_milestone, get_goal_progress, decompose_goal, detect_goal_blocker, "
-        "schedule_goal_work, generate_goal_report)"
+        "schedule_goal_work, generate_goal_report, delete_goal)"
     )

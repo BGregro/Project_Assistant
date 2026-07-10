@@ -593,11 +593,12 @@ function closeTaskContainer(status) {
   // Freeze elapsed time
   updateTaskContainerMeta();
 
-  // Collapse after completion (10s delay so user can read the final output)
+  // Collapse after completion (15s delay so user can read the final output)
   if (status === 'complete') {
+    const containerToCollapse = activeTaskContainer;
     setTimeout(() => {
-      if (activeTaskContainer) activeTaskContainer.classList.remove('open');
-    }, 10000);
+      if (containerToCollapse) containerToCollapse.classList.remove('open');
+    }, 15000);
   }
 
   stopTaskRunning();

@@ -338,6 +338,7 @@ details.tool-block {
   background: var(--bg-tool);
   overflow: hidden;
   animation: fadeSlideIn 0.13s ease-out;
+  min-height: 32px;           /* always tall enough to click, even far up a long chat */
 }
 
 /* When inside a task run container, tighten the margin */
@@ -359,6 +360,10 @@ details.tool-block summary {
   padding: 5px 9px; cursor: pointer; list-style: none;
   font-size: 11px; user-select: none;
   transition: background 0.12s;
+  min-height: 32px;           /* guaranteed click target */
+  box-sizing: border-box;
+  position: relative;         /* keeps it above a collapsed task-run-container */
+  z-index: 1;
 }
 details.tool-block summary:hover { background: rgba(255,255,255,0.03); }
 details.tool-block summary::-webkit-details-marker { display: none; }
