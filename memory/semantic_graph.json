@@ -4,7 +4,7 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-03T07:06:44.805176+00:00",
-      "last_seen": "2026-07-05T08:35:56.799249+00:00"
+      "last_seen": "2026-07-10T12:04:34.747898+00:00"
     },
     "search": {
       "type": "concept",
@@ -28,19 +28,19 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-03T07:06:44.888614+00:00",
-      "last_seen": "2026-07-03T07:06:44.888614+00:00"
+      "last_seen": "2026-07-10T11:47:30.727079+00:00"
     },
     "assistant": {
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-03T07:06:44.915448+00:00",
-      "last_seen": "2026-07-03T07:06:44.915448+00:00"
+      "last_seen": "2026-07-10T11:47:30.771101+00:00"
     },
     "get_recent_episodes": {
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-03T07:13:14.804108+00:00",
-      "last_seen": "2026-07-03T07:13:14.804108+00:00"
+      "last_seen": "2026-07-09T11:23:55.584263+00:00"
     },
     "recent": {
       "type": "concept",
@@ -88,7 +88,7 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-04T17:35:17.819401+00:00",
-      "last_seen": "2026-07-04T17:50:24.735224+00:00"
+      "last_seen": "2026-07-10T08:29:54.627858+00:00"
     },
     "timeline_memory": {
       "type": "tool",
@@ -100,7 +100,7 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-04T17:45:25.724868+00:00",
-      "last_seen": "2026-07-05T07:49:33.536165+00:00"
+      "last_seen": "2026-07-09T11:34:03.002377+00:00"
     },
     "query_memory": {
       "type": "tool",
@@ -130,13 +130,13 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-05T07:42:45.750241+00:00",
-      "last_seen": "2026-07-05T07:42:46.082673+00:00"
+      "last_seen": "2026-07-10T08:29:54.585616+00:00"
     },
     "system": {
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-05T07:42:45.781497+00:00",
-      "last_seen": "2026-07-05T07:42:46.114246+00:00"
+      "last_seen": "2026-07-10T08:29:54.697246+00:00"
     },
     "optimizing": {
       "type": "concept",
@@ -148,7 +148,7 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-05T07:42:45.896728+00:00",
-      "last_seen": "2026-07-05T08:35:56.973637+00:00"
+      "last_seen": "2026-07-10T10:35:23.786344+00:00"
     },
     "timeline": {
       "type": "concept",
@@ -160,7 +160,7 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-05T08:35:56.652927+00:00",
-      "last_seen": "2026-07-05T08:35:56.652927+00:00"
+      "last_seen": "2026-07-10T11:32:51.010498+00:00"
     },
     "practices": {
       "type": "concept",
@@ -172,7 +172,7 @@
       "type": "concept",
       "metadata": {},
       "first_seen": "2026-07-05T08:35:56.706519+00:00",
-      "last_seen": "2026-07-05T08:35:57.401476+00:00"
+      "last_seen": "2026-07-09T19:13:54.139517+00:00"
     },
     "autonomous": {
       "type": "concept",
@@ -196,7 +196,577 @@
       "type": "tool",
       "metadata": {},
       "first_seen": "2026-07-05T08:35:57.308021+00:00",
-      "last_seen": "2026-07-05T08:35:57.308021+00:00"
+      "last_seen": "2026-07-10T11:32:51.481787+00:00"
+    },
+    "analyze_performance": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.208881+00:00",
+      "last_seen": "2026-07-09T11:23:55.208881+00:00"
+    },
+    "current": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.229769+00:00",
+      "last_seen": "2026-07-09T12:16:55.581191+00:00"
+    },
+    "version": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.265657+00:00",
+      "last_seen": "2026-07-09T11:23:55.805284+00:00"
+    },
+    "capabilities": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.301287+00:00",
+      "last_seen": "2026-07-09T21:29:01.842684+00:00"
+    },
+    "usage": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.328030+00:00",
+      "last_seen": "2026-07-09T11:23:55.871497+00:00"
+    },
+    "cases": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.364770+00:00",
+      "last_seen": "2026-07-09T11:23:55.905168+00:00"
+    },
+    "recall_memory": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.398411+00:00",
+      "last_seen": "2026-07-09T20:52:35.905157+00:00"
+    },
+    "list_capabilities": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:23:55.758794+00:00",
+      "last_seen": "2026-07-09T21:29:01.698225+00:00"
+    },
+    "document": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:34:02.940582+00:00",
+      "last_seen": "2026-07-09T11:34:02.940582+00:00"
+    },
+    "write": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:34:02.972551+00:00",
+      "last_seen": "2026-07-09T11:34:02.972551+00:00"
+    },
+    "wrote": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:34:03.033230+00:00",
+      "last_seen": "2026-07-09T11:34:03.033230+00:00"
+    },
+    "previous": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T11:34:03.059342+00:00",
+      "last_seen": "2026-07-09T21:29:01.761472+00:00"
+    },
+    "list_directory": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.636170+00:00",
+      "last_seen": "2026-07-10T11:32:50.770827+00:00"
+    },
+    "delete": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.654346+00:00",
+      "last_seen": "2026-07-10T12:26:41.435403+00:00"
+    },
+    "passive": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.685729+00:00",
+      "last_seen": "2026-07-09T12:02:28.435891+00:00"
+    },
+    "income": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.721805+00:00",
+      "last_seen": "2026-07-09T12:02:28.468998+00:00"
+    },
+    "generation": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.755718+00:00",
+      "last_seen": "2026-07-09T12:02:28.504518+00:00"
+    },
+    "better": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.784445+00:00",
+      "last_seen": "2026-07-09T12:02:28.541669+00:00"
+    },
+    "list_goals": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:27.815541+00:00",
+      "last_seen": "2026-07-10T12:26:41.357704+00:00"
+    },
+    "execute_code": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:28.188381+00:00",
+      "last_seen": "2026-07-10T11:32:51.250407+00:00"
+    },
+    "create_goal": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:02:28.383392+00:00",
+      "last_seen": "2026-07-09T20:52:36.163383+00:00"
+    },
+    "conversation": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:16:55.228540+00:00",
+      "last_seen": "2026-07-09T12:16:55.609617+00:00"
+    },
+    "searches": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:16:55.261395+00:00",
+      "last_seen": "2026-07-09T12:16:55.648971+00:00"
+    },
+    "goals": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:16:55.297925+00:00",
+      "last_seen": "2026-07-10T12:26:41.387771+00:00"
+    },
+    "get_goal": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:16:55.321414+00:00",
+      "last_seen": "2026-07-09T12:16:55.321414+00:00"
+    },
+    "decompose_goal": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:16:55.528517+00:00",
+      "last_seen": "2026-07-09T18:09:39.737638+00:00"
+    },
+    "design_tool": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.650717+00:00",
+      "last_seen": "2026-07-09T12:42:00.650717+00:00"
+    },
+    "start": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.661474+00:00",
+      "last_seen": "2026-07-09T18:09:40.567515+00:00"
+    },
+    "wokring": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.691608+00:00",
+      "last_seen": "2026-07-09T12:42:01.296046+00:00"
+    },
+    "tools": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.723993+00:00",
+      "last_seen": "2026-07-09T20:52:36.207195+00:00"
+    },
+    "milestones": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.763344+00:00",
+      "last_seen": "2026-07-09T12:42:01.360450+00:00"
+    },
+    "listed": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:00.800260+00:00",
+      "last_seen": "2026-07-10T13:00:18.951535+00:00"
+    },
+    "get_performance_metrics": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T12:42:01.041410+00:00",
+      "last_seen": "2026-07-09T12:42:01.041410+00:00"
+    },
+    "reload_tool": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.136913+00:00",
+      "last_seen": "2026-07-09T16:59:58.866502+00:00"
+    },
+    "thing": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.151725+00:00",
+      "last_seen": "2026-07-09T13:41:26.592875+00:00"
+    },
+    "noticed": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.187431+00:00",
+      "last_seen": "2026-07-09T13:41:26.632762+00:00"
+    },
+    "generated": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.266333+00:00",
+      "last_seen": "2026-07-09T13:41:26.718731+00:00"
+    },
+    "agent": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.302096+00:00",
+      "last_seen": "2026-07-09T13:41:26.757295+00:00"
+    },
+    "failure:failure": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T13:41:26.846026+00:00",
+      "last_seen": "2026-07-10T12:04:35.019093+00:00"
+    },
+    "list_processes": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.644276+00:00",
+      "last_seen": "2026-07-09T15:19:05.644276+00:00"
+    },
+    "stuck": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.672370+00:00",
+      "last_seen": "2026-07-09T15:19:05.672370+00:00"
+    },
+    "somewhere": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.725800+00:00",
+      "last_seen": "2026-07-09T15:19:05.725800+00:00"
+    },
+    "happened": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.776025+00:00",
+      "last_seen": "2026-07-09T15:19:05.776025+00:00"
+    },
+    "processing": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.825039+00:00",
+      "last_seen": "2026-07-09T15:19:05.825039+00:00"
+    },
+    "going": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T15:19:05.865263+00:00",
+      "last_seen": "2026-07-09T15:19:05.865263+00:00"
+    },
+    "continue": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.119112+00:00",
+      "last_seen": "2026-07-09T16:59:59.698189+00:00"
+    },
+    "previously": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.154425+00:00",
+      "last_seen": "2026-07-09T16:59:59.729799+00:00"
+    },
+    "moving": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.183158+00:00",
+      "last_seen": "2026-07-09T16:59:59.776380+00:00"
+    },
+    "backend": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.246977+00:00",
+      "last_seen": "2026-07-09T16:59:59.849302+00:00"
+    },
+    "list_outputs": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.288862+00:00",
+      "last_seen": "2026-07-09T16:59:58.288862+00:00"
+    },
+    "log_fact": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:58.480746+00:00",
+      "last_seen": "2026-07-09T20:52:35.777053+00:00"
+    },
+    "analyze_file": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:59.242839+00:00",
+      "last_seen": "2026-07-09T16:59:59.242839+00:00"
+    },
+    "read_file": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T16:59:59.476695+00:00",
+      "last_seen": "2026-07-09T16:59:59.476695+00:00"
+    },
+    "first": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T18:09:39.836200+00:00",
+      "last_seen": "2026-07-09T18:09:40.647242+00:00"
+    },
+    "complete": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T18:09:39.879066+00:00",
+      "last_seen": "2026-07-09T18:09:40.681366+00:00"
+    },
+    "update_goal": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T18:09:39.958513+00:00",
+      "last_seen": "2026-07-10T13:00:18.896499+00:00"
+    },
+    "log_goal_progress": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T18:09:40.169999+00:00",
+      "last_seen": "2026-07-09T20:52:35.651710+00:00"
+    },
+    "proceed": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T19:13:53.868442+00:00",
+      "last_seen": "2026-07-09T19:13:54.094642+00:00"
+    },
+    "detect": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T19:13:54.039388+00:00",
+      "last_seen": "2026-07-09T19:13:54.254652+00:00"
+    },
+    "write_tool": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-09T19:13:54.080329+00:00",
+      "last_seen": "2026-07-09T19:13:54.080329+00:00"
+    },
+    "register": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T20:52:35.536051+00:00",
+      "last_seen": "2026-07-09T20:52:36.177505+00:00"
+    },
+    "meant": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T21:29:01.491295+00:00",
+      "last_seen": "2026-07-09T21:29:01.719526+00:00"
+    },
+    "message": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-09T21:29:01.574818+00:00",
+      "last_seen": "2026-07-09T21:29:01.800244+00:00"
+    },
+    "list_scheduled_tasks": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-10T08:29:54.313636+00:00",
+      "last_seen": "2026-07-10T08:29:54.313636+00:00"
+    },
+    "health": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T08:29:54.331102+00:00",
+      "last_seen": "2026-07-10T08:29:54.548471+00:00"
+    },
+    "optimization": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T08:29:54.452960+00:00",
+      "last_seen": "2026-07-10T08:29:54.658633+00:00"
+    },
+    "schedule_task": {
+      "type": "tool",
+      "metadata": {},
+      "first_seen": "2026-07-10T08:29:54.527631+00:00",
+      "last_seen": "2026-07-10T08:29:54.527631+00:00"
+    },
+    "minden": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T09:27:31.261550+00:00",
+      "last_seen": "2026-07-10T12:04:34.762579+00:00"
+    },
+    "inform": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T09:27:31.295926+00:00",
+      "last_seen": "2026-07-10T12:04:34.812653+00:00"
+    },
+    "dokumentumot": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T09:27:31.338348+00:00",
+      "last_seen": "2026-07-10T12:04:34.867311+00:00"
+    },
+    "karon": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T09:27:31.378106+00:00",
+      "last_seen": "2026-07-10T12:04:34.912715+00:00"
+    },
+    "rgyhoz": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T09:27:31.421499+00:00",
+      "last_seen": "2026-07-10T09:27:32.140293+00:00"
+    },
+    "kutat": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T10:35:23.802354+00:00",
+      "last_seen": "2026-07-10T11:41:19.428283+00:00"
+    },
+    "nagyon": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T10:35:23.851895+00:00",
+      "last_seen": "2026-07-10T10:35:24.074381+00:00"
+    },
+    "ugyanezt": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T10:35:23.892006+00:00",
+      "last_seen": "2026-07-10T10:35:24.124442+00:00"
+    },
+    "rendszerek": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T10:35:23.958797+00:00",
+      "last_seen": "2026-07-10T12:04:34.963918+00:00"
+    },
+    "alapj": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:32:50.849265+00:00",
+      "last_seen": "2026-07-10T11:32:51.803914+00:00"
+    },
+    "rendesen": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:32:50.889377+00:00",
+      "last_seen": "2026-07-10T11:32:51.834636+00:00"
+    },
+    "kutatt": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:32:50.932317+00:00",
+      "last_seen": "2026-07-10T11:32:51.880385+00:00"
+    },
+    "interneten": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:32:50.969112+00:00",
+      "last_seen": "2026-07-10T11:32:51.929343+00:00"
+    },
+    "elind": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:41:19.293920+00:00",
+      "last_seen": "2026-07-10T11:41:19.293920+00:00"
+    },
+    "tottam": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:41:19.331384+00:00",
+      "last_seen": "2026-07-10T11:41:19.331384+00:00"
+    },
+    "searxng": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:41:19.386260+00:00",
+      "last_seen": "2026-07-10T11:53:56.555168+00:00"
+    },
+    "zenetben": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:41:19.479038+00:00",
+      "last_seen": "2026-07-10T11:41:19.479038+00:00"
+    },
+    "error": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:47:30.695756+00:00",
+      "last_seen": "2026-07-10T11:47:30.695756+00:00"
+    },
+    "failed": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:47:30.823502+00:00",
+      "last_seen": "2026-07-10T11:47:30.823502+00:00"
+    },
+    "invalid": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:47:30.870862+00:00",
+      "last_seen": "2026-07-10T11:47:30.870862+00:00"
+    },
+    "container": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:53:56.598285+00:00",
+      "last_seen": "2026-07-10T11:53:56.598285+00:00"
+    },
+    "37187dc2d": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:53:56.647738+00:00",
+      "last_seen": "2026-07-10T11:53:56.647738+00:00"
+    },
+    "updating": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:53:56.697649+00:00",
+      "last_seen": "2026-07-10T11:53:56.697649+00:00"
+    },
+    "certificates": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T11:53:56.747765+00:00",
+      "last_seen": "2026-07-10T11:53:56.747765+00:00"
+    },
+    "duplicates": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T12:26:41.480357+00:00",
+      "last_seen": "2026-07-10T12:26:41.480357+00:00"
+    },
+    "completed": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T12:26:41.520330+00:00",
+      "last_seen": "2026-07-10T12:26:41.520330+00:00"
+    },
+    "versions": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T12:26:41.560599+00:00",
+      "last_seen": "2026-07-10T12:26:41.560599+00:00"
+    },
+    "things": {
+      "type": "concept",
+      "metadata": {},
+      "first_seen": "2026-07-10T13:00:18.918123+00:00",
+      "last_seen": "2026-07-10T13:00:18.918123+00:00"
     }
   },
   "edges": [
@@ -231,19 +801,19 @@
       "from": "context",
       "to": "search_web",
       "relationship": "solved_with",
-      "strength": 1.0,
+      "strength": 1.1,
       "sources": [],
       "first_seen": "2026-07-03T07:06:44.902484+00:00",
-      "last_seen": "2026-07-03T07:06:44.902484+00:00"
+      "last_seen": "2026-07-10T11:47:30.757980+00:00"
     },
     {
       "from": "assistant",
       "to": "search_web",
       "relationship": "solved_with",
-      "strength": 1.0,
+      "strength": 1.1,
       "sources": [],
       "first_seen": "2026-07-03T07:06:44.927772+00:00",
-      "last_seen": "2026-07-03T07:06:44.927772+00:00"
+      "last_seen": "2026-07-10T11:47:30.804988+00:00"
     },
     {
       "from": "recent",
@@ -528,10 +1098,10 @@
       "from": "write_file",
       "to": "search_web",
       "relationship": "used_together",
-      "strength": 1.0,
+      "strength": 1.1,
       "sources": [],
       "first_seen": "2026-07-05T07:42:46.250891+00:00",
-      "last_seen": "2026-07-05T07:42:46.250891+00:00"
+      "last_seen": "2026-07-10T09:27:32.223586+00:00"
     },
     {
       "from": "timeline",
@@ -771,10 +1341,10 @@
       "from": "fetch_page",
       "to": "search_web",
       "relationship": "used_together",
-      "strength": 1.0,
+      "strength": 1.2,
       "sources": [],
       "first_seen": "2026-07-05T08:35:57.496206+00:00",
-      "last_seen": "2026-07-05T08:35:57.496206+00:00"
+      "last_seen": "2026-07-10T11:32:52.089726+00:00"
     },
     {
       "from": "fetch_page",
@@ -798,10 +1368,10 @@
       "from": "fetch_page",
       "to": "deep_research",
       "relationship": "used_together",
-      "strength": 1.0,
+      "strength": 1.1,
       "sources": [],
       "first_seen": "2026-07-05T08:35:57.545391+00:00",
-      "last_seen": "2026-07-05T08:35:57.545391+00:00"
+      "last_seen": "2026-07-10T11:32:52.063868+00:00"
     },
     {
       "from": "search_web",
@@ -856,7 +1426,3364 @@
       "sources": [],
       "first_seen": "2026-07-05T08:35:57.628704+00:00",
       "last_seen": "2026-07-05T08:35:57.628704+00:00"
+    },
+    {
+      "from": "current",
+      "to": "analyze_performance",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.247553+00:00",
+      "last_seen": "2026-07-09T11:23:55.247553+00:00"
+    },
+    {
+      "from": "version",
+      "to": "analyze_performance",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.282921+00:00",
+      "last_seen": "2026-07-09T11:23:55.282921+00:00"
+    },
+    {
+      "from": "capabilities",
+      "to": "analyze_performance",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.312562+00:00",
+      "last_seen": "2026-07-09T11:23:55.312562+00:00"
+    },
+    {
+      "from": "usage",
+      "to": "analyze_performance",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.346525+00:00",
+      "last_seen": "2026-07-09T11:23:55.346525+00:00"
+    },
+    {
+      "from": "cases",
+      "to": "analyze_performance",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.380870+00:00",
+      "last_seen": "2026-07-09T11:23:55.380870+00:00"
+    },
+    {
+      "from": "current",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.432128+00:00",
+      "last_seen": "2026-07-09T11:23:55.432128+00:00"
+    },
+    {
+      "from": "version",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.466869+00:00",
+      "last_seen": "2026-07-09T11:23:55.466869+00:00"
+    },
+    {
+      "from": "capabilities",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.498178+00:00",
+      "last_seen": "2026-07-09T11:23:55.498178+00:00"
+    },
+    {
+      "from": "usage",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.533437+00:00",
+      "last_seen": "2026-07-09T11:23:55.533437+00:00"
+    },
+    {
+      "from": "cases",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.567023+00:00",
+      "last_seen": "2026-07-09T11:23:55.567023+00:00"
+    },
+    {
+      "from": "current",
+      "to": "get_recent_episodes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.617898+00:00",
+      "last_seen": "2026-07-09T11:23:55.617898+00:00"
+    },
+    {
+      "from": "version",
+      "to": "get_recent_episodes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.651908+00:00",
+      "last_seen": "2026-07-09T11:23:55.651908+00:00"
+    },
+    {
+      "from": "capabilities",
+      "to": "get_recent_episodes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.686104+00:00",
+      "last_seen": "2026-07-09T11:23:55.686104+00:00"
+    },
+    {
+      "from": "usage",
+      "to": "get_recent_episodes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.718267+00:00",
+      "last_seen": "2026-07-09T11:23:55.718267+00:00"
+    },
+    {
+      "from": "cases",
+      "to": "get_recent_episodes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.740713+00:00",
+      "last_seen": "2026-07-09T11:23:55.740713+00:00"
+    },
+    {
+      "from": "current",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.794146+00:00",
+      "last_seen": "2026-07-09T11:23:55.794146+00:00"
+    },
+    {
+      "from": "version",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.821815+00:00",
+      "last_seen": "2026-07-09T11:23:55.821815+00:00"
+    },
+    {
+      "from": "capabilities",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.854176+00:00",
+      "last_seen": "2026-07-09T21:29:01.863492+00:00"
+    },
+    {
+      "from": "usage",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.887824+00:00",
+      "last_seen": "2026-07-09T11:23:55.887824+00:00"
+    },
+    {
+      "from": "cases",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.920085+00:00",
+      "last_seen": "2026-07-09T11:23:55.920085+00:00"
+    },
+    {
+      "from": "analyze_performance",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.936847+00:00",
+      "last_seen": "2026-07-09T11:23:55.936847+00:00"
+    },
+    {
+      "from": "analyze_performance",
+      "to": "get_recent_episodes",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.955219+00:00",
+      "last_seen": "2026-07-09T11:23:55.955219+00:00"
+    },
+    {
+      "from": "analyze_performance",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.969212+00:00",
+      "last_seen": "2026-07-09T11:23:55.969212+00:00"
+    },
+    {
+      "from": "recall_memory",
+      "to": "get_recent_episodes",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:55.987794+00:00",
+      "last_seen": "2026-07-09T11:23:55.987794+00:00"
+    },
+    {
+      "from": "recall_memory",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:56.006271+00:00",
+      "last_seen": "2026-07-09T11:23:56.006271+00:00"
+    },
+    {
+      "from": "get_recent_episodes",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:23:56.022764+00:00",
+      "last_seen": "2026-07-09T11:23:56.022764+00:00"
+    },
+    {
+      "from": "document",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:34:02.956515+00:00",
+      "last_seen": "2026-07-09T11:34:02.956515+00:00"
+    },
+    {
+      "from": "write",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:34:02.989906+00:00",
+      "last_seen": "2026-07-09T11:34:02.989906+00:00"
+    },
+    {
+      "from": "everything",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:34:03.019548+00:00",
+      "last_seen": "2026-07-09T11:34:03.019548+00:00"
+    },
+    {
+      "from": "wrote",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:34:03.046025+00:00",
+      "last_seen": "2026-07-09T11:34:03.046025+00:00"
+    },
+    {
+      "from": "previous",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T11:34:03.073066+00:00",
+      "last_seen": "2026-07-09T11:34:03.073066+00:00"
+    },
+    {
+      "from": "delete",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.672076+00:00",
+      "last_seen": "2026-07-09T12:02:27.672076+00:00"
+    },
+    {
+      "from": "passive",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.705048+00:00",
+      "last_seen": "2026-07-09T12:02:27.705048+00:00"
+    },
+    {
+      "from": "income",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.737788+00:00",
+      "last_seen": "2026-07-09T12:02:27.737788+00:00"
+    },
+    {
+      "from": "generation",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.768348+00:00",
+      "last_seen": "2026-07-09T12:02:27.768348+00:00"
+    },
+    {
+      "from": "better",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.800336+00:00",
+      "last_seen": "2026-07-09T12:02:27.800336+00:00"
+    },
+    {
+      "from": "delete",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.846180+00:00",
+      "last_seen": "2026-07-10T12:26:41.457008+00:00"
+    },
+    {
+      "from": "passive",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.879231+00:00",
+      "last_seen": "2026-07-09T12:02:27.879231+00:00"
+    },
+    {
+      "from": "income",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.915400+00:00",
+      "last_seen": "2026-07-09T12:02:27.915400+00:00"
+    },
+    {
+      "from": "generation",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.949985+00:00",
+      "last_seen": "2026-07-09T12:02:27.949985+00:00"
+    },
+    {
+      "from": "better",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:27.983146+00:00",
+      "last_seen": "2026-07-09T12:02:27.983146+00:00"
+    },
+    {
+      "from": "delete",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.033959+00:00",
+      "last_seen": "2026-07-09T12:02:28.033959+00:00"
+    },
+    {
+      "from": "passive",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.071139+00:00",
+      "last_seen": "2026-07-09T12:02:28.071139+00:00"
+    },
+    {
+      "from": "income",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.105458+00:00",
+      "last_seen": "2026-07-09T12:02:28.105458+00:00"
+    },
+    {
+      "from": "generation",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.139021+00:00",
+      "last_seen": "2026-07-09T12:02:28.139021+00:00"
+    },
+    {
+      "from": "better",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.171158+00:00",
+      "last_seen": "2026-07-09T12:02:28.171158+00:00"
+    },
+    {
+      "from": "delete",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.221753+00:00",
+      "last_seen": "2026-07-09T12:02:28.221753+00:00"
+    },
+    {
+      "from": "passive",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.257678+00:00",
+      "last_seen": "2026-07-09T12:02:28.257678+00:00"
+    },
+    {
+      "from": "income",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.292250+00:00",
+      "last_seen": "2026-07-09T12:02:28.292250+00:00"
+    },
+    {
+      "from": "generation",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.327238+00:00",
+      "last_seen": "2026-07-09T12:02:28.327238+00:00"
+    },
+    {
+      "from": "better",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.365327+00:00",
+      "last_seen": "2026-07-09T12:02:28.365327+00:00"
+    },
+    {
+      "from": "delete",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.419222+00:00",
+      "last_seen": "2026-07-09T12:02:28.419222+00:00"
+    },
+    {
+      "from": "passive",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.451621+00:00",
+      "last_seen": "2026-07-09T12:02:28.451621+00:00"
+    },
+    {
+      "from": "income",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.486235+00:00",
+      "last_seen": "2026-07-09T12:02:28.486235+00:00"
+    },
+    {
+      "from": "generation",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.523236+00:00",
+      "last_seen": "2026-07-09T12:02:28.523236+00:00"
+    },
+    {
+      "from": "better",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.558733+00:00",
+      "last_seen": "2026-07-09T12:02:28.558733+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "list_goals",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.576547+00:00",
+      "last_seen": "2026-07-09T12:02:28.576547+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.594655+00:00",
+      "last_seen": "2026-07-09T12:02:28.594655+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.3,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.607199+00:00",
+      "last_seen": "2026-07-10T11:32:51.984276+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.624151+00:00",
+      "last_seen": "2026-07-09T12:02:28.624151+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.639328+00:00",
+      "last_seen": "2026-07-09T12:02:28.639328+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.655904+00:00",
+      "last_seen": "2026-07-09T12:02:28.655904+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.673087+00:00",
+      "last_seen": "2026-07-09T18:09:40.925080+00:00"
+    },
+    {
+      "from": "recall_memory",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.690392+00:00",
+      "last_seen": "2026-07-09T20:52:36.495388+00:00"
+    },
+    {
+      "from": "recall_memory",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.702315+00:00",
+      "last_seen": "2026-07-09T20:52:36.519920+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:02:28.720301+00:00",
+      "last_seen": "2026-07-09T20:52:36.545392+00:00"
+    },
+    {
+      "from": "check",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.175836+00:00",
+      "last_seen": "2026-07-09T12:16:55.175836+00:00"
+    },
+    {
+      "from": "current",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.211910+00:00",
+      "last_seen": "2026-07-09T12:16:55.211910+00:00"
+    },
+    {
+      "from": "conversation",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.245177+00:00",
+      "last_seen": "2026-07-09T12:16:55.245177+00:00"
+    },
+    {
+      "from": "searches",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.278638+00:00",
+      "last_seen": "2026-07-09T12:16:55.278638+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.3,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.310190+00:00",
+      "last_seen": "2026-07-10T12:26:41.404306+00:00"
+    },
+    {
+      "from": "check",
+      "to": "get_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.359904+00:00",
+      "last_seen": "2026-07-09T12:16:55.359904+00:00"
+    },
+    {
+      "from": "current",
+      "to": "get_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.399298+00:00",
+      "last_seen": "2026-07-09T12:16:55.399298+00:00"
+    },
+    {
+      "from": "conversation",
+      "to": "get_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.428639+00:00",
+      "last_seen": "2026-07-09T12:16:55.428639+00:00"
+    },
+    {
+      "from": "searches",
+      "to": "get_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.465972+00:00",
+      "last_seen": "2026-07-09T12:16:55.465972+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "get_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.508509+00:00",
+      "last_seen": "2026-07-09T12:16:55.508509+00:00"
+    },
+    {
+      "from": "check",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.562283+00:00",
+      "last_seen": "2026-07-09T12:16:55.562283+00:00"
+    },
+    {
+      "from": "current",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.593151+00:00",
+      "last_seen": "2026-07-09T12:16:55.593151+00:00"
+    },
+    {
+      "from": "conversation",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.628869+00:00",
+      "last_seen": "2026-07-09T12:16:55.628869+00:00"
+    },
+    {
+      "from": "searches",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.665783+00:00",
+      "last_seen": "2026-07-09T12:16:55.665783+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.696878+00:00",
+      "last_seen": "2026-07-09T18:09:39.931414+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "get_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.717091+00:00",
+      "last_seen": "2026-07-09T12:16:55.717091+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "decompose_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.736580+00:00",
+      "last_seen": "2026-07-09T12:16:55.736580+00:00"
+    },
+    {
+      "from": "get_goal",
+      "to": "decompose_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:16:55.757537+00:00",
+      "last_seen": "2026-07-09T12:16:55.757537+00:00"
+    },
+    {
+      "from": "start",
+      "to": "design_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.677040+00:00",
+      "last_seen": "2026-07-09T12:42:00.677040+00:00"
+    },
+    {
+      "from": "wokring",
+      "to": "design_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.705047+00:00",
+      "last_seen": "2026-07-09T12:42:00.705047+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "design_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.744186+00:00",
+      "last_seen": "2026-07-09T12:42:00.744186+00:00"
+    },
+    {
+      "from": "milestones",
+      "to": "design_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.782168+00:00",
+      "last_seen": "2026-07-09T12:42:00.782168+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "design_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.818890+00:00",
+      "last_seen": "2026-07-09T12:42:00.818890+00:00"
+    },
+    {
+      "from": "start",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.875103+00:00",
+      "last_seen": "2026-07-09T18:09:40.411538+00:00"
+    },
+    {
+      "from": "wokring",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.907127+00:00",
+      "last_seen": "2026-07-09T12:42:00.907127+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.943642+00:00",
+      "last_seen": "2026-07-09T12:42:00.943642+00:00"
+    },
+    {
+      "from": "milestones",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:00.987182+00:00",
+      "last_seen": "2026-07-09T12:42:00.987182+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.023645+00:00",
+      "last_seen": "2026-07-09T12:42:01.023645+00:00"
+    },
+    {
+      "from": "start",
+      "to": "get_performance_metrics",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.078885+00:00",
+      "last_seen": "2026-07-09T12:42:01.078885+00:00"
+    },
+    {
+      "from": "wokring",
+      "to": "get_performance_metrics",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.103895+00:00",
+      "last_seen": "2026-07-09T12:42:01.103895+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "get_performance_metrics",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.135418+00:00",
+      "last_seen": "2026-07-09T12:42:01.135418+00:00"
+    },
+    {
+      "from": "milestones",
+      "to": "get_performance_metrics",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.174889+00:00",
+      "last_seen": "2026-07-09T12:42:01.174889+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "get_performance_metrics",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.214308+00:00",
+      "last_seen": "2026-07-09T12:42:01.214308+00:00"
+    },
+    {
+      "from": "start",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.277007+00:00",
+      "last_seen": "2026-07-09T12:42:01.277007+00:00"
+    },
+    {
+      "from": "wokring",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.309336+00:00",
+      "last_seen": "2026-07-09T12:42:01.309336+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.338884+00:00",
+      "last_seen": "2026-07-09T16:59:58.830945+00:00"
+    },
+    {
+      "from": "milestones",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.377816+00:00",
+      "last_seen": "2026-07-09T12:42:01.377816+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.408996+00:00",
+      "last_seen": "2026-07-09T12:42:01.408996+00:00"
+    },
+    {
+      "from": "design_tool",
+      "to": "list_goals",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.419711+00:00",
+      "last_seen": "2026-07-09T12:42:01.419711+00:00"
+    },
+    {
+      "from": "design_tool",
+      "to": "get_performance_metrics",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.438372+00:00",
+      "last_seen": "2026-07-09T12:42:01.438372+00:00"
+    },
+    {
+      "from": "design_tool",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.453057+00:00",
+      "last_seen": "2026-07-09T12:42:01.453057+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "get_performance_metrics",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.470693+00:00",
+      "last_seen": "2026-07-09T12:42:01.470693+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.487973+00:00",
+      "last_seen": "2026-07-09T12:42:01.487973+00:00"
+    },
+    {
+      "from": "get_performance_metrics",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T12:42:01.506237+00:00",
+      "last_seen": "2026-07-09T12:42:01.506237+00:00"
+    },
+    {
+      "from": "thing",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.170754+00:00",
+      "last_seen": "2026-07-09T13:41:26.170754+00:00"
+    },
+    {
+      "from": "noticed",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.206024+00:00",
+      "last_seen": "2026-07-09T13:41:26.206024+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 0.6,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.245942+00:00",
+      "last_seen": "2026-07-09T16:59:59.002309+00:00"
+    },
+    {
+      "from": "generated",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.281350+00:00",
+      "last_seen": "2026-07-09T13:41:26.281350+00:00"
+    },
+    {
+      "from": "agent",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.321121+00:00",
+      "last_seen": "2026-07-09T13:41:26.321121+00:00"
+    },
+    {
+      "from": "thing",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.379401+00:00",
+      "last_seen": "2026-07-09T13:41:26.379401+00:00"
+    },
+    {
+      "from": "noticed",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.423731+00:00",
+      "last_seen": "2026-07-09T13:41:26.423731+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 0.7,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.466196+00:00",
+      "last_seen": "2026-07-09T19:13:53.977827+00:00"
+    },
+    {
+      "from": "generated",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.509566+00:00",
+      "last_seen": "2026-07-09T13:41:26.509566+00:00"
+    },
+    {
+      "from": "agent",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.551140+00:00",
+      "last_seen": "2026-07-09T13:41:26.551140+00:00"
+    },
+    {
+      "from": "thing",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.610606+00:00",
+      "last_seen": "2026-07-09T13:41:26.610606+00:00"
+    },
+    {
+      "from": "noticed",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.655916+00:00",
+      "last_seen": "2026-07-09T13:41:26.655916+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 0.7,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.697518+00:00",
+      "last_seen": "2026-07-09T20:52:36.118910+00:00"
+    },
+    {
+      "from": "generated",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.738421+00:00",
+      "last_seen": "2026-07-09T13:41:26.738421+00:00"
+    },
+    {
+      "from": "agent",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.772075+00:00",
+      "last_seen": "2026-07-09T13:41:26.772075+00:00"
+    },
+    {
+      "from": "reload_tool",
+      "to": "list_directory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.786999+00:00",
+      "last_seen": "2026-07-09T13:41:26.786999+00:00"
+    },
+    {
+      "from": "reload_tool",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.808613+00:00",
+      "last_seen": "2026-07-09T17:00:00.385699+00:00"
+    },
+    {
+      "from": "reload_tool",
+      "to": "failure:failure",
+      "relationship": "leads_to",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.868331+00:00",
+      "last_seen": "2026-07-09T13:41:26.868331+00:00"
+    },
+    {
+      "from": "failure:failure",
+      "to": "reload_tool",
+      "relationship": "caused_by",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T13:41:26.888569+00:00",
+      "last_seen": "2026-07-09T13:41:26.888569+00:00"
+    },
+    {
+      "from": "stuck",
+      "to": "list_processes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T15:19:05.699404+00:00",
+      "last_seen": "2026-07-09T15:19:05.699404+00:00"
+    },
+    {
+      "from": "somewhere",
+      "to": "list_processes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T15:19:05.752380+00:00",
+      "last_seen": "2026-07-09T15:19:05.752380+00:00"
+    },
+    {
+      "from": "happened",
+      "to": "list_processes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T15:19:05.801574+00:00",
+      "last_seen": "2026-07-09T15:19:05.801574+00:00"
+    },
+    {
+      "from": "processing",
+      "to": "list_processes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T15:19:05.846067+00:00",
+      "last_seen": "2026-07-09T15:19:05.846067+00:00"
+    },
+    {
+      "from": "going",
+      "to": "list_processes",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T15:19:05.892644+00:00",
+      "last_seen": "2026-07-09T15:19:05.892644+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.136320+00:00",
+      "last_seen": "2026-07-09T16:59:58.136320+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.174220+00:00",
+      "last_seen": "2026-07-09T16:59:58.174220+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.198807+00:00",
+      "last_seen": "2026-07-09T16:59:58.198807+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.259195+00:00",
+      "last_seen": "2026-07-09T16:59:58.259195+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "list_outputs",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.320653+00:00",
+      "last_seen": "2026-07-09T16:59:58.320653+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "list_outputs",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.352343+00:00",
+      "last_seen": "2026-07-09T16:59:58.352343+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "list_outputs",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.385781+00:00",
+      "last_seen": "2026-07-09T16:59:58.385781+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "list_outputs",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.433127+00:00",
+      "last_seen": "2026-07-09T16:59:58.433127+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "list_outputs",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.464429+00:00",
+      "last_seen": "2026-07-09T16:59:58.464429+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.514336+00:00",
+      "last_seen": "2026-07-09T16:59:58.514336+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.549429+00:00",
+      "last_seen": "2026-07-09T16:59:58.549429+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.574716+00:00",
+      "last_seen": "2026-07-09T16:59:58.574716+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.624819+00:00",
+      "last_seen": "2026-07-09T20:52:35.841875+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.653486+00:00",
+      "last_seen": "2026-07-09T16:59:58.653486+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.717055+00:00",
+      "last_seen": "2026-07-09T16:59:58.717055+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.756427+00:00",
+      "last_seen": "2026-07-09T16:59:58.756427+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.795541+00:00",
+      "last_seen": "2026-07-09T16:59:58.795541+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.858473+00:00",
+      "last_seen": "2026-07-09T16:59:58.858473+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.891006+00:00",
+      "last_seen": "2026-07-09T16:59:58.891006+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.938874+00:00",
+      "last_seen": "2026-07-09T16:59:58.938874+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:58.970569+00:00",
+      "last_seen": "2026-07-09T16:59:58.970569+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "reload_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.034752+00:00",
+      "last_seen": "2026-07-09T16:59:59.034752+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.099179+00:00",
+      "last_seen": "2026-07-09T16:59:59.099179+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.128990+00:00",
+      "last_seen": "2026-07-09T16:59:59.128990+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.163398+00:00",
+      "last_seen": "2026-07-09T16:59:59.163398+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.224067+00:00",
+      "last_seen": "2026-07-09T16:59:59.224067+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "analyze_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.287120+00:00",
+      "last_seen": "2026-07-09T16:59:59.287120+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "analyze_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.333838+00:00",
+      "last_seen": "2026-07-09T16:59:59.333838+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "analyze_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.381645+00:00",
+      "last_seen": "2026-07-09T16:59:59.381645+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "analyze_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.414049+00:00",
+      "last_seen": "2026-07-09T16:59:59.414049+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "analyze_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.445585+00:00",
+      "last_seen": "2026-07-09T16:59:59.445585+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "read_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.508317+00:00",
+      "last_seen": "2026-07-09T16:59:59.508317+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "read_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.539603+00:00",
+      "last_seen": "2026-07-09T16:59:59.539603+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "read_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.584050+00:00",
+      "last_seen": "2026-07-09T16:59:59.584050+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "read_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.622402+00:00",
+      "last_seen": "2026-07-09T16:59:59.622402+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "read_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.666330+00:00",
+      "last_seen": "2026-07-09T16:59:59.666330+00:00"
+    },
+    {
+      "from": "continue",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.713973+00:00",
+      "last_seen": "2026-07-09T16:59:59.713973+00:00"
+    },
+    {
+      "from": "previously",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.758271+00:00",
+      "last_seen": "2026-07-09T16:59:59.758271+00:00"
+    },
+    {
+      "from": "moving",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.793680+00:00",
+      "last_seen": "2026-07-09T16:59:59.793680+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.826103+00:00",
+      "last_seen": "2026-07-09T16:59:59.826103+00:00"
+    },
+    {
+      "from": "backend",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.873963+00:00",
+      "last_seen": "2026-07-09T16:59:59.873963+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "list_outputs",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.877042+00:00",
+      "last_seen": "2026-07-09T16:59:59.877042+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "log_fact",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.906634+00:00",
+      "last_seen": "2026-07-09T16:59:59.906634+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.926734+00:00",
+      "last_seen": "2026-07-09T16:59:59.926734+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "reload_tool",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.940322+00:00",
+      "last_seen": "2026-07-09T16:59:59.940322+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "analyze_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T16:59:59.976527+00:00",
+      "last_seen": "2026-07-09T16:59:59.976527+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.004089+00:00",
+      "last_seen": "2026-07-09T17:00:00.004089+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.021120+00:00",
+      "last_seen": "2026-07-09T17:00:00.021120+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "log_fact",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.035574+00:00",
+      "last_seen": "2026-07-09T17:00:00.035574+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.050908+00:00",
+      "last_seen": "2026-07-09T17:00:00.050908+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "reload_tool",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.076611+00:00",
+      "last_seen": "2026-07-09T17:00:00.076611+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.102934+00:00",
+      "last_seen": "2026-07-09T17:00:00.102934+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "analyze_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.123697+00:00",
+      "last_seen": "2026-07-09T17:00:00.123697+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.143796+00:00",
+      "last_seen": "2026-07-09T17:00:00.143796+00:00"
+    },
+    {
+      "from": "list_outputs",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.162977+00:00",
+      "last_seen": "2026-07-09T17:00:00.162977+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "write_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.181356+00:00",
+      "last_seen": "2026-07-09T17:00:00.181356+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "reload_tool",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.192830+00:00",
+      "last_seen": "2026-07-09T17:00:00.192830+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.212503+00:00",
+      "last_seen": "2026-07-09T20:52:36.461528+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "analyze_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.240266+00:00",
+      "last_seen": "2026-07-09T17:00:00.240266+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.255380+00:00",
+      "last_seen": "2026-07-09T17:00:00.255380+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.272248+00:00",
+      "last_seen": "2026-07-09T17:00:00.272248+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "reload_tool",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.290048+00:00",
+      "last_seen": "2026-07-09T17:00:00.290048+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.302084+00:00",
+      "last_seen": "2026-07-10T10:35:24.259335+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "analyze_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.332255+00:00",
+      "last_seen": "2026-07-09T17:00:00.332255+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.351710+00:00",
+      "last_seen": "2026-07-09T17:00:00.351710+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.365493+00:00",
+      "last_seen": "2026-07-09T17:00:00.365493+00:00"
+    },
+    {
+      "from": "reload_tool",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.413312+00:00",
+      "last_seen": "2026-07-09T17:00:00.413312+00:00"
+    },
+    {
+      "from": "reload_tool",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.430509+00:00",
+      "last_seen": "2026-07-09T17:00:00.430509+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "analyze_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.445317+00:00",
+      "last_seen": "2026-07-09T17:00:00.445317+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.445317+00:00",
+      "last_seen": "2026-07-09T17:00:00.445317+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.477606+00:00",
+      "last_seen": "2026-07-09T17:00:00.477606+00:00"
+    },
+    {
+      "from": "analyze_file",
+      "to": "read_file",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.496227+00:00",
+      "last_seen": "2026-07-09T17:00:00.496227+00:00"
+    },
+    {
+      "from": "analyze_file",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.512277+00:00",
+      "last_seen": "2026-07-09T17:00:00.512277+00:00"
+    },
+    {
+      "from": "read_file",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T17:00:00.524218+00:00",
+      "last_seen": "2026-07-09T17:00:00.524218+00:00"
+    },
+    {
+      "from": "start",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:39.777331+00:00",
+      "last_seen": "2026-07-09T18:09:39.777331+00:00"
+    },
+    {
+      "from": "building",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:39.817431+00:00",
+      "last_seen": "2026-07-09T18:09:39.817431+00:00"
+    },
+    {
+      "from": "first",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:39.847568+00:00",
+      "last_seen": "2026-07-09T18:09:39.847568+00:00"
+    },
+    {
+      "from": "complete",
+      "to": "decompose_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:39.897310+00:00",
+      "last_seen": "2026-07-09T18:09:39.897310+00:00"
+    },
+    {
+      "from": "start",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:39.997628+00:00",
+      "last_seen": "2026-07-09T18:09:39.997628+00:00"
+    },
+    {
+      "from": "building",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.043512+00:00",
+      "last_seen": "2026-07-09T18:09:40.043512+00:00"
+    },
+    {
+      "from": "first",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.083518+00:00",
+      "last_seen": "2026-07-09T18:09:40.083518+00:00"
+    },
+    {
+      "from": "complete",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.118947+00:00",
+      "last_seen": "2026-07-09T18:09:40.118947+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.147539+00:00",
+      "last_seen": "2026-07-09T18:09:40.147539+00:00"
+    },
+    {
+      "from": "start",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.203258+00:00",
+      "last_seen": "2026-07-09T18:09:40.203258+00:00"
+    },
+    {
+      "from": "building",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.240050+00:00",
+      "last_seen": "2026-07-09T18:09:40.240050+00:00"
+    },
+    {
+      "from": "first",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.277654+00:00",
+      "last_seen": "2026-07-09T18:09:40.277654+00:00"
+    },
+    {
+      "from": "complete",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.313383+00:00",
+      "last_seen": "2026-07-09T18:09:40.313383+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.347942+00:00",
+      "last_seen": "2026-07-09T18:09:40.347942+00:00"
+    },
+    {
+      "from": "building",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.440663+00:00",
+      "last_seen": "2026-07-09T18:09:40.440663+00:00"
+    },
+    {
+      "from": "first",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.469642+00:00",
+      "last_seen": "2026-07-09T18:09:40.469642+00:00"
+    },
+    {
+      "from": "complete",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.502617+00:00",
+      "last_seen": "2026-07-09T18:09:40.502617+00:00"
+    },
+    {
+      "from": "start",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.587700+00:00",
+      "last_seen": "2026-07-09T18:09:40.587700+00:00"
+    },
+    {
+      "from": "building",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.630738+00:00",
+      "last_seen": "2026-07-09T18:09:40.630738+00:00"
+    },
+    {
+      "from": "first",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.664136+00:00",
+      "last_seen": "2026-07-09T18:09:40.664136+00:00"
+    },
+    {
+      "from": "complete",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.702424+00:00",
+      "last_seen": "2026-07-09T18:09:40.702424+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.730802+00:00",
+      "last_seen": "2026-07-09T18:09:40.730802+00:00"
+    },
+    {
+      "from": "decompose_goal",
+      "to": "update_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.750915+00:00",
+      "last_seen": "2026-07-09T18:09:40.750915+00:00"
+    },
+    {
+      "from": "decompose_goal",
+      "to": "log_goal_progress",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.767491+00:00",
+      "last_seen": "2026-07-09T18:09:40.767491+00:00"
+    },
+    {
+      "from": "decompose_goal",
+      "to": "list_goals",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.788595+00:00",
+      "last_seen": "2026-07-09T18:09:40.788595+00:00"
+    },
+    {
+      "from": "decompose_goal",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.807258+00:00",
+      "last_seen": "2026-07-09T18:09:40.807258+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "log_goal_progress",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.817473+00:00",
+      "last_seen": "2026-07-09T18:09:40.817473+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "list_goals",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.848121+00:00",
+      "last_seen": "2026-07-09T18:09:40.848121+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.866607+00:00",
+      "last_seen": "2026-07-09T20:52:36.350660+00:00"
+    },
+    {
+      "from": "log_goal_progress",
+      "to": "list_goals",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.887647+00:00",
+      "last_seen": "2026-07-09T18:09:40.887647+00:00"
+    },
+    {
+      "from": "log_goal_progress",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-09T18:09:40.904066+00:00",
+      "last_seen": "2026-07-09T20:52:36.414465+00:00"
+    },
+    {
+      "from": "proceed",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:53.890362+00:00",
+      "last_seen": "2026-07-09T19:13:53.890362+00:00"
+    },
+    {
+      "from": "building",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:53.924598+00:00",
+      "last_seen": "2026-07-09T19:13:53.924598+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.020402+00:00",
+      "last_seen": "2026-07-09T19:13:54.020402+00:00"
+    },
+    {
+      "from": "detect",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.059175+00:00",
+      "last_seen": "2026-07-09T19:13:54.059175+00:00"
+    },
+    {
+      "from": "proceed",
+      "to": "write_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.120102+00:00",
+      "last_seen": "2026-07-09T19:13:54.120102+00:00"
+    },
+    {
+      "from": "building",
+      "to": "write_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.160061+00:00",
+      "last_seen": "2026-07-09T19:13:54.160061+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "write_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.198216+00:00",
+      "last_seen": "2026-07-09T19:13:54.198216+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "write_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.236856+00:00",
+      "last_seen": "2026-07-09T19:13:54.236856+00:00"
+    },
+    {
+      "from": "detect",
+      "to": "write_tool",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.276554+00:00",
+      "last_seen": "2026-07-09T19:13:54.276554+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "write_tool",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T19:13:54.301519+00:00",
+      "last_seen": "2026-07-09T19:13:54.301519+00:00"
+    },
+    {
+      "from": "register",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.557675+00:00",
+      "last_seen": "2026-07-09T20:52:35.557675+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.589296+00:00",
+      "last_seen": "2026-07-09T20:52:35.589296+00:00"
+    },
+    {
+      "from": "system",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.627910+00:00",
+      "last_seen": "2026-07-09T20:52:35.627910+00:00"
+    },
+    {
+      "from": "register",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.683206+00:00",
+      "last_seen": "2026-07-09T20:52:35.683206+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.716841+00:00",
+      "last_seen": "2026-07-09T20:52:35.716841+00:00"
+    },
+    {
+      "from": "system",
+      "to": "log_goal_progress",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.763498+00:00",
+      "last_seen": "2026-07-09T20:52:35.763498+00:00"
+    },
+    {
+      "from": "register",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.810414+00:00",
+      "last_seen": "2026-07-09T20:52:35.810414+00:00"
+    },
+    {
+      "from": "system",
+      "to": "log_fact",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.891450+00:00",
+      "last_seen": "2026-07-09T20:52:35.891450+00:00"
+    },
+    {
+      "from": "register",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.937082+00:00",
+      "last_seen": "2026-07-09T20:52:35.937082+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:35.977285+00:00",
+      "last_seen": "2026-07-09T20:52:35.977285+00:00"
+    },
+    {
+      "from": "system",
+      "to": "recall_memory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.016838+00:00",
+      "last_seen": "2026-07-09T20:52:36.016838+00:00"
+    },
+    {
+      "from": "register",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.080595+00:00",
+      "last_seen": "2026-07-09T20:52:36.080595+00:00"
+    },
+    {
+      "from": "system",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.148069+00:00",
+      "last_seen": "2026-07-09T20:52:36.148069+00:00"
+    },
+    {
+      "from": "register",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.191173+00:00",
+      "last_seen": "2026-07-09T20:52:36.191173+00:00"
+    },
+    {
+      "from": "tools",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.238901+00:00",
+      "last_seen": "2026-07-09T20:52:36.238901+00:00"
+    },
+    {
+      "from": "system",
+      "to": "create_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.270818+00:00",
+      "last_seen": "2026-07-09T20:52:36.270818+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "log_fact",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.290888+00:00",
+      "last_seen": "2026-07-09T20:52:36.290888+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.316710+00:00",
+      "last_seen": "2026-07-09T20:52:36.316710+00:00"
+    },
+    {
+      "from": "update_goal",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.319576+00:00",
+      "last_seen": "2026-07-09T20:52:36.319576+00:00"
+    },
+    {
+      "from": "log_goal_progress",
+      "to": "log_fact",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.371214+00:00",
+      "last_seen": "2026-07-09T20:52:36.371214+00:00"
+    },
+    {
+      "from": "log_goal_progress",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.391443+00:00",
+      "last_seen": "2026-07-09T20:52:36.391443+00:00"
+    },
+    {
+      "from": "log_goal_progress",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.405055+00:00",
+      "last_seen": "2026-07-09T20:52:36.405055+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "recall_memory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.429731+00:00",
+      "last_seen": "2026-07-09T20:52:36.429731+00:00"
+    },
+    {
+      "from": "log_fact",
+      "to": "create_goal",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T20:52:36.479590+00:00",
+      "last_seen": "2026-07-09T20:52:36.479590+00:00"
+    },
+    {
+      "from": "meant",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.511212+00:00",
+      "last_seen": "2026-07-09T21:29:01.511212+00:00"
+    },
+    {
+      "from": "previous",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.554203+00:00",
+      "last_seen": "2026-07-09T21:29:01.554203+00:00"
+    },
+    {
+      "from": "message",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.592228+00:00",
+      "last_seen": "2026-07-09T21:29:01.592228+00:00"
+    },
+    {
+      "from": "capabilities",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.635259+00:00",
+      "last_seen": "2026-07-09T21:29:01.635259+00:00"
+    },
+    {
+      "from": "meant",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.739727+00:00",
+      "last_seen": "2026-07-09T21:29:01.739727+00:00"
+    },
+    {
+      "from": "previous",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.781047+00:00",
+      "last_seen": "2026-07-09T21:29:01.781047+00:00"
+    },
+    {
+      "from": "message",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.821263+00:00",
+      "last_seen": "2026-07-09T21:29:01.821263+00:00"
+    },
+    {
+      "from": "goals",
+      "to": "list_capabilities",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.904611+00:00",
+      "last_seen": "2026-07-09T21:29:01.904611+00:00"
+    },
+    {
+      "from": "list_goals",
+      "to": "list_capabilities",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-09T21:29:01.924432+00:00",
+      "last_seen": "2026-07-09T21:29:01.924432+00:00"
+    },
+    {
+      "from": "health",
+      "to": "list_scheduled_tasks",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.351831+00:00",
+      "last_seen": "2026-07-10T08:29:54.351831+00:00"
+    },
+    {
+      "from": "check",
+      "to": "list_scheduled_tasks",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.394625+00:00",
+      "last_seen": "2026-07-10T08:29:54.394625+00:00"
+    },
+    {
+      "from": "memory",
+      "to": "list_scheduled_tasks",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.431282+00:00",
+      "last_seen": "2026-07-10T08:29:54.431282+00:00"
+    },
+    {
+      "from": "optimization",
+      "to": "list_scheduled_tasks",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.467478+00:00",
+      "last_seen": "2026-07-10T08:29:54.467478+00:00"
+    },
+    {
+      "from": "system",
+      "to": "list_scheduled_tasks",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.505650+00:00",
+      "last_seen": "2026-07-10T08:29:54.505650+00:00"
+    },
+    {
+      "from": "health",
+      "to": "schedule_task",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.566789+00:00",
+      "last_seen": "2026-07-10T08:29:54.566789+00:00"
+    },
+    {
+      "from": "check",
+      "to": "schedule_task",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.605137+00:00",
+      "last_seen": "2026-07-10T08:29:54.605137+00:00"
+    },
+    {
+      "from": "memory",
+      "to": "schedule_task",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.641778+00:00",
+      "last_seen": "2026-07-10T08:29:54.641778+00:00"
+    },
+    {
+      "from": "optimization",
+      "to": "schedule_task",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.679417+00:00",
+      "last_seen": "2026-07-10T08:29:54.679417+00:00"
+    },
+    {
+      "from": "system",
+      "to": "schedule_task",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.711810+00:00",
+      "last_seen": "2026-07-10T08:29:54.711810+00:00"
+    },
+    {
+      "from": "list_scheduled_tasks",
+      "to": "schedule_task",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T08:29:54.731072+00:00",
+      "last_seen": "2026-07-10T08:29:54.731072+00:00"
+    },
+    {
+      "from": "minden",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.279296+00:00",
+      "last_seen": "2026-07-10T09:27:31.279296+00:00"
+    },
+    {
+      "from": "inform",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.317720+00:00",
+      "last_seen": "2026-07-10T09:27:31.317720+00:00"
+    },
+    {
+      "from": "dokumentumot",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.357285+00:00",
+      "last_seen": "2026-07-10T09:27:31.357285+00:00"
+    },
+    {
+      "from": "karon",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.399987+00:00",
+      "last_seen": "2026-07-10T10:35:23.944584+00:00"
+    },
+    {
+      "from": "rgyhoz",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.446919+00:00",
+      "last_seen": "2026-07-10T09:27:31.446919+00:00"
+    },
+    {
+      "from": "minden",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.513115+00:00",
+      "last_seen": "2026-07-10T09:27:31.513115+00:00"
+    },
+    {
+      "from": "inform",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.549097+00:00",
+      "last_seen": "2026-07-10T09:27:31.549097+00:00"
+    },
+    {
+      "from": "dokumentumot",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.601812+00:00",
+      "last_seen": "2026-07-10T09:27:31.601812+00:00"
+    },
+    {
+      "from": "karon",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.646234+00:00",
+      "last_seen": "2026-07-10T09:27:31.646234+00:00"
+    },
+    {
+      "from": "rgyhoz",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.686631+00:00",
+      "last_seen": "2026-07-10T09:27:31.686631+00:00"
+    },
+    {
+      "from": "minden",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.750412+00:00",
+      "last_seen": "2026-07-10T09:27:31.750412+00:00"
+    },
+    {
+      "from": "inform",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.790402+00:00",
+      "last_seen": "2026-07-10T09:27:31.790402+00:00"
+    },
+    {
+      "from": "dokumentumot",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.830794+00:00",
+      "last_seen": "2026-07-10T09:27:31.830794+00:00"
+    },
+    {
+      "from": "karon",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.871480+00:00",
+      "last_seen": "2026-07-10T09:27:31.871480+00:00"
+    },
+    {
+      "from": "rgyhoz",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.918689+00:00",
+      "last_seen": "2026-07-10T09:27:31.918689+00:00"
+    },
+    {
+      "from": "minden",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:31.987975+00:00",
+      "last_seen": "2026-07-10T12:04:34.792707+00:00"
+    },
+    {
+      "from": "inform",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.034040+00:00",
+      "last_seen": "2026-07-10T12:04:34.847217+00:00"
+    },
+    {
+      "from": "dokumentumot",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.078040+00:00",
+      "last_seen": "2026-07-10T12:04:34.896024+00:00"
+    },
+    {
+      "from": "karon",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.125420+00:00",
+      "last_seen": "2026-07-10T12:04:34.945690+00:00"
+    },
+    {
+      "from": "rgyhoz",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.161673+00:00",
+      "last_seen": "2026-07-10T09:27:32.161673+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "list_directory",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.176810+00:00",
+      "last_seen": "2026-07-10T09:27:32.176810+00:00"
+    },
+    {
+      "from": "write_file",
+      "to": "fetch_page",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.201292+00:00",
+      "last_seen": "2026-07-10T09:27:32.201292+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "fetch_page",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.243939+00:00",
+      "last_seen": "2026-07-10T11:32:51.966332+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "search_web",
+      "relationship": "used_together",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T09:27:32.269288+00:00",
+      "last_seen": "2026-07-10T11:32:52.028819+00:00"
+    },
+    {
+      "from": "kutat",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:23.825501+00:00",
+      "last_seen": "2026-07-10T10:35:23.825501+00:00"
+    },
+    {
+      "from": "nagyon",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:23.865661+00:00",
+      "last_seen": "2026-07-10T10:35:23.865661+00:00"
+    },
+    {
+      "from": "ugyanezt",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:23.902537+00:00",
+      "last_seen": "2026-07-10T10:35:23.902537+00:00"
+    },
+    {
+      "from": "rendszerek",
+      "to": "write_file",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:23.990349+00:00",
+      "last_seen": "2026-07-10T10:35:23.990349+00:00"
+    },
+    {
+      "from": "kutat",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:24.061393+00:00",
+      "last_seen": "2026-07-10T11:32:51.295398+00:00"
+    },
+    {
+      "from": "nagyon",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:24.095469+00:00",
+      "last_seen": "2026-07-10T10:35:24.095469+00:00"
+    },
+    {
+      "from": "ugyanezt",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:24.144539+00:00",
+      "last_seen": "2026-07-10T10:35:24.144539+00:00"
+    },
+    {
+      "from": "karon",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:24.190504+00:00",
+      "last_seen": "2026-07-10T10:35:24.190504+00:00"
+    },
+    {
+      "from": "rendszerek",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T10:35:24.231979+00:00",
+      "last_seen": "2026-07-10T10:35:24.231979+00:00"
+    },
+    {
+      "from": "kutat",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:50.818466+00:00",
+      "last_seen": "2026-07-10T11:32:50.818466+00:00"
+    },
+    {
+      "from": "alapj",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:50.865203+00:00",
+      "last_seen": "2026-07-10T11:32:50.865203+00:00"
+    },
+    {
+      "from": "rendesen",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:50.913791+00:00",
+      "last_seen": "2026-07-10T11:32:50.913791+00:00"
+    },
+    {
+      "from": "kutatt",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:50.948518+00:00",
+      "last_seen": "2026-07-10T11:32:50.948518+00:00"
+    },
+    {
+      "from": "interneten",
+      "to": "list_directory",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:50.987629+00:00",
+      "last_seen": "2026-07-10T11:32:50.987629+00:00"
+    },
+    {
+      "from": "alapj",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.085673+00:00",
+      "last_seen": "2026-07-10T11:32:51.085673+00:00"
+    },
+    {
+      "from": "rendesen",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.134105+00:00",
+      "last_seen": "2026-07-10T11:32:51.134105+00:00"
+    },
+    {
+      "from": "kutatt",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.165517+00:00",
+      "last_seen": "2026-07-10T11:32:51.165517+00:00"
+    },
+    {
+      "from": "interneten",
+      "to": "fetch_page",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.226228+00:00",
+      "last_seen": "2026-07-10T11:32:51.226228+00:00"
+    },
+    {
+      "from": "alapj",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.341687+00:00",
+      "last_seen": "2026-07-10T11:32:51.341687+00:00"
+    },
+    {
+      "from": "rendesen",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.385920+00:00",
+      "last_seen": "2026-07-10T11:32:51.385920+00:00"
+    },
+    {
+      "from": "kutatt",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.424513+00:00",
+      "last_seen": "2026-07-10T11:32:51.424513+00:00"
+    },
+    {
+      "from": "interneten",
+      "to": "execute_code",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.466008+00:00",
+      "last_seen": "2026-07-10T11:32:51.466008+00:00"
+    },
+    {
+      "from": "kutat",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.536080+00:00",
+      "last_seen": "2026-07-10T11:32:51.536080+00:00"
+    },
+    {
+      "from": "alapj",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.577262+00:00",
+      "last_seen": "2026-07-10T11:32:51.577262+00:00"
+    },
+    {
+      "from": "rendesen",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.612645+00:00",
+      "last_seen": "2026-07-10T11:32:51.612645+00:00"
+    },
+    {
+      "from": "kutatt",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.646091+00:00",
+      "last_seen": "2026-07-10T11:32:51.646091+00:00"
+    },
+    {
+      "from": "interneten",
+      "to": "deep_research",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.707349+00:00",
+      "last_seen": "2026-07-10T11:32:51.707349+00:00"
+    },
+    {
+      "from": "kutat",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.1,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.771049+00:00",
+      "last_seen": "2026-07-10T11:41:19.443323+00:00"
+    },
+    {
+      "from": "alapj",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.818960+00:00",
+      "last_seen": "2026-07-10T11:32:51.818960+00:00"
+    },
+    {
+      "from": "rendesen",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.865162+00:00",
+      "last_seen": "2026-07-10T11:32:51.865162+00:00"
+    },
+    {
+      "from": "kutatt",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.903989+00:00",
+      "last_seen": "2026-07-10T11:32:51.903989+00:00"
+    },
+    {
+      "from": "interneten",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:51.946322+00:00",
+      "last_seen": "2026-07-10T11:32:51.946322+00:00"
+    },
+    {
+      "from": "list_directory",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:52.006004+00:00",
+      "last_seen": "2026-07-10T11:32:52.006004+00:00"
+    },
+    {
+      "from": "fetch_page",
+      "to": "execute_code",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:52.044870+00:00",
+      "last_seen": "2026-07-10T11:32:52.044870+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "deep_research",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:52.108900+00:00",
+      "last_seen": "2026-07-10T11:32:52.108900+00:00"
+    },
+    {
+      "from": "execute_code",
+      "to": "search_web",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:52.139150+00:00",
+      "last_seen": "2026-07-10T11:32:52.139150+00:00"
+    },
+    {
+      "from": "deep_research",
+      "to": "search_web",
+      "relationship": "used_together",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:32:52.152391+00:00",
+      "last_seen": "2026-07-10T11:32:52.152391+00:00"
+    },
+    {
+      "from": "elind",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.315676+00:00",
+      "last_seen": "2026-07-10T11:41:19.315676+00:00"
+    },
+    {
+      "from": "tottam",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.368970+00:00",
+      "last_seen": "2026-07-10T11:41:19.368970+00:00"
+    },
+    {
+      "from": "searxng",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.6,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.411410+00:00",
+      "last_seen": "2026-07-10T11:53:56.574826+00:00"
+    },
+    {
+      "from": "zenetben",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.490819+00:00",
+      "last_seen": "2026-07-10T11:41:19.490819+00:00"
+    },
+    {
+      "from": "search_web",
+      "to": "failure:failure",
+      "relationship": "leads_to",
+      "strength": 1.2,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.554348+00:00",
+      "last_seen": "2026-07-10T12:04:35.044128+00:00"
+    },
+    {
+      "from": "failure:failure",
+      "to": "search_web",
+      "relationship": "caused_by",
+      "strength": 1.2,
+      "sources": [],
+      "first_seen": "2026-07-10T11:41:19.570712+00:00",
+      "last_seen": "2026-07-10T12:04:35.065272+00:00"
+    },
+    {
+      "from": "error",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:47:30.714107+00:00",
+      "last_seen": "2026-07-10T11:47:30.714107+00:00"
+    },
+    {
+      "from": "failed",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:47:30.849208+00:00",
+      "last_seen": "2026-07-10T11:47:30.849208+00:00"
+    },
+    {
+      "from": "invalid",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T11:47:30.890374+00:00",
+      "last_seen": "2026-07-10T11:47:30.890374+00:00"
+    },
+    {
+      "from": "container",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:53:56.620812+00:00",
+      "last_seen": "2026-07-10T11:53:56.620812+00:00"
+    },
+    {
+      "from": "37187dc2d",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:53:56.672662+00:00",
+      "last_seen": "2026-07-10T11:53:56.672662+00:00"
+    },
+    {
+      "from": "updating",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:53:56.720825+00:00",
+      "last_seen": "2026-07-10T11:53:56.720825+00:00"
+    },
+    {
+      "from": "certificates",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T11:53:56.776021+00:00",
+      "last_seen": "2026-07-10T11:53:56.776021+00:00"
+    },
+    {
+      "from": "rendszerek",
+      "to": "search_web",
+      "relationship": "solved_with",
+      "strength": 0.5,
+      "sources": [],
+      "first_seen": "2026-07-10T12:04:34.995718+00:00",
+      "last_seen": "2026-07-10T12:04:34.995718+00:00"
+    },
+    {
+      "from": "duplicates",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T12:26:41.501691+00:00",
+      "last_seen": "2026-07-10T12:26:41.501691+00:00"
+    },
+    {
+      "from": "completed",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T12:26:41.535853+00:00",
+      "last_seen": "2026-07-10T12:26:41.535853+00:00"
+    },
+    {
+      "from": "versions",
+      "to": "list_goals",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T12:26:41.580330+00:00",
+      "last_seen": "2026-07-10T12:26:41.580330+00:00"
+    },
+    {
+      "from": "things",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T13:00:18.934473+00:00",
+      "last_seen": "2026-07-10T13:00:18.934473+00:00"
+    },
+    {
+      "from": "listed",
+      "to": "update_goal",
+      "relationship": "solved_with",
+      "strength": 1.0,
+      "sources": [],
+      "first_seen": "2026-07-10T13:00:18.969333+00:00",
+      "last_seen": "2026-07-10T13:00:18.969333+00:00"
     }
   ],
-  "last_updated": "2026-07-05T08:35:57.628704+00:00"
+  "last_updated": "2026-07-10T13:00:18.970334+00:00"
 }

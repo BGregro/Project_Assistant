@@ -1,0 +1,14 @@
+{
+  "goal_health_check_nightly": {
+    "task_id": "goal_health_check_nightly",
+    "message": "Run goal health check: detect stalled goals, identify blockers, suggest next milestones. Log findings to outputs/goal_health_check_{date}.txt",
+    "schedule": "every day at 22:00",
+    "created": "2026-07-10T08:28:34.872908"
+  },
+  "memory_optimization_weekly": {
+    "task_id": "memory_optimization_weekly",
+    "message": "Run full memory maintenance sweep: flag stale facts, identify duplicates, report coverage. Save to outputs/memory_maintenance_{date}.txt",
+    "schedule": "every monday at 20:00",
+    "created": "2026-07-10T08:28:34.895569"
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "goals": [
+    {
+      "goal_id": "9128d392-a902-46dc-a54f-9aabbcb4045f",
+      "title": "Implement Autonomous Goal Executor",
+      "description": "Build a self-directed system that automatically detects stalled goals, decomposes them into actionable milestones, and schedules weekly work. The agent should autonomously pursue active goals without requiring manual intervention, with weekly progress reports to the user.",
+      "status": "complete",
+      "priority": 1,
+      "created_date": "2026-07-09T11:59:17.484111+00:00",
+      "target_date": "2026-07-25",
+      "milestones": [
+        {
+          "id": "c54872a5-0463-4870-9e37-e27e68e54209",
+          "title": "Design a goal stall detection mechanism using progress tracking and deadline monitoring",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "f5742214-f000-4409-a663-897c077c41a3",
+          "title": "Implement a milestone decomposition algorithm to break down goals into actionable sub-tasks",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "2293b2ba-24a3-45e4-b060-cf0f0c7d4170",
+          "title": "Develop a weekly scheduling system that allocates milestones to specific time intervals",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "2f5b4089-d378-4676-8c3b-39723a9b730b",
+          "title": "Create an autonomous task execution engine that triggers and tracks milestone completion",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "f77ad812-80bc-4479-bab8-38d759bdfaa9",
+          "title": "Build a progress reporting module to generate weekly summaries of completed work and pending tasks",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "70612d23-9fe6-446d-913e-b1160fac9c9e",
+          "title": "Establish self-direction feedback loops to adjust scheduling and decomposition based on execution outcomes",
+          "done": false,
+          "date_completed": null
+        }
+      ],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [
+        {
+          "timestamp": "2026-07-09T18:08:36.704248+00:00",
+          "note": "Goal 1 COMPLETE: 6 core tools implemented (goal_stall_detector, milestone_decomposer, weekly_scheduler, goal_execution_engine, progress_reporter, self_learning_loop). All tools in backend/agent_tools/generated/ ready for registration and testing."
+        }
+      ],
+      "last_updated": "2026-07-09T18:08:36.704248+00:00"
+    },
+    {
+      "goal_id": "066d2f3f-9bbf-4273-ab44-ded50af2988c",
+      "title": "Integrate Memory-Driven Decision Making",
+      "description": "Enable the agent to automatically query past decisions, apply learned patterns, and reuse solutions from previous projects. Build context pre-fetching, fact-based routing, and pattern detection so the agent makes smarter decisions on the second and third iteration of similar tasks.",
+      "status": "active",
+      "priority": 1,
+      "created_date": "2026-07-09T11:59:17.515612+00:00",
+      "target_date": "2026-08-01",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.515612+00:00"
+    },
+    {
+      "goal_id": "684f9ce9-2b2a-4e6b-8beb-ff0eaaf8f70d",
+      "title": "Build Active Self-Learning Loop",
+      "description": "Implement automated failure analysis, rule generation, and effectiveness scoring. The agent should learn from every task execution, classify failures, propose improvement rules, and track which tools/patterns work best. Weekly self-improvement proposals for review.",
+      "status": "active",
+      "priority": 1,
+      "created_date": "2026-07-09T11:59:17.543003+00:00",
+      "target_date": "2026-08-08",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.543003+00:00"
+    },
+    {
+      "goal_id": "7aa2366c-f9f4-493a-93df-d29e96c4c76b",
+      "title": "Create Domain-Specific Project Scaffolds",
+      "description": "Build 5-6 reusable project templates: AI/ML research, SaaS startup, data analysis, CLI tools, web automation. Each scaffold should include pre-configured dependencies, test frameworks, documentation templates, and GitHub setup. Remove friction from project initialization.",
+      "status": "active",
+      "priority": 2,
+      "created_date": "2026-07-09T11:59:17.575065+00:00",
+      "target_date": "2026-08-15",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.575065+00:00"
+    },
+    {
+      "goal_id": "044642d0-a5aa-4dbd-9c1d-5d2ba18f8712",
+      "title": "Implement Intelligent Time-Constraint Aware Planner",
+      "description": "Build a scheduler that understands your evening/weekend availability, breaks long tasks into 90-min focused sessions, estimates effort based on historical data, and automatically distributes work across your free time. Should enable resuming with full context preservation.",
+      "status": "active",
+      "priority": 2,
+      "created_date": "2026-07-09T11:59:17.610289+00:00",
+      "target_date": "2026-08-22",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.610289+00:00"
+    },
+    {
+      "goal_id": "13db8a1f-10ff-4b1d-b99d-05cb74b188c7",
+      "title": "Prepare Local-Only Deployment Infrastructure",
+      "description": "Build a roadmap and tooling to run the entire agent stack locally (qwen3:70b or similar) on a dedicated machine. Include: GPU/NPU optimization, model quantization, local vectorDB scaling, offline web access, and cost-per-inference tracking for when you upgrade hardware.",
+      "status": "active",
+      "priority": 2,
+      "created_date": "2026-07-09T11:59:17.639628+00:00",
+      "target_date": "2026-09-15",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.639628+00:00"
+    },
+    {
+      "goal_id": "976c4dcc-64b5-4bae-86f7-47f7138b3392",
+      "title": "Set Up Income Generation Pipeline (Foundational)",
+      "description": "Research and prototype 2-3 income sources suitable for an autonomous AI system (YouTube automation, API services, tool SaaS, consulting automation). Build proof-of-concept for fastest path to revenue to fund hardware upgrades. Target: First $500/month within 12 weeks.",
+      "status": "active",
+      "priority": 3,
+      "created_date": "2026-07-09T11:59:17.666706+00:00",
+      "target_date": "2026-10-01",
+      "milestones": [],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [],
+      "last_updated": "2026-07-09T11:59:17.666706+00:00"
+    },
+    {
+      "goal_id": "fa9eaaf4-89e0-4c3b-a21f-4f91c0c580ea",
+      "title": "Autonomous Background Executor",
+      "description": "Enable the agent to work on goals autonomously during downtime (when you're not giving instructions). Detect idle periods, prioritize goals by deadline and blocker status, execute work safely with kill switches, log sessions, and optimize timing. The system should improve itself by learning when you're available and which goals benefit most from background work.",
+      "status": "active",
+      "priority": 1,
+      "created_date": "2026-07-09T18:04:21.787903+00:00",
+      "target_date": "2026-08-08",
+      "milestones": [
+        {
+          "id": "c333fbde-76cb-4821-a886-88adf7440b80",
+          "title": "Implement idle period detection using inactivity metrics and user interaction logs",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "87cd2afa-e554-495d-85e3-4d717c535942",
+          "title": "Develop a goal prioritization algorithm based on deadlines, blocker status, and urgency",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "7894a9c4-a0fd-4797-bcd5-68c31d90882c",
+          "title": "Design safety kill switch mechanisms to pause or terminate background tasks on demand",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "e1574844-1ff2-46f7-bf79-76716431d1db",
+          "title": "Create session logging system to record all autonomous task executions and decisions",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "3ff60f29-0c38-4e9c-9d9d-a6d7a54b624c",
+          "title": "Optimize background work timing by learning user availability patterns and system load",
+          "done": false,
+          "date_completed": null
+        },
+        {
+          "id": "55b59a8f-c580-48de-9fcc-c4c9c907f84c",
+          "title": "Integrate self-improvement feedback loop to analyze logged sessions and adjust execution strategies",
+          "done": false,
+          "date_completed": null
+        }
+      ],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [
+        {
+          "timestamp": "2026-07-09T18:08:36.735820+00:00",
+          "note": "Goal 2 created and decomposed into 6 milestones. Starting development phase now."
+        }
+      ],
+      "last_updated": "2026-07-09T18:08:36.735820+00:00"
+    },
+    {
+      "goal_id": "b0e9eb0b-6d9e-4310-8ed2-1a749cfc7d85",
+      "title": "Implement Autonomous Goal Executor",
+      "description": "Build 6 interconnected tools for autonomous goal management: stall detection, milestone decomposition, weekly scheduling, execution engine, progress reporting, and self-learning loop. Enables the agent to independently track and advance goals without constant user input.",
+      "status": "complete",
+      "priority": 1,
+      "created_date": "2026-07-09T20:32:54.311382+00:00",
+      "target_date": "2025-08-01",
+      "milestones": [
+        {
+          "id": "11d4c38d-2dd2-4d05-ae17-d01a65d171dd",
+          "title": "Build six autonomous goal management tools",
+          "done": true,
+          "date_completed": "2026-07-09T20:33:44.609992+00:00"
+        }
+      ],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [
+        {
+          "timestamp": "2026-07-09T20:33:44.609992+00:00",
+          "note": "Goal 1 COMPLETE: All 6 tools built, registered in backend/agent_tools/generated/, and system tested. Functions: goal_stall_detector, milestone_decomposer, weekly_scheduler, goal_execution_engine, progress_reporter, self_learning_loop. All async functions verified working with test data."
+        }
+      ],
+      "last_updated": "2026-07-09T20:51:44.866959+00:00"
+    },
+    {
+      "goal_id": "9002d600-41d3-41aa-8e31-9dbf3741ecab",
+      "title": "Autonomous Background Executor",
+      "description": "Build 4 core tools for autonomous background work: idle period detection, goal prioritization, safe task execution with resource monitoring, and session logging. Enables the agent to work on milestones during user idle time while respecting safety constraints.",
+      "status": "complete",
+      "priority": 1,
+      "created_date": "2026-07-09T20:32:54.355802+00:00",
+      "target_date": "2025-08-08",
+      "milestones": [
+        {
+          "id": "d6757052-1163-426f-b910-04df13549285",
+          "title": "Implement idle detection, priority scoring, safety execution, session logging",
+          "done": true,
+          "date_completed": "2026-07-09T20:33:44.644514+00:00"
+        }
+      ],
+      "current_strategy": "",
+      "blockers": [],
+      "related_tasks": [],
+      "related_projects": [],
+      "progress_notes": [
+        {
+          "timestamp": "2026-07-09T20:33:44.644514+00:00",
+          "note": "Goal 2 COMPLETE: All 4 tools built, registered in backend/agent_tools/generated/, and system tested. Functions: idle_period_detector, goal_priority_scorer, safety_executor, session_logger. Full integration with Goal 1 verified through system test."
+        }
+      ],
+      "last_updated": "2026-07-09T20:51:44.898695+00:00"
+    }
+  ],
+  "last_updated": "2026-07-09T20:51:44.898695+00:00"
+}

@@ -1,28 +1,28 @@
 {
   "tools": {
     "list_outputs": {
-      "call_count": 1,
-      "success_count": 1,
+      "call_count": 3,
+      "success_count": 3,
       "failure_count": 0,
-      "total_duration_ms": 31,
+      "total_duration_ms": 46,
       "last_failure_reason": "",
-      "last_used": "2026-06-21T20:31:18.934337+00:00"
+      "last_used": "2026-07-09T15:41:09.472264+00:00"
     },
     "search_web": {
-      "call_count": 11,
-      "success_count": 11,
-      "failure_count": 0,
-      "total_duration_ms": 1362545,
-      "last_failure_reason": "",
-      "last_used": "2026-07-05T08:24:47.452211+00:00"
+      "call_count": 51,
+      "success_count": 37,
+      "failure_count": 14,
+      "total_duration_ms": 4307451,
+      "last_failure_reason": "Both SearXNG and DuckDuckGo are unavailable. Check that SearXNG is running (see SEARXNG_SETUP.md) or that you have internet access for the DDG fallback.",
+      "last_used": "2026-07-10T12:01:32.396735+00:00"
     },
     "get_recent_episodes": {
-      "call_count": 1,
+      "call_count": 2,
       "success_count": 1,
-      "failure_count": 0,
+      "failure_count": 1,
       "total_duration_ms": 0,
-      "last_failure_reason": "",
-      "last_used": "2026-07-03T07:11:07.444338+00:00"
+      "last_failure_reason": "'<' not supported between instances of 'int' and 'str'",
+      "last_used": "2026-07-09T11:19:14.845393+00:00"
     },
     "get_episode": {
       "call_count": 1,
@@ -65,28 +65,28 @@
       "last_used": "2026-07-05T07:36:51.297742+00:00"
     },
     "write_file": {
-      "call_count": 2,
-      "success_count": 2,
-      "failure_count": 0,
-      "total_duration_ms": 78,
-      "last_failure_reason": "",
-      "last_used": "2026-07-05T08:28:42.605341+00:00"
+      "call_count": 37,
+      "success_count": 36,
+      "failure_count": 1,
+      "total_duration_ms": 693,
+      "last_failure_reason": "Tool argument error: write_file() got an unexpected keyword argument 'code'",
+      "last_used": "2026-07-10T10:22:11.641237+00:00"
     },
     "deep_research": {
-      "call_count": 1,
-      "success_count": 1,
+      "call_count": 3,
+      "success_count": 3,
       "failure_count": 0,
-      "total_duration_ms": 62313,
+      "total_duration_ms": 323141,
       "last_failure_reason": "",
-      "last_used": "2026-07-05T08:01:54.156391+00:00"
+      "last_used": "2026-07-10T11:29:11.902295+00:00"
     },
     "fetch_page": {
-      "call_count": 5,
-      "success_count": 5,
+      "call_count": 15,
+      "success_count": 15,
       "failure_count": 0,
-      "total_duration_ms": 893812,
+      "total_duration_ms": 2508345,
       "last_failure_reason": "",
-      "last_used": "2026-07-05T08:25:03.435675+00:00"
+      "last_used": "2026-07-10T11:12:20.150177+00:00"
     },
     "log_research": {
       "call_count": 1,
@@ -95,33 +95,209 @@
       "total_duration_ms": 4969,
       "last_failure_reason": "",
       "last_used": "2026-07-05T08:33:45.248056+00:00"
+    },
+    "list_capabilities": {
+      "call_count": 3,
+      "success_count": 3,
+      "failure_count": 0,
+      "total_duration_ms": 31,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T21:27:37.940445+00:00"
+    },
+    "recall_memory": {
+      "call_count": 3,
+      "success_count": 3,
+      "failure_count": 0,
+      "total_duration_ms": 16,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T20:32:10.566339+00:00"
+    },
+    "analyze_performance": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 180656,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T11:22:15.145177+00:00"
+    },
+    "list_directory": {
+      "call_count": 19,
+      "success_count": 19,
+      "failure_count": 0,
+      "total_duration_ms": 2734109,
+      "last_failure_reason": "",
+      "last_used": "2026-07-10T11:17:54.386036+00:00"
+    },
+    "list_goals": {
+      "call_count": 6,
+      "success_count": 6,
+      "failure_count": 0,
+      "total_duration_ms": 0,
+      "last_failure_reason": "",
+      "last_used": "2026-07-10T12:24:25.492090+00:00"
+    },
+    "execute_code": {
+      "call_count": 66,
+      "success_count": 53,
+      "failure_count": 13,
+      "total_duration_ms": 8304161,
+      "last_failure_reason": "",
+      "last_used": "2026-07-10T11:25:38.041945+00:00"
+    },
+    "create_goal": {
+      "call_count": 10,
+      "success_count": 10,
+      "failure_count": 0,
+      "total_duration_ms": 124,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T20:32:54.371395+00:00"
+    },
+    "get_goal": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 0,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T12:12:06.911195+00:00"
+    },
+    "decompose_goal": {
+      "call_count": 2,
+      "success_count": 2,
+      "failure_count": 0,
+      "total_duration_ms": 219734,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T18:07:09.664343+00:00"
+    },
+    "get_performance_metrics": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 31,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T12:25:56.653274+00:00"
+    },
+    "design_tool": {
+      "call_count": 1,
+      "success_count": 0,
+      "failure_count": 1,
+      "total_duration_ms": 180656,
+      "last_failure_reason": "Local LLM unavailable — cannot design tool. Is Ollama running?",
+      "last_used": "2026-07-09T12:29:50.937937+00:00"
+    },
+    "reload_tool": {
+      "call_count": 7,
+      "success_count": 0,
+      "failure_count": 7,
+      "total_duration_ms": 420391,
+      "last_failure_reason": "Operation cancelled by user.",
+      "last_used": "2026-07-09T16:19:51.259644+00:00"
+    },
+    "scan_system": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 5781,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T13:48:34.016406+00:00"
+    },
+    "read_file": {
+      "call_count": 9,
+      "success_count": 7,
+      "failure_count": 2,
+      "total_duration_ms": 108,
+      "last_failure_reason": "File not found: C:\\Users\\bodag\\OneDrive\\PROJECTS\\Project_Assistant\\backend\\agent_tools\\generated\\execution_engine.py",
+      "last_used": "2026-07-09T16:35:17.537526+00:00"
+    },
+    "list_processes": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 0,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T15:18:03.617114+00:00"
+    },
+    "analyze_file": {
+      "call_count": 2,
+      "success_count": 2,
+      "failure_count": 0,
+      "total_duration_ms": 31,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T16:54:41.410607+00:00"
+    },
+    "log_fact": {
+      "call_count": 3,
+      "success_count": 3,
+      "failure_count": 0,
+      "total_duration_ms": 30,
+      "last_failure_reason": "",
+      "last_used": "2026-07-09T20:51:44.930337+00:00"
+    },
+    "update_goal": {
+      "call_count": 5,
+      "success_count": 3,
+      "failure_count": 2,
+      "total_duration_ms": 15,
+      "last_failure_reason": "Goal 'fa9eaaf4' not found.",
+      "last_used": "2026-07-10T12:59:12.747493+00:00"
+    },
+    "log_goal_progress": {
+      "call_count": 6,
+      "success_count": 4,
+      "failure_count": 2,
+      "total_duration_ms": 16,
+      "last_failure_reason": "Goal 'goal_2' not found.",
+      "last_used": "2026-07-09T20:33:44.660292+00:00"
+    },
+    "write_tool": {
+      "call_count": 5,
+      "success_count": 4,
+      "failure_count": 1,
+      "total_duration_ms": 69750,
+      "last_failure_reason": "Syntax check failed: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"C:\\Users\\bodag\\AppData\\Local\\Python\\pythoncore-3.12-64\\Lib\\encodings\\cp1252.py\", line 23, in deco",
+      "last_used": "2026-07-09T19:12:18.154673+00:00"
+    },
+    "list_scheduled_tasks": {
+      "call_count": 1,
+      "success_count": 1,
+      "failure_count": 0,
+      "total_duration_ms": 0,
+      "last_failure_reason": "",
+      "last_used": "2026-07-10T08:27:45.981835+00:00"
+    },
+    "schedule_task": {
+      "call_count": 2,
+      "success_count": 2,
+      "failure_count": 0,
+      "total_duration_ms": 31,
+      "last_failure_reason": "",
+      "last_used": "2026-07-10T08:28:34.906147+00:00"
     }
   },
   "task_types": {
     "file_operations": {
-      "count": 1,
-      "success_count": 1,
-      "total_duration_seconds": 128,
-      "avg_tools_per_task": 1.0
+      "count": 6,
+      "success_count": 4,
+      "total_duration_seconds": 6879,
+      "avg_tools_per_task": 2.33
     },
     "software_development": {
-      "count": 2,
-      "success_count": 2,
-      "total_duration_seconds": 131,
-      "avg_tools_per_task": 0.0
-    },
-    "research": {
       "count": 7,
       "success_count": 6,
-      "total_duration_seconds": 3573,
-      "avg_tools_per_task": 1.72
+      "total_duration_seconds": 2764,
+      "avg_tools_per_task": 1.43
+    },
+    "research": {
+      "count": 8,
+      "success_count": 7,
+      "total_duration_seconds": 4611,
+      "avg_tools_per_task": 2.0
     },
     "general": {
-      "count": 4,
-      "success_count": 4,
-      "total_duration_seconds": 611,
-      "avg_tools_per_task": 1.0
+      "count": 18,
+      "success_count": 16,
+      "total_duration_seconds": 22531,
+      "avg_tools_per_task": 2.5
     }
   },
-  "last_updated": "2026-07-05T08:35:55.799186+00:00"
+  "last_updated": "2026-07-10T13:00:18.236602+00:00"
 }

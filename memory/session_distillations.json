@@ -1,0 +1,35 @@
+[
+  {
+    "timestamp": "2026-07-10T12:20:16.834870+00:00",
+    "task_count": 20,
+    "learnings": [
+      "Refine search terms to avoid irrelevant results from broad queries",
+      "Verify all dependencies (e.g., missing files) before restarting services",
+      "Align task suggestions directly with the main goal for clarity and effectiveness",
+      "Use task scheduling tools (e.g., schedule_task) to ensure goal completion",
+      "Maintain consistent research methodologies for reliable outcomes"
+    ]
+  },
+  {
+    "timestamp": "2026-07-10T11:57:28.319675+00:00",
+    "task_count": 20,
+    "learnings": [
+      "Using update_goal and log_fact tools ensures progress tracking and clarity in task execution.",
+      "Clear, concise suggestions aligned with goals enhance autonomy and task completion efficiency.",
+      "Structured research formats (like ELTE IK course research) ensure consistency and comprehensive source coverage.",
+      "Broad search terms can lead to irrelevant results; specificity is critical for effective search_web queries.",
+      "Missing configuration files (e.g., limiter.toml) highlight the need for thorough pre-deployment checks and documentation review."
+    ]
+  },
+  {
+    "timestamp": "2026-07-10T02:14:33.149216+00:00",
+    "task_count": 20,
+    "learnings": [
+      "Decomposing complex tasks into actionable steps using tools like decompose_goal ensures clarity and progress tracking.",
+      "Systematic testing and verification of tool placements (e.g., with reload_tool and list_directory) prevents misalignment in workflows.",
+      "Monitoring system bottlenecks via list_outputs and scan_system helps identify and resolve efficiency issues proactively.",
+      "Iterative goal refinement with update_goal and decompose_goal maintains alignment with evolving priorities.",
+      "Transparency in capabilities through list_goals and list_capabilities reinforces trust and autonomy in task execution."
+    ]
+  }
+]

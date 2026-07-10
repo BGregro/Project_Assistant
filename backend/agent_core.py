@@ -1641,9 +1641,13 @@ class AgentCore:
         """
         Pre-flight check before every Anthropic API call.
 
-        If the last assistant message contains tool_use blocks with no following
-        tool_result message (orphaned — caused by 429/network errors mid-response),
-        inject synthetic tool_result messages so the API doesn't return 400.
+        Scans the ENTIRE messages array (not just the last message) for orphaned
+        tool_use blocks — assistant messages with tool_use content not followed
+        immediately by a user message containing matching tool_result blocks.
+        This catches gaps buried anywhere in history (e.g. messages[8]) caused by
+        429/network errors mid-response, not just at the tail — a bug that
+        previously let mid-history corruption survive and fail every subsequent
+        API call with a 400.
 
         Handles both live SDK objects (block.type attribute) and plain dict entries
         so it works in both the bounded loop (_run_claude) and TaskRunner.run_task().
@@ -1651,41 +1655,68 @@ class AgentCore:
         if not messages:
             return messages
 
-        last = messages[-1]
-        if last.get("role") != "assistant":
-            return messages
+        repaired = []
+        i = 0
+        repairs = 0
 
-        content = last.get("content", [])
-        if not isinstance(content, list):
-            return messages
+        while i < len(messages):
+            msg = messages[i]
+            repaired.append(msg)
 
-        tool_use_blocks = [
-            b for b in content
-            if (isinstance(b, dict) and b.get("type") == "tool_use")
-            or (hasattr(b, "type") and b.type == "tool_use")
-        ]
+            if msg.get("role") != "assistant":
+                i += 1
+                continue
 
-        if not tool_use_blocks:
-            return messages
+            content = msg.get("content", [])
+            if not isinstance(content, list):
+                i += 1
+                continue
 
-        logger.warning(
-            f"[agent] Detected {len(tool_use_blocks)} orphaned tool_use block(s) "
-            "— injecting synthetic tool_results to repair history."
-        )
+            tool_use_blocks = [
+                b for b in content
+                if (isinstance(b, dict) and b.get("type") == "tool_use")
+                or (hasattr(b, "type") and b.type == "tool_use")
+            ]
 
-        synthetic = [
-            {
-                "type": "tool_result",
-                "tool_use_id": (b["id"] if isinstance(b, dict) else b.id),
-                "content": (
-                    "Tool call was interrupted by a rate-limit or network error. "
-                    "Please retry."
-                ),
-            }
-            for b in tool_use_blocks
-        ]
+            if not tool_use_blocks:
+                i += 1
+                continue
 
-        return list(messages) + [{"role": "user", "content": synthetic}]
+            # Check if the next message is a proper tool_result user message
+            next_msg = messages[i + 1] if i + 1 < len(messages) else None
+            has_results = (
+                next_msg is not None
+                and next_msg.get("role") == "user"
+                and isinstance(next_msg.get("content"), list)
+                and any(
+                    (isinstance(b, dict) and b.get("type") == "tool_result")
+                    or (hasattr(b, "type") and b.type == "tool_result")
+                    for b in next_msg.get("content", [])
+                )
+            )
+
+            if not has_results:
+                # Inject synthetic tool_results before proceeding
+                synthetic = [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": (b["id"] if isinstance(b, dict) else b.id),
+                        "content": "Tool call interrupted by error. Please retry.",
+                    }
+                    for b in tool_use_blocks
+                ]
+                repaired.append({"role": "user", "content": synthetic})
+                repairs += 1
+                logger.warning(
+                    f"[agent] Repaired orphaned tool_use at messages[{i}] "
+                    f"({len(tool_use_blocks)} block(s))"
+                )
+
+            i += 1
+
+        if repairs:
+            logger.info(f"[agent] _sanitize_messages: {repairs} repair(s) applied.")
+        return repaired
 
 
 # ---------------------------------------------------------------------------
